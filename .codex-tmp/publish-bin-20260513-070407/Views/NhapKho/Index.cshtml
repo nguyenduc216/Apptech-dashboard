@@ -1,0 +1,742 @@
+@using System.Globalization
+@model NhapKhoManagementViewModel
+@{
+    ViewData["Title"] = "Nhập kho";
+    ViewData["Breadcrumb"] = "Trang chủ / Kho / Nhập kho";
+
+    var currentStatus = NhapKhoPhieuStatus.Normalize(Model.Form.TrangThaiPhieu);
+    var isEditable = Model.PopupMode == NhapKhoPopupMode.Create || currentStatus == NhapKhoPhieuStatus.Draft;
+    var activeTab = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase)) ||
+        string.Equals(Model.Form.ActiveTab, "hang-hoa-nhap", StringComparison.OrdinalIgnoreCase)
+            ? "hang-hoa-nhap"
+            : "thong-tin";
+    var summaryErrors = ViewData.ModelState.Values
+        .SelectMany(state => state.Errors)
+        .Select(error => error.ErrorMessage)
+        .Where(message => !string.IsNullOrWhiteSpace(message))
+        .Distinct()
+        .ToArray();
+    var ngayNhapHasError = ViewData.ModelState.TryGetValue("Form.NgayNhapKho", out var ngayNhapState) && ngayNhapState.Errors.Count > 0;
+    var noiDungHasError = ViewData.ModelState.TryGetValue("Form.NoiDungNhapKho", out var noiDungState) && noiDungState.Errors.Count > 0;
+    var khoHasError = ViewData.ModelState.TryGetValue("Form.KhoId", out var khoState) && khoState.Errors.Count > 0;
+    var detailHasError = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase));
+
+    string[] GetFieldErrors(string key)
+    {
+        return ViewData.ModelState.TryGetValue(key, out var state)
+            ? state.Errors
+                .Select(error => error.ErrorMessage)
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Distinct()
+                .ToArray()
+            : [];
+    }
+}
+
+<section class="master-data-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="floating-status-toast @Model.StatusType"
+             data-status-toast
+             role="status"
+             aria-live="polite">
+            <div class="floating-status-toast-icon" aria-hidden="true">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            </div>
+            <div class="floating-status-toast-body">
+                <strong>@(Model.StatusType == "success" ? "Thành công" : Model.StatusType == "error" ? "Có lỗi xảy ra" : "Thông báo")</strong>
+                <span>@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="floating-status-toast-close" data-status-toast-close aria-label="Đóng thông báo">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
+    }
+
+    <article class="panel master-data-panel">
+        <div class="panel-header master-data-header">
+            <div>
+                <h3>Danh sách phiếu nhập kho</h3>
+                <p>Quản lý phiếu nhập kho, hàng hóa nhập và trạng thái xử lý.</p>
+            </div>
+
+            <div class="master-data-header-actions">
+                <a class="master-data-add-button" asp-permission-action="insert"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@Model.CurrentPage"
+                   asp-route-showCreatePopup="true">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    <span>Tạo phiếu</span>
+                </a>
+            </div>
+        </div>
+
+        <form method="get" asp-action="Index" class="master-data-filter-form">
+            <label class="master-data-filter-field" for="keyword">
+                <span>Tìm phiếu nhập kho</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="keyword" name="keyword" type="search" value="@Model.Filter.Keyword" placeholder="Nhập mã phiếu, nội dung, người nhập, kho hoặc nhà cung cấp..." />
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="statusFilter">
+                <span>Trạng thái phiếu</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                    <select id="statusFilter" name="statusFilter">
+                        <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Filter.StatusFilter) ? "selected" : null)">Tất cả trạng thái</option>
+                        <option value="@NhapKhoPhieuStatus.Draft" selected="@(NhapKhoPhieuStatus.Normalize(Model.Filter.StatusFilter) == NhapKhoPhieuStatus.Draft && !string.IsNullOrWhiteSpace(Model.Filter.StatusFilter) ? "selected" : null)">Phiếu nháp</option>
+                        <option value="@NhapKhoPhieuStatus.Imported" selected="@(NhapKhoPhieuStatus.Normalize(Model.Filter.StatusFilter) == NhapKhoPhieuStatus.Imported ? "selected" : null)">Đã nhập</option>
+                        <option value="@NhapKhoPhieuStatus.Canceled" selected="@(NhapKhoPhieuStatus.Normalize(Model.Filter.StatusFilter) == NhapKhoPhieuStatus.Canceled ? "selected" : null)">Hủy phiếu</option>
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </span>
+            </label>
+
+            <div class="master-data-filter-actions">
+                <button type="submit" class="primary-button master-data-filter-button">
+                    <span class="button-content">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <span>Tìm kiếm</span>
+                    </span>
+                </button>
+
+                <a class="secondary-button master-data-reset-button" asp-action="Index">Làm mới</a>
+            </div>
+        </form>
+
+        <div class="master-data-summary">
+            <div><strong>@Model.TotalCount</strong> phiếu nhập kho</div>
+            <div>Trang <strong>@Model.CurrentPage</strong>@(Model.TotalPages > 0 ? $" / {Model.TotalPages}" : "")</div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table master-data-table">
+                <thead>
+                    <tr>
+                        <th>Mã phiếu</th>
+                        <th>Ngày nhập</th>
+                        <th>Nội dung</th>
+                        <th>Kho</th>
+                        <th>Nhà cung cấp</th>
+                        <th>Trạng thái</th>
+                        <th>Hàng hóa</th>
+                        <th class="actions-col">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8" class="master-data-empty">Chưa có phiếu nhập kho phù hợp.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td><div class="master-data-name">@item.MaPhieu</div></td>
+                                <td>@(item.NgayNhapKho?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td><div class="vat-tu-note-preview">@(string.IsNullOrWhiteSpace(item.NoiDungNhapKho) ? "-" : item.NoiDungNhapKho)</div></td>
+                                <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.TenNhaCungCap) ? "-" : item.TenNhaCungCap)</td>
+                                <td><span class="status-pill @item.TrangThaiCssClass">@item.TrangThaiDisplay</span></td>
+                                <td>@item.DetailCount dòng / @item.TotalQuantity.ToString("0.##")</td>
+                                <td class="actions-col">
+                                    <div class="master-data-actions">
+                                        <a class="table-action-button edit" asp-permission-action="update"
+                                           asp-action="Index"
+                                           asp-route-keyword="@Model.Filter.Keyword"
+                                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                                           asp-route-page="@Model.CurrentPage"
+                                           asp-route-editId="@item.Id">
+                                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                            <span>Mở</span>
+                                        </a>
+
+                                        <form method="post" asp-action="Delete" class="inline-action-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="Id" value="@item.Id" />
+                                            <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+                                            <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
+                                            <input type="hidden" name="Page" value="@Model.CurrentPage" />
+                                            <button type="submit"
+                                                    class="table-action-button delete" asp-permission-action="delete"
+                                                    disabled="@(NhapKhoPhieuStatus.Normalize(item.TrangThaiPhieu) == NhapKhoPhieuStatus.Imported ? "disabled" : null)"
+                                                    data-delete-confirm="Bạn có chắc muốn xóa phiếu nhập kho này?">
+                                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                <span>Xóa</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pagination-bar" aria-label="Phân trang nhập kho">
+                <a class="pagination-button @(Model.CurrentPage <= 1 ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@(Model.CurrentPage - 1)">
+                    <i class="fa-solid fa-angle-left" aria-hidden="true"></i>
+                    <span>Trước</span>
+                </a>
+
+                <div class="pagination-pages">
+                    @foreach (var pageNumber in Model.VisiblePages)
+                    {
+                        <a class="pagination-page @(pageNumber == Model.CurrentPage ? "active" : "")"
+                           asp-action="Index"
+                           asp-route-keyword="@Model.Filter.Keyword"
+                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                           asp-route-page="@pageNumber">
+                            @pageNumber
+                        </a>
+                    }
+                </div>
+
+                <a class="pagination-button @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@(Model.CurrentPage + 1)">
+                    <span>Sau</span>
+                    <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
+                </a>
+            </nav>
+        }
+    </article>
+</section>
+
+@if (Model.IsPopupOpen)
+{
+    <div class="crud-modal-shell" data-crud-modal-shell>
+        <div class="crud-modal-backdrop" aria-hidden="true"></div>
+
+        <section class="crud-modal xuat-kho-modal" role="dialog" aria-modal="true" aria-labelledby="nhap-kho-modal-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="nhap-kho-modal-title">@Model.PopupTitle</h2>
+                    <p class="crud-modal-subtitle">Chọn kho nhập, hàng hóa, đơn vị tính, mã số lô, số lượng và loại hình nhập.</p>
+                </div>
+
+                <a class="menu-nav-button crud-close-button"
+                   data-crud-modal-close
+                   aria-label="Đóng popup"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@Model.CurrentPage">
+                    <span aria-hidden="true">&times;</span>
+                </a>
+            </div>
+
+            <form method="post" asp-action="@Model.SubmitAction" class="account-form crud-form" data-nhap-kho-form novalidate>
+                @Html.AntiForgeryToken()
+
+                <input asp-for="Form.Id" type="hidden" />
+                <input asp-for="Form.Keyword" type="hidden" />
+                <input asp-for="Form.StatusFilter" type="hidden" />
+                <input asp-for="Form.Page" type="hidden" />
+                <input asp-for="Form.ActiveTab" type="hidden" data-active-tab-input />
+                <input asp-for="Form.MaPhieu" type="hidden" />
+                <input asp-for="Form.NguoiNhapKho" type="hidden" />
+
+                @if (summaryErrors.Length > 0)
+                {
+                    <div class="page-alert error validation-summary">
+                        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                        <div>
+                            @foreach (var message in summaryErrors)
+                            {
+                                <div>@message</div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="crud-tabs" data-tab-group>
+                    <div class="crud-tab-list" role="tablist" aria-label="Nhóm thông tin phiếu nhập">
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "thong-tin" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="thong-tin"
+                                role="tab"
+                                aria-selected="@(activeTab == "thong-tin" ? "true" : "false")">
+                            Thông tin phiếu
+                        </button>
+
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "hang-hoa-nhap" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="hang-hoa-nhap"
+                                role="tab"
+                                aria-selected="@(activeTab == "hang-hoa-nhap" ? "true" : "false")">
+                            Hàng hóa nhập
+                        </button>
+                    </div>
+
+                    <div class="crud-tab-panel @(activeTab == "thong-tin" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="thong-tin"
+                         role="tabpanel"
+                         @(activeTab == "thong-tin" ? null : "hidden")>
+                        <div class="account-form-grid xuat-kho-info-grid">
+                            <label class="login-field">
+                                <span>Mã phiếu</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-barcode" aria-hidden="true"></i>
+                                    <input value="@Model.Form.MaPhieu" readonly tabindex="-1" />
+                                    <button type="button"
+                                            class="login-input-action"
+                                            data-copy-to-clipboard
+                                            data-copy-value="@Model.Form.MaPhieu"
+                                            data-copy-title="Đã copy mã phiếu"
+                                            data-copy-message="@Model.Form.MaPhieu"
+                                            aria-label="Copy mã phiếu nhập kho">
+                                        <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                            </label>
+
+                            <label class="login-field @(ngayNhapHasError ? "has-error" : "")">
+                                <span>Ngày nhập</span>
+                                <span class="login-input-shell">
+                                    <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                                    <input asp-for="Form.NgayNhapKho" type="date" readonly="@(!isEditable ? "readonly" : null)" />
+                                </span>
+                                <span asp-validation-for="Form.NgayNhapKho" class="login-field-error"></span>
+                            </label>
+
+                            <label class="login-field">
+                                <span>Người nhập</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                                    <input value="@Model.Form.NguoiNhapKho" readonly tabindex="-1" />
+                                </span>
+                            </label>
+
+                            <label class="login-field">
+                                <span>Trạng thái phiếu</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                                    <input value="@NhapKhoPhieuStatus.GetDisplayName(Model.Form.TrangThaiPhieu)" readonly tabindex="-1" />
+                                </span>
+                                <input asp-for="Form.TrangThaiPhieu" type="hidden" />
+                            </label>
+
+                            <label class="login-field @(khoHasError ? "has-error" : "")">
+                                <span>Kho nhập</span>
+                                <span class="login-input-shell select-shell">
+                                    <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
+                                    <select asp-for="Form.KhoId" disabled="@(!isEditable ? "disabled" : null)">
+                                        <option value="">Chọn kho nhập</option>
+                                        @foreach (var option in Model.KhoOptions)
+                                        {
+                                            <option value="@option.Id" selected="@(Model.Form.KhoId == option.Id ? "selected" : null)">@option.Label</option>
+                                        }
+                                    </select>
+                                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                </span>
+                                <span asp-validation-for="Form.KhoId" class="login-field-error"></span>
+                            </label>
+
+                            <label class="login-field">
+                                <span>Nhà cung cấp</span>
+                                <span class="login-input-shell select-shell">
+                                    <i class="fa-solid fa-truck-field" aria-hidden="true"></i>
+                                    <select asp-for="Form.NhaCungCapId" disabled="@(!isEditable ? "disabled" : null)">
+                                        <option value="">Chọn nhà cung cấp</option>
+                                        @foreach (var option in Model.NhaCungCapOptions)
+                                        {
+                                            <option value="@option.Id" selected="@(Model.Form.NhaCungCapId == option.Id ? "selected" : null)">@option.Label</option>
+                                        }
+                                    </select>
+                                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                </span>
+                            </label>
+
+                            <label class="login-field field-span-2 @(noiDungHasError ? "has-error" : "")">
+                                <span>Nội dung nhập</span>
+                                <span class="login-input-shell textarea-shell xuat-kho-textarea-shell">
+                                    <i class="fa-solid fa-align-left" aria-hidden="true"></i>
+                                    <textarea asp-for="Form.NoiDungNhapKho" rows="4" readonly="@(!isEditable ? "readonly" : null)" placeholder="Nhập nội dung nhập kho..."></textarea>
+                                </span>
+                                <span asp-validation-for="Form.NoiDungNhapKho" class="login-field-error"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="crud-tab-panel @(activeTab == "hang-hoa-nhap" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="hang-hoa-nhap"
+                         role="tabpanel"
+                         @(activeTab == "hang-hoa-nhap" ? null : "hidden")>
+                        <div class="xuat-kho-detail-panel @(detailHasError ? "has-error" : "")" data-nhap-kho-root data-readonly="@(!isEditable ? "true" : "false")">
+                            @if (isEditable)
+                            {
+                                <button type="button" class="secondary-button" data-nhap-kho-add-detail>
+                                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                    <span>Thêm hàng hóa</span>
+                                </button>
+                            }
+
+                            @if (detailHasError)
+                            {
+                                <span class="login-field-error xuat-kho-detail-error">Vui lòng kiểm tra các ô viền đỏ trong danh sách hàng hóa nhập.</span>
+                            }
+
+                            <div class="table-wrap xuat-kho-detail-table-wrap">
+                                <table class="data-table master-data-table xuat-kho-detail-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hàng hóa</th>
+                                            <th>Số lượng nhập</th>
+                                            <th>Mã số lô</th>
+                                            <th>Đơn vị tính</th>
+                                            <th>Loại hình nhập</th>
+                                            @if (isEditable)
+                                            {
+                                                <th class="actions-col">Xóa</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody data-nhap-kho-detail-list>
+                                        @for (var index = 0; index < Model.Form.Details.Count; index++)
+                                        {
+                                            var detail = Model.Form.Details[index];
+                                            var hangHoaErrors = GetFieldErrors($"Form.Details[{index}].HangHoaId");
+                                            var soLuongErrors = GetFieldErrors($"Form.Details[{index}].SoLuongNhap");
+                                            var maSoLoErrors = GetFieldErrors($"Form.Details[{index}].MaSoLo");
+                                            var donViTinhErrors = GetFieldErrors($"Form.Details[{index}].DonViTinhId");
+                                            var loaiHinhErrors = GetFieldErrors($"Form.Details[{index}].LoaiHinhNhap");
+                                            var hangHoaHasError = hangHoaErrors.Length > 0;
+                                            var soLuongHasError = soLuongErrors.Length > 0;
+                                            var maSoLoHasError = maSoLoErrors.Length > 0;
+                                            var donViTinhHasError = donViTinhErrors.Length > 0;
+                                            var loaiHinhHasError = loaiHinhErrors.Length > 0;
+                                            <tr data-nhap-kho-detail-row>
+                                                <td class="detail-field-cell @(hangHoaHasError ? "has-error" : "")">
+                                                    <input type="hidden" name="Form.Details[@index].Id" value="@detail.Id" data-detail-id />
+                                                    <span class="login-input-shell select-shell">
+                                                        <select name="Form.Details[@index].HangHoaId"
+                                                                class="@(hangHoaHasError ? "input-validation-error" : null)"
+                                                                data-detail-hang-hoa-id
+                                                                aria-invalid="@(hangHoaHasError ? "true" : "false")"
+                                                                required
+                                                                disabled="@(!isEditable ? "disabled" : null)">
+                                                            <option value="">Chọn hàng hóa</option>
+                                                            @foreach (var option in Model.HangHoaOptions)
+                                                            {
+                                                                <option value="@option.Id" data-don-vi-tinh-id="@option.DonViTinhId" selected="@(detail.HangHoaId == option.Id ? "selected" : null)">@option.Label</option>
+                                                            }
+                                                        </select>
+                                                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                                    </span>
+                                                    @foreach (var message in hangHoaErrors)
+                                                    {
+                                                        <span class="login-field-error detail-field-error">@message</span>
+                                                    }
+                                                </td>
+                                                <td class="detail-field-cell @(soLuongHasError ? "has-error" : "")">
+                                                    <input class="xuat-kho-quantity-input @(soLuongHasError ? "input-validation-error" : null)"
+                                                           type="number"
+                                                           name="Form.Details[@index].SoLuongNhap"
+                                                            value="@detail.SoLuongNhap.ToString(CultureInfo.InvariantCulture)"
+                                                            min="0.01"
+                                                            step="0.01"
+                                                            aria-invalid="@(soLuongHasError ? "true" : "false")"
+                                                            required
+                                                            data-detail-quantity
+                                                            readonly="@(!isEditable ? "readonly" : null)" />
+                                                    @foreach (var message in soLuongErrors)
+                                                    {
+                                                        <span class="login-field-error detail-field-error">@message</span>
+                                                    }
+                                                </td>
+                                                <td class="detail-field-cell @(maSoLoHasError ? "has-error" : "")">
+                                                    <input class="xuat-kho-quantity-input @(maSoLoHasError ? "input-validation-error" : null)"
+                                                           type="text"
+                                                           name="Form.Details[@index].MaSoLo"
+                                                           value="@detail.MaSoLo"
+                                                           maxlength="50"
+                                                           placeholder="Nhập mã số lô"
+                                                           aria-invalid="@(maSoLoHasError ? "true" : "false")"
+                                                           readonly="@(!isEditable ? "readonly" : null)" />
+                                                    @foreach (var message in maSoLoErrors)
+                                                    {
+                                                        <span class="login-field-error detail-field-error">@message</span>
+                                                    }
+                                                </td>
+                                                <td class="detail-field-cell @(donViTinhHasError ? "has-error" : "")">
+                                                    <span class="login-input-shell select-shell">
+                                                        <select name="Form.Details[@index].DonViTinhId"
+                                                                class="@(donViTinhHasError ? "input-validation-error" : null)"
+                                                                data-detail-don-vi-tinh-id
+                                                                aria-invalid="@(donViTinhHasError ? "true" : "false")"
+                                                                required
+                                                                disabled="@(!isEditable ? "disabled" : null)">
+                                                            <option value="">Chọn đơn vị tính</option>
+                                                            @foreach (var option in Model.DonViTinhOptions)
+                                                            {
+                                                                <option value="@option.Id" selected="@(detail.DonViTinhId == option.Id ? "selected" : null)">@option.Label</option>
+                                                            }
+                                                        </select>
+                                                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                                    </span>
+                                                    @foreach (var message in donViTinhErrors)
+                                                    {
+                                                        <span class="login-field-error detail-field-error">@message</span>
+                                                    }
+                                                </td>
+                                                <td class="detail-field-cell @(loaiHinhHasError ? "has-error" : "")">
+                                                    <span class="login-input-shell select-shell">
+                                                        <select name="Form.Details[@index].LoaiHinhNhap"
+                                                                class="@(loaiHinhHasError ? "input-validation-error" : null)"
+                                                                data-detail-loai-hinh-nhap
+                                                                aria-invalid="@(loaiHinhHasError ? "true" : "false")"
+                                                                required
+                                                                disabled="@(!isEditable ? "disabled" : null)">
+                                                            <option value="">Chọn loại hình</option>
+                                                            <option value="@NhapKhoLoaiHinh.NhapTungVatTu" selected="@(NhapKhoLoaiHinh.Normalize(detail.LoaiHinhNhap) == NhapKhoLoaiHinh.NhapTungVatTu ? "selected" : null)">Nhập từng vật tư</option>
+                                                            <option value="@NhapKhoLoaiHinh.NhapTheoLo" selected="@(NhapKhoLoaiHinh.Normalize(detail.LoaiHinhNhap) == NhapKhoLoaiHinh.NhapTheoLo ? "selected" : null)">Nhập theo lô</option>
+                                                        </select>
+                                                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                                    </span>
+                                                    @foreach (var message in loaiHinhErrors)
+                                                    {
+                                                        <span class="login-field-error detail-field-error">@message</span>
+                                                    }
+                                                </td>
+                                                @if (isEditable)
+                                                {
+                                                    <td class="actions-col">
+                                                        <button type="button" class="table-action-button delete" asp-permission-action="delete" data-nhap-kho-remove-detail aria-label="Xóa hàng hóa khỏi phiếu">
+                                                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                        </button>
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="master-data-empty xuat-kho-detail-empty @(Model.Form.Details.Count == 0 ? "" : "is-hidden")" data-nhap-kho-detail-empty>
+                                Chưa có hàng hóa trong phiếu nhập.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="crud-modal-actions @(Model.PopupMode == NhapKhoPopupMode.Edit && currentStatus == NhapKhoPhieuStatus.Draft ? "has-export-action" : "")">
+                    <a class="secondary-button crud-cancel-button"
+                       asp-action="Index"
+                       asp-route-keyword="@Model.Filter.Keyword"
+                       asp-route-statusFilter="@Model.Filter.StatusFilter"
+                       asp-route-page="@Model.CurrentPage">
+                        Đóng
+                    </a>
+
+                    @if (isEditable)
+                    {
+                        @if (Model.PopupMode == NhapKhoPopupMode.Edit && currentStatus == NhapKhoPhieuStatus.Draft)
+                        {
+                            <button type="submit"
+                                    name="command"
+                                    value="import"
+                                    class="secondary-button xuat-kho-export-button"
+                                    data-processing-button
+                                    data-processing-text="Đang nhập">
+                                <span class="button-content">
+                                    <i class="fa-solid fa-dolly" aria-hidden="true"></i>
+                                    <span>Nhập phiếu</span>
+                                </span>
+                                <span class="button-processing" aria-hidden="true">
+                                    <span class="button-processing-dot"></span>
+                                    <span class="button-processing-text">Đang nhập</span>
+                                </span>
+                            </button>
+                        }
+
+                        <button type="submit" name="command" value="save" class="primary-button" asp-permission-action="@(Model.PopupMode == NhapKhoPopupMode.Edit ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
+                            <span class="button-content">
+                                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                <span>@(Model.PopupMode == NhapKhoPopupMode.Edit ? "Lưu phiếu" : "Tạo phiếu nháp")</span>
+                            </span>
+                            <span class="button-processing" aria-hidden="true">
+                                <span class="button-processing-dot"></span>
+                                <span class="button-processing-text">Đang lưu</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+            </form>
+
+            <template data-nhap-kho-detail-template>
+                <tr data-nhap-kho-detail-row>
+                    <td class="detail-field-cell">
+                        <input type="hidden" name="Form.Details[__index__].Id" data-detail-id />
+                        <span class="login-input-shell select-shell">
+                            <select name="Form.Details[__index__].HangHoaId" data-detail-hang-hoa-id required>
+                                <option value="">Chọn hàng hóa</option>
+                                @foreach (var option in Model.HangHoaOptions)
+                                {
+                                    <option value="@option.Id" data-don-vi-tinh-id="@option.DonViTinhId">@option.Label</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </td>
+                    <td class="detail-field-cell">
+                        <input class="xuat-kho-quantity-input" type="number" name="Form.Details[__index__].SoLuongNhap" value="1" min="0.01" step="0.01" required data-detail-quantity />
+                    </td>
+                    <td class="detail-field-cell">
+                        <input class="xuat-kho-quantity-input" type="text" name="Form.Details[__index__].MaSoLo" maxlength="50" placeholder="Nhập mã số lô" />
+                    </td>
+                    <td class="detail-field-cell">
+                        <span class="login-input-shell select-shell">
+                            <select name="Form.Details[__index__].DonViTinhId" data-detail-don-vi-tinh-id required>
+                                <option value="">Chọn đơn vị tính</option>
+                                @foreach (var option in Model.DonViTinhOptions)
+                                {
+                                    <option value="@option.Id">@option.Label</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </td>
+                    <td class="detail-field-cell">
+                        <span class="login-input-shell select-shell">
+                            <select name="Form.Details[__index__].LoaiHinhNhap" data-detail-loai-hinh-nhap required>
+                                <option value="">Chọn loại hình</option>
+                                <option value="@NhapKhoLoaiHinh.NhapTungVatTu">Nhập từng vật tư</option>
+                                <option value="@NhapKhoLoaiHinh.NhapTheoLo">Nhập theo lô</option>
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </td>
+                    <td class="actions-col">
+                        <button type="button" class="table-action-button delete" asp-permission-action="delete" data-nhap-kho-remove-detail aria-label="Xóa hàng hóa khỏi phiếu">
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+            </template>
+        </section>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const root = document.querySelector("[data-nhap-kho-root]");
+            const list = root?.querySelector("[data-nhap-kho-detail-list]");
+            const template = document.querySelector("[data-nhap-kho-detail-template]");
+            const empty = root?.querySelector("[data-nhap-kho-detail-empty]");
+            const addButton = root?.querySelector("[data-nhap-kho-add-detail]");
+
+            if (!(root instanceof HTMLElement) ||
+                !(list instanceof HTMLElement) ||
+                !(template instanceof HTMLTemplateElement)) {
+                return;
+            }
+
+            const getRows = () => Array.from(list.querySelectorAll("[data-nhap-kho-detail-row]"));
+            const reindexRows = () => {
+                getRows().forEach((row, index) => {
+                    row.querySelectorAll("[name]").forEach((input) => {
+                        const currentName = input.getAttribute("name") || "";
+                        input.setAttribute("name", currentName.replace(/Form\.Details\[(?:\d+|__index__)\]/u, `Form.Details[${index}]`));
+                    });
+                });
+            };
+            const updateEmpty = () => empty?.classList.toggle("is-hidden", getRows().length > 0);
+            const clearFieldError = (field) => {
+                const cell = field.closest(".detail-field-cell");
+                if (!(cell instanceof HTMLElement)) {
+                    return;
+                }
+
+                cell.classList.remove("has-error");
+                field.classList.remove("input-validation-error");
+                field.removeAttribute("aria-invalid");
+                cell.querySelectorAll(".detail-field-error").forEach((error) => error.remove());
+            };
+            const attachRow = (row) => {
+                row.querySelectorAll("input, select").forEach((field) => {
+                    if (!(field instanceof HTMLInputElement) && !(field instanceof HTMLSelectElement)) {
+                        return;
+                    }
+
+                    if (field instanceof HTMLInputElement && field.type === "hidden") {
+                        return;
+                    }
+
+                    field.addEventListener("change", () => clearFieldError(field));
+                    if (field instanceof HTMLInputElement) {
+                        field.addEventListener("input", () => clearFieldError(field));
+                    }
+                });
+
+                const hangHoaSelect = row.querySelector("[data-detail-hang-hoa-id]");
+                const donViTinhSelect = row.querySelector("[data-detail-don-vi-tinh-id]");
+                if (hangHoaSelect instanceof HTMLSelectElement && donViTinhSelect instanceof HTMLSelectElement) {
+                    const syncDonViTinh = () => {
+                        const selected = hangHoaSelect.selectedOptions[0];
+                        const donViTinhId = selected?.dataset.donViTinhId;
+                        if (donViTinhId && !donViTinhSelect.value) {
+                            donViTinhSelect.value = donViTinhId;
+                            window.ApptechLiveSelect?.refresh(donViTinhSelect);
+                        }
+                    };
+                    hangHoaSelect.addEventListener("change", () => {
+                        const selected = hangHoaSelect.selectedOptions[0];
+                        const donViTinhId = selected?.dataset.donViTinhId;
+                        donViTinhSelect.value = donViTinhId || "";
+                        window.ApptechLiveSelect?.refresh(donViTinhSelect);
+                    });
+                    syncDonViTinh();
+                }
+
+                const removeButton = row.querySelector("[data-nhap-kho-remove-detail]");
+                if (removeButton instanceof HTMLButtonElement) {
+                    removeButton.addEventListener("click", () => {
+                        row.remove();
+                        reindexRows();
+                        updateEmpty();
+                    });
+                }
+            };
+
+            getRows().forEach(attachRow);
+            updateEmpty();
+
+            if (addButton instanceof HTMLButtonElement) {
+                addButton.addEventListener("click", () => {
+                    const fragment = template.content.cloneNode(true);
+                    const row = fragment.firstElementChild;
+                    if (!(row instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    list.appendChild(row);
+                    attachRow(row);
+                    reindexRows();
+                    updateEmpty();
+                });
+            }
+        })();
+    </script>
+}

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect width="128" height="128" rx="20" fill="#ffffff"/>
+  <path d="M10 44V10H44" stroke="#12382f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M84 10H118V44" stroke="#12382f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M118 84V118H84" stroke="#12382f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 118H10V84" stroke="#12382f" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="28" y="28" width="18" height="18" fill="#111111"/>
+  <rect x="33" y="33" width="8" height="8" fill="#ffffff"/>
+  <rect x="82" y="28" width="18" height="18" fill="#111111"/>
+  <rect x="87" y="33" width="8" height="8" fill="#ffffff"/>
+  <rect x="28" y="82" width="18" height="18" fill="#111111"/>
+  <rect x="33" y="87" width="8" height="8" fill="#ffffff"/>
+  <rect x="54" y="28" width="8" height="8" fill="#111111"/>
+  <rect x="64" y="28" width="8" height="8" fill="#111111"/>
+  <rect x="54" y="38" width="8" height="8" fill="#111111"/>
+  <rect x="64" y="38" width="8" height="8" fill="#111111"/>
+  <rect x="54" y="54" width="8" height="8" fill="#111111"/>
+  <rect x="64" y="54" width="8" height="8" fill="#111111"/>
+  <rect x="74" y="54" width="8" height="8" fill="#111111"/>
+  <rect x="54" y="64" width="8" height="8" fill="#111111"/>
+  <rect x="74" y="64" width="8" height="8" fill="#111111"/>
+  <rect x="64" y="74" width="8" height="8" fill="#111111"/>
+  <rect x="74" y="74" width="8" height="8" fill="#111111"/>
+  <rect x="54" y="84" width="8" height="8" fill="#111111"/>
+  <rect x="64" y="84" width="8" height="8" fill="#111111"/>
+  <rect x="74" y="84" width="8" height="8" fill="#111111"/>
+  <rect x="88" y="54" width="8" height="8" fill="#111111"/>
+  <rect x="98" y="54" width="8" height="8" fill="#111111"/>
+  <rect x="88" y="64" width="8" height="8" fill="#111111"/>
+  <rect x="98" y="74" width="8" height="8" fill="#111111"/>
+  <rect x="88" y="84" width="8" height="8" fill="#111111"/>
+  <rect x="54" y="98" width="8" height="8" fill="#111111"/>
+  <rect x="64" y="98" width="8" height="8" fill="#111111"/>
+  <rect x="74" y="98" width="8" height="8" fill="#111111"/>
+</svg>

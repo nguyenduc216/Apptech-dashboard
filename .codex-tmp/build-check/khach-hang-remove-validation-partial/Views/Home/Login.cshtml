@@ -1,0 +1,121 @@
+@model ApptechDashboard.Models.LoginViewModel
+@{
+    Layout = null;
+    var title = ViewData["Title"]?.ToString() ?? "Đăng nhập";
+    var loginMessage = ViewData["LoginMessage"]?.ToString();
+    var loginMessageType = ViewData["LoginMessageType"]?.ToString() ?? "info";
+    var usernameHasError = ViewData.ModelState.TryGetValue(nameof(Model.Username), out var usernameState) && usernameState.Errors.Count > 0;
+    var passwordHasError = ViewData.ModelState.TryGetValue(nameof(Model.Password), out var passwordState) && passwordState.Errors.Count > 0;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0cb386" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Apptech Dashboard" />
+    <title>@title - Apptech Dashboard</title>
+    <link rel="icon" type="image/png" href="~/images/apptech-logo-512.png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/images/apptech-logo-512.png" asp-append-version="true" />
+    <link rel="manifest" href="~/manifest.webmanifest" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="login-page">
+    <main class="login-shell">
+        <header class="login-header">
+            <div class="login-brand">
+                <div class="brand-mark login-brand-mark">
+                    <img src="~/images/apptech-logo-512.png" alt="Apptech logo" class="brand-logo" />
+                </div>
+                <div>
+                    <div class="brand-title">Apptech</div>
+                    <div class="brand-subtitle login-brand-subtitle">Smart Home Command Center</div>
+                </div>
+            </div>
+        </header>
+
+        <section class="login-panel">
+            <div class="login-panel-head">
+                <div class="login-panel-badge">Đăng nhập hệ thống</div>
+                <h2>Truy cập vào Dashboard</h2>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(loginMessage))
+            {
+                <div class="page-alert @loginMessageType">
+                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                    <span>@loginMessage</span>
+                </div>
+            }
+
+            <form asp-action="Login" method="post" class="login-form">
+                @Html.AntiForgeryToken()
+                <input asp-for="ReturnUrl" type="hidden" />
+
+                <div asp-validation-summary="ModelOnly" class="login-validation"></div>
+
+                <div class="login-field @(usernameHasError ? "has-error" : null)">
+                    <label asp-for="Username"></label>
+                    <div class="login-input-shell">
+                        <i class="fa-solid fa-user" aria-hidden="true"></i>
+                        <input asp-for="Username" autocomplete="username" placeholder="Nhập tên đăng nhập" />
+                    </div>
+                    <span asp-validation-for="Username" class="login-field-error"></span>
+                </div>
+
+                <div class="login-field @(passwordHasError ? "has-error" : null)">
+                    <label asp-for="Password"></label>
+                    <div class="login-input-shell">
+                        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                        <input asp-for="Password"
+                               autocomplete="current-password"
+                               placeholder="Nhập mật khẩu"
+                               data-password-input />
+                        <button type="button"
+                                class="login-input-action"
+                                data-password-toggle
+                                aria-label="Hiển thị mật khẩu"
+                                aria-controls="Password"
+                                aria-pressed="false">
+                            <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <span asp-validation-for="Password" class="login-field-error"></span>
+                </div>
+
+                <label class="login-checkbox">
+                    <input asp-for="RememberMe" />
+                    <span>Ghi nhớ đăng nhập trên thiết bị này</span>
+                </label>
+
+                <button type="submit"
+                        class="primary-button login-submit"
+                        data-processing-button
+                        data-processing-text="Đang xác thực">
+                    <span class="button-content">
+                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
+                        <span>Đăng nhập vào hệ thống</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang xác thực</span>
+                    </span>
+                </button>
+
+                <div class="login-app-install">
+                    <button type="button"
+                            class="secondary-button login-install-button"
+                            data-app-install-button>
+                        Tải app
+                    </button>
+                    <div class="login-install-feedback" data-install-feedback hidden></div>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script src="~/js/dashboard.js" asp-append-version="true"></script>
+</body>
+</html>

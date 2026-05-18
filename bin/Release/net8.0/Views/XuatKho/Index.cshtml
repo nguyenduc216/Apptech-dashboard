@@ -1,0 +1,624 @@
+@using System.Globalization
+@model XuatKhoManagementViewModel
+@{
+    ViewData["Title"] = "Xuất kho";
+    ViewData["Breadcrumb"] = "Trang chủ / Kho / Xuất kho";
+
+    var ngayXuatKhoHasError = ViewData.ModelState.TryGetValue("Form.NgayXuatKho", out var ngayXuatKhoState) && ngayXuatKhoState.Errors.Count > 0;
+    var noiDungHasError = ViewData.ModelState.TryGetValue("Form.NoiDungXuatKho", out var noiDungState) && noiDungState.Errors.Count > 0;
+    var detailHasError = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase));
+    var activeTab = detailHasError || string.Equals(Model.Form.ActiveTab, "vat-tu-xuat", StringComparison.OrdinalIgnoreCase)
+        ? "vat-tu-xuat"
+        : "thong-tin";
+    var currentStatus = XuatKhoPhieuStatus.Normalize(Model.Form.TrangThaiPhieu);
+    var isEditable = Model.PopupMode == XuatKhoPopupMode.Create || currentStatus == XuatKhoPhieuStatus.Draft;
+}
+
+<section class="master-data-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="floating-status-toast @Model.StatusType"
+             data-status-toast
+             role="status"
+             aria-live="polite">
+            <div class="floating-status-toast-icon" aria-hidden="true">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            </div>
+            <div class="floating-status-toast-body">
+                <strong>@(Model.StatusType == "success" ? "Thành công" : Model.StatusType == "error" ? "Có lỗi xảy ra" : "Thông báo")</strong>
+                <span>@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="floating-status-toast-close" data-status-toast-close aria-label="Đóng thông báo">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
+    }
+
+    <article class="panel master-data-panel">
+        <div class="panel-header master-data-header">
+            <div>
+                <h3>Danh sách phiếu xuất kho</h3>
+                <p>Quản lý phiếu xuất kho và vật tư xuất bằng QR.</p>
+            </div>
+
+            <div class="master-data-header-actions">
+                <a class="master-data-add-button"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                   asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                   asp-route-page="@Model.CurrentPage"
+                   asp-route-showCreatePopup="true">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    <span>Tạo phiếu</span>
+                </a>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+        {
+            <div class="page-alert @Model.StatusType master-data-status-alert">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")" aria-hidden="true"></i>
+                <span>@Model.StatusMessage</span>
+            </div>
+        }
+
+        <form method="get" asp-action="Index" class="master-data-filter-form xuat-kho-filter-form">
+            <label class="master-data-filter-field" for="keyword">
+                <span>Tìm phiếu xuất kho</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="keyword" name="keyword" type="search" value="@Model.Filter.Keyword" placeholder="Nhập mã phiếu, nội dung hoặc người xuất..." />
+                </span>
+            </label>
+
+            <div class="xuat-kho-date-filter-row">
+                <label class="master-data-filter-field" for="fromDate">
+                    <span>Từ ngày</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                        <input id="fromDate" name="fromDate" type="date" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+                    </span>
+                </label>
+
+                <label class="master-data-filter-field" for="toDate">
+                    <span>Đến ngày</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
+                        <input id="toDate" name="toDate" type="date" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+                    </span>
+                </label>
+            </div>
+
+            <label class="master-data-filter-field" for="statusFilter">
+                <span>Trạng thái phiếu</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                    <select id="statusFilter" name="statusFilter">
+                        <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Filter.StatusFilter) ? "selected" : null)">Tất cả trạng thái</option>
+                        <option value="@XuatKhoPhieuStatus.Draft" selected="@(XuatKhoPhieuStatus.Normalize(Model.Filter.StatusFilter) == XuatKhoPhieuStatus.Draft && !string.IsNullOrWhiteSpace(Model.Filter.StatusFilter) ? "selected" : null)">Phiếu nháp</option>
+                        <option value="@XuatKhoPhieuStatus.Exported" selected="@(XuatKhoPhieuStatus.Normalize(Model.Filter.StatusFilter) == XuatKhoPhieuStatus.Exported ? "selected" : null)">Xuất kho</option>
+                        <option value="@XuatKhoPhieuStatus.Canceled" selected="@(XuatKhoPhieuStatus.Normalize(Model.Filter.StatusFilter) == XuatKhoPhieuStatus.Canceled ? "selected" : null)">Hủy phiếu</option>
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </span>
+            </label>
+
+            <div class="master-data-filter-actions">
+                <button type="submit" class="primary-button master-data-filter-button">
+                    <span class="button-content">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <span>Tìm kiếm</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang xử lý</span>
+                    </span>
+                </button>
+
+                <a class="secondary-button master-data-reset-button" asp-action="Index">Làm mới</a>
+            </div>
+        </form>
+
+        <div class="master-data-summary">
+            <div><strong>@Model.TotalCount</strong> phiếu xuất kho</div>
+            <div>Trang <strong>@Model.CurrentPage</strong>@(Model.TotalPages > 0 ? $" / {Model.TotalPages}" : "")</div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table master-data-table xuat-kho-table">
+                <thead>
+                    <tr>
+                        <th>Mã phiếu</th>
+                        <th>Ngày xuất</th>
+                        <th>Nội dung</th>
+                        <th>Người xuất</th>
+                        <th>Trạng thái</th>
+                        <th>Vật tư</th>
+                        <th class="actions-col">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="7" class="master-data-empty">Chưa có phiếu xuất kho phù hợp.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td><div class="master-data-name">@item.MaPhieu</div></td>
+                                <td>@(item.NgayXuatKho?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td>
+                                    <div class="vat-tu-note-preview">@(string.IsNullOrWhiteSpace(item.NoiDungXuatKho) ? "-" : item.NoiDungXuatKho)</div>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(item.NguoiXuatKho) ? "-" : item.NguoiXuatKho)</td>
+                                <td>
+                                    <span class="status-pill @item.TrangThaiCssClass">@item.TrangThaiDisplay</span>
+                                </td>
+                                <td>@item.DetailCount dòng / @item.TotalQuantity.ToString("0.##")</td>
+                                <td class="actions-col">
+                                    <div class="master-data-actions">
+                                        <a class="table-action-button edit"
+                                           asp-action="Index"
+                                           asp-route-keyword="@Model.Filter.Keyword"
+                                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                                           asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                                           asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                                           asp-route-page="@Model.CurrentPage"
+                                           asp-route-editId="@item.Id">
+                                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                            <span>Mở</span>
+                                        </a>
+
+                                        <form method="post" asp-action="Delete" class="inline-action-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="Id" value="@item.Id" />
+                                            <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+                                            <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
+                                            <input type="hidden" name="FromDate" value="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="Page" value="@Model.CurrentPage" />
+                                            <button type="submit"
+                                                    class="table-action-button delete"
+                                                    disabled="@(XuatKhoPhieuStatus.Normalize(item.TrangThaiPhieu) == XuatKhoPhieuStatus.Exported ? "disabled" : null)"
+                                                    data-delete-confirm="Bạn có chắc muốn xóa phiếu xuất kho này?">
+                                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                <span>Xóa</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pagination-bar" aria-label="Phân trang xuất kho">
+                <a class="pagination-button @(Model.CurrentPage <= 1 ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                   asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                   asp-route-page="@(Model.CurrentPage - 1)">
+                    <i class="fa-solid fa-angle-left" aria-hidden="true"></i>
+                    <span>Trước</span>
+                </a>
+
+                <div class="pagination-pages">
+                    @foreach (var pageNumber in Model.VisiblePages)
+                    {
+                        <a class="pagination-page @(pageNumber == Model.CurrentPage ? "active" : "")"
+                           asp-action="Index"
+                           asp-route-keyword="@Model.Filter.Keyword"
+                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                           asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                           asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                           asp-route-page="@pageNumber">
+                            @pageNumber
+                        </a>
+                    }
+                </div>
+
+                <a class="pagination-button @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                   asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                   asp-route-page="@(Model.CurrentPage + 1)">
+                    <span>Sau</span>
+                    <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
+                </a>
+            </nav>
+        }
+    </article>
+</section>
+
+@if (Model.IsPopupOpen)
+{
+    <div class="crud-modal-shell" data-crud-modal-shell>
+        <div class="crud-modal-backdrop" aria-hidden="true"></div>
+
+        <section class="crud-modal xuat-kho-modal" role="dialog" aria-modal="true" aria-labelledby="xuat-kho-modal-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="xuat-kho-modal-title">@Model.PopupTitle</h2>
+                    <p class="crud-modal-subtitle">Scan QR vật tư, kiểm tra số lượng tồn và lập phiếu xuất kho.</p>
+                </div>
+
+                <a class="menu-nav-button crud-close-button"
+                   data-crud-modal-close
+                   aria-label="Đóng popup"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                   asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                   asp-route-page="@Model.CurrentPage">
+                    <span aria-hidden="true">&times;</span>
+                </a>
+            </div>
+
+            <form method="post" asp-action="@Model.SubmitAction" class="account-form crud-form" data-xuat-kho-form novalidate>
+                @Html.AntiForgeryToken()
+
+                <input asp-for="Form.Id" type="hidden" />
+                <input asp-for="Form.Keyword" type="hidden" />
+                <input asp-for="Form.StatusFilter" type="hidden" />
+                <input asp-for="Form.FromDate" type="hidden" />
+                <input asp-for="Form.ToDate" type="hidden" />
+                <input asp-for="Form.Page" type="hidden" />
+                <input asp-for="Form.ActiveTab" type="hidden" data-active-tab-input />
+                <input asp-for="Form.MaPhieu" type="hidden" />
+                <input asp-for="Form.NguoiXuatKho" type="hidden" />
+                <div class="page-alert error xuat-kho-client-validation" data-xuat-kho-client-errors hidden>
+                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                    <div data-xuat-kho-client-error-list></div>
+                </div>
+
+                <div class="crud-tabs" data-tab-group>
+                    <div class="crud-tab-list" role="tablist" aria-label="Nhóm thông tin phiếu xuất">
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "thong-tin" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="thong-tin"
+                                role="tab"
+                                aria-selected="@(activeTab == "thong-tin" ? "true" : "false")">
+                            Thông tin phiếu
+                        </button>
+
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "vat-tu-xuat" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="vat-tu-xuat"
+                                role="tab"
+                                aria-selected="@(activeTab == "vat-tu-xuat" ? "true" : "false")">
+                            Danh sách vật tư xuất
+                        </button>
+                    </div>
+
+                    <div class="crud-tab-panel @(activeTab == "thong-tin" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="thong-tin"
+                         role="tabpanel"
+                         @(activeTab == "thong-tin" ? null : "hidden")>
+                        <div class="account-form-grid xuat-kho-info-grid">
+                            <label class="login-field">
+                                <span>Mã phiếu</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-barcode" aria-hidden="true"></i>
+                                    <input value="@Model.Form.MaPhieu" readonly tabindex="-1" />
+                                </span>
+                            </label>
+
+                            <label class="login-field @(ngayXuatKhoHasError ? "has-error" : "")" data-xuat-kho-field="ngay-xuat-kho">
+                                <span>Ngày xuất kho</span>
+                                <span class="login-input-shell">
+                                    <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                                    <input asp-for="Form.NgayXuatKho" type="date" max="@DateTime.Today.ToString("yyyy-MM-dd")" readonly="@(!isEditable ? "readonly" : null)" />
+                                </span>
+                                <span asp-validation-for="Form.NgayXuatKho" class="login-field-error"></span>
+                            </label>
+
+                            <label class="login-field">
+                                <span>Người xuất kho</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                                    <input value="@Model.Form.NguoiXuatKho" readonly tabindex="-1" />
+                                </span>
+                            </label>
+
+                            <label class="login-field">
+                                <span>Trạng thái phiếu</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+                                    <input value="@XuatKhoPhieuStatus.GetDisplayName(Model.Form.TrangThaiPhieu)" readonly tabindex="-1" />
+                                </span>
+                                <input asp-for="Form.TrangThaiPhieu" type="hidden" />
+                            </label>
+
+                            <label class="login-field field-span-2 @(noiDungHasError ? "has-error" : "")" data-xuat-kho-field="noi-dung">
+                                <span>Nội dung xuất kho</span>
+                                <span class="login-input-shell textarea-shell xuat-kho-textarea-shell">
+                                    <i class="fa-solid fa-align-left" aria-hidden="true"></i>
+                                    <textarea asp-for="Form.NoiDungXuatKho" rows="4" readonly="@(!isEditable ? "readonly" : null)" placeholder="Nhập nội dung xuất kho..."></textarea>
+                                </span>
+                                <span asp-validation-for="Form.NoiDungXuatKho" class="login-field-error"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="crud-tab-panel @(activeTab == "vat-tu-xuat" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="vat-tu-xuat"
+                         role="tabpanel"
+                         @(activeTab == "vat-tu-xuat" ? null : "hidden")>
+                        <div class="xuat-kho-detail-panel @(detailHasError ? "has-error" : "")" data-xuat-kho-root data-readonly="@(!isEditable ? "true" : "false")">
+                            @if (isEditable)
+                            {
+                                <div class="qr-scanner-shell xuat-kho-scanner" data-xuat-kho-scanner>
+                                    <div class="xuat-kho-scanner-head">
+                                        <span>Quét / tìm vật tư</span>
+                                        <button type="button"
+                                                class="table-action-button xuat-kho-scanner-toggle"
+                                                data-xuat-kho-scanner-toggle
+                                                aria-expanded="true"
+                                                aria-label="Thu gọn cụm tìm kiếm vật tư">
+                                            <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="xuat-kho-scanner-body" data-xuat-kho-scanner-body>
+                                    <div class="qr-scanner-layout">
+                                        <div class="qr-scanner-main">
+                                            <div class="qr-display-card is-empty" data-xuat-kho-qr-summary>
+                                                <div class="qr-display-default" data-xuat-kho-qr-summary-default>
+                                                    <div class="qr-display-icon">
+                                                        <i class="fa-solid fa-qrcode" aria-hidden="true" data-xuat-kho-qr-summary-icon></i>
+                                                    </div>
+                                                </div>
+                                                <div class="qr-scanner-panel xuat-kho-qr-panel" data-xuat-kho-qr-panel hidden>
+                                                    <div class="qr-scanner-reader" data-xuat-kho-qr-reader></div>
+                                                    <div class="qr-scanner-frame" aria-hidden="true"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="qr-scanner-side">
+                                            <div class="qr-scanner-actions">
+                                                <button type="button" class="secondary-button qr-scanner-button" data-xuat-kho-qr-start>
+                                                    <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                                    <span>Quét camera</span>
+                                                </button>
+
+                                                <div class="qr-camera-select-shell" data-xuat-kho-camera-shell hidden>
+                                                    <span class="login-input-shell select-shell">
+                                                        <i class="fa-solid fa-camera-rotate" aria-hidden="true"></i>
+                                                        <select data-xuat-kho-camera></select>
+                                                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                                    </span>
+                                                </div>
+
+                                                <label class="secondary-button qr-scanner-button qr-file-button" for="xuatKhoQrImageFile">
+                                                    <i class="fa-regular fa-image" aria-hidden="true"></i>
+                                                    <span>Quét từ ảnh</span>
+                                                </label>
+
+                                                <button type="button" class="secondary-button qr-scanner-button" data-xuat-kho-qr-stop hidden>
+                                                    <i class="fa-solid fa-stop" aria-hidden="true"></i>
+                                                    <span>Dừng quét</span>
+                                                </button>
+
+                                                <input type="file" id="xuatKhoQrImageFile" accept="image/*" data-xuat-kho-qr-file hidden />
+                                            </div>
+
+                                            <div class="qr-scanner-status xuat-kho-qr-status" data-xuat-kho-qr-status>
+                                                Tìm danh sách vật tư trước, sau đó quét QR bằng camera hoặc ảnh.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="xuat-kho-search" data-xuat-kho-search>
+                                        <label class="login-field xuat-kho-search-field">
+                                            <span>Tìm vật tư</span>
+                                            <span class="login-input-shell">
+                                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                                                <input type="search"
+                                                       autocomplete="off"
+                                                       placeholder="Nhập tên vật tư, hàng hóa, mã lô, vị trí kho..."
+                                                       data-xuat-kho-search-input />
+                                            </span>
+                                        </label>
+
+                                        <div class="xuat-kho-search-results" data-xuat-kho-search-results hidden></div>
+                                    </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (detailHasError)
+                            {
+                                var detailMessages = ViewData.ModelState
+                                    .Where(entry => entry.Key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase))
+                                    .SelectMany(entry => entry.Value?.Errors ?? [])
+                                    .Select(error => error.ErrorMessage)
+                                    .Where(message => !string.IsNullOrWhiteSpace(message))
+                                    .Distinct()
+                                    .ToArray();
+                                <span class="login-field-error xuat-kho-detail-error">
+                                    @(detailMessages.Length > 0 ? string.Join(" ", detailMessages) : "Vui lòng kiểm tra danh sách vật tư xuất.")
+                                </span>
+                            }
+
+                            <div class="table-wrap xuat-kho-detail-table-wrap">
+                                <table class="data-table master-data-table xuat-kho-detail-table">
+                                    <thead>
+                                        <tr>
+	                                            <th>Vật tư</th>
+	                                            <th>Kho</th>
+	                                            <th>Tồn</th>
+	                                            <th>Số lượng xuất</th>
+                                            @if (isEditable)
+                                            {
+                                                <th class="actions-col">Xóa</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody data-xuat-kho-detail-list>
+                                        @for (var index = 0; index < Model.Form.Details.Count; index++)
+                                        {
+                                            var detail = Model.Form.Details[index];
+                                            <tr data-xuat-kho-detail-row data-vat-tu-id="@detail.VatTuId">
+                                                <td>
+                                                    <input type="hidden" name="Form.Details[@index].Id" value="@detail.Id" data-detail-id />
+                                                    <input type="hidden" name="Form.Details[@index].VatTuId" value="@detail.VatTuId" data-detail-vat-tu-id />
+                                                    <input type="hidden" name="Form.Details[@index].HangHoaId" value="@detail.HangHoaId" data-detail-hang-hoa-id />
+                                                    <input type="hidden" name="Form.Details[@index].TenChiTiet" value="@detail.TenChiTiet" data-detail-ten-chi-tiet />
+                                                    <input type="hidden" name="Form.Details[@index].TenHangHoa" value="@detail.TenHangHoa" data-detail-ten-hang-hoa />
+                                                    <input type="hidden" name="Form.Details[@index].MaHangHoa" value="@detail.MaHangHoa" data-detail-ma-hang-hoa />
+                                                    <input type="hidden" name="Form.Details[@index].TenKho" value="@detail.TenKho" data-detail-ten-kho />
+                                                    <input type="hidden" name="Form.Details[@index].MaKho" value="@detail.MaKho" data-detail-ma-kho />
+                                                    <input type="hidden" name="Form.Details[@index].DonViTinh" value="@detail.DonViTinh" data-detail-don-vi-tinh />
+                                                    <input type="hidden" name="Form.Details[@index].QRCode" value="@detail.QRCode" data-detail-qr-code />
+                                                    <input type="hidden" name="Form.Details[@index].SoLuongTon" value="@detail.SoLuongTon.ToString(CultureInfo.InvariantCulture)" data-detail-so-luong-ton />
+                                                    <div class="vat-tu-cell-stack">
+                                                        <a class="master-data-name-link"
+                                                           href="@Url.Action("Index", "VatTu", new { editId = detail.VatTuId, page = 1 })"
+                                                           data-detail-link>
+                                                            <strong data-detail-display-name>@detail.TenChiTiet</strong>
+                                                        </a>
+                                                        <span data-detail-display-product>@(string.IsNullOrWhiteSpace(detail.TenHangHoa) ? "-" : detail.TenHangHoa)</span>
+                                                    </div>
+	                                                </td>
+	                                                <td data-detail-display-kho>@(string.IsNullOrWhiteSpace(detail.TenKho) ? "-" : detail.TenKho)</td>
+	                                                <td><span data-detail-display-stock>@detail.SoLuongTon.ToString("0.##")</span> @(detail.DonViTinh ?? "")</td>
+                                                <td>
+                                                    <input class="xuat-kho-quantity-input"
+                                                           type="number"
+                                                           name="Form.Details[@index].SoLuongXuat"
+                                                           value="@detail.SoLuongXuat.ToString(CultureInfo.InvariantCulture)"
+                                                           min="1"
+                                                           max="@detail.SoLuongTon.ToString(CultureInfo.InvariantCulture)"
+                                                           step="0.01"
+                                                           data-detail-quantity
+                                                           readonly="@(!isEditable ? "readonly" : null)" />
+                                                </td>
+                                                @if (isEditable)
+                                                {
+                                                    <td class="actions-col">
+                                                        <button type="button" class="table-action-button delete xuat-kho-remove-detail" data-xuat-kho-remove-detail aria-label="Xóa vật tư khỏi phiếu">
+                                                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                        </button>
+                                                    </td>
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="master-data-empty xuat-kho-detail-empty @(Model.Form.Details.Count == 0 ? "" : "is-hidden")" data-xuat-kho-detail-empty>
+                                Chưa có vật tư trong phiếu xuất.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="crud-modal-actions @(Model.PopupMode == XuatKhoPopupMode.Edit && currentStatus == XuatKhoPhieuStatus.Draft ? "has-export-action" : "")">
+                    <a class="secondary-button crud-cancel-button"
+                       asp-action="Index"
+                       asp-route-keyword="@Model.Filter.Keyword"
+                       asp-route-statusFilter="@Model.Filter.StatusFilter"
+                       asp-route-fromDate="@Model.Filter.FromDate?.ToString("yyyy-MM-dd")"
+                       asp-route-toDate="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")"
+                       asp-route-page="@Model.CurrentPage">
+                        Đóng
+                    </a>
+
+                    @if (isEditable)
+                    {
+                        @if (Model.PopupMode == XuatKhoPopupMode.Edit && currentStatus == XuatKhoPhieuStatus.Draft)
+                        {
+                            <button type="submit"
+                                    name="command"
+                                    value="export"
+                                    class="secondary-button xuat-kho-export-button"
+                                    data-processing-button
+                                    data-processing-text="Đang xuất">
+                                <span class="button-content">
+                                    <i class="fa-solid fa-truck-ramp-box" aria-hidden="true"></i>
+                                    <span>Xuất phiếu</span>
+                                </span>
+                                <span class="button-processing" aria-hidden="true">
+                                    <span class="button-processing-dot"></span>
+                                    <span class="button-processing-text">Đang xuất</span>
+                                </span>
+                            </button>
+                        }
+
+                        <button type="submit" name="command" value="save" class="primary-button" data-processing-button data-processing-text="Đang lưu">
+                            <span class="button-content">
+                                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                <span>@(Model.PopupMode == XuatKhoPopupMode.Edit ? "Lưu phiếu" : "Tạo phiếu nháp")</span>
+                            </span>
+                            <span class="button-processing" aria-hidden="true">
+                                <span class="button-processing-dot"></span>
+                                <span class="button-processing-text">Đang lưu</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+            </form>
+
+            <template data-xuat-kho-detail-template>
+                <tr data-xuat-kho-detail-row data-vat-tu-id="">
+                    <td>
+                        <input type="hidden" name="Form.Details[__index__].Id" data-detail-id />
+                        <input type="hidden" name="Form.Details[__index__].VatTuId" data-detail-vat-tu-id />
+                        <input type="hidden" name="Form.Details[__index__].HangHoaId" data-detail-hang-hoa-id />
+                        <input type="hidden" name="Form.Details[__index__].TenChiTiet" data-detail-ten-chi-tiet />
+                        <input type="hidden" name="Form.Details[__index__].TenHangHoa" data-detail-ten-hang-hoa />
+                        <input type="hidden" name="Form.Details[__index__].MaHangHoa" data-detail-ma-hang-hoa />
+                        <input type="hidden" name="Form.Details[__index__].TenKho" data-detail-ten-kho />
+                        <input type="hidden" name="Form.Details[__index__].MaKho" data-detail-ma-kho />
+                        <input type="hidden" name="Form.Details[__index__].DonViTinh" data-detail-don-vi-tinh />
+                        <input type="hidden" name="Form.Details[__index__].QRCode" data-detail-qr-code />
+                        <input type="hidden" name="Form.Details[__index__].SoLuongTon" data-detail-so-luong-ton />
+                        <div class="vat-tu-cell-stack">
+                            <a class="master-data-name-link" href="#" data-detail-link>
+                                <strong data-detail-display-name></strong>
+                            </a>
+                            <span data-detail-display-product></span>
+                        </div>
+	                    </td>
+	                    <td data-detail-display-kho></td>
+	                    <td><span data-detail-display-stock></span> <span data-detail-display-unit></span></td>
+                    <td>
+                        <input class="xuat-kho-quantity-input"
+                               type="number"
+                               name="Form.Details[__index__].SoLuongXuat"
+                               min="1"
+                               step="0.01"
+                               data-detail-quantity />
+                    </td>
+                    <td class="actions-col">
+                        <button type="button" class="table-action-button delete xuat-kho-remove-detail" data-xuat-kho-remove-detail aria-label="Xóa vật tư khỏi phiếu">
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+            </template>
+        </section>
+    </div>
+}
+

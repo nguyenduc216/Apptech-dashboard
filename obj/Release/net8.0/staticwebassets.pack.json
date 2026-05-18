@@ -1,0 +1,97 @@
+{
+  "Files": [
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\css\\site.css",
+      "PackagePath": "staticwebassets\\css\\site.css"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\apptech-logo-192.png",
+      "PackagePath": "staticwebassets\\images\\apptech-logo-192.png"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\apptech-logo-512.png",
+      "PackagePath": "staticwebassets\\images\\apptech-logo-512.png"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\default-avatar.svg",
+      "PackagePath": "staticwebassets\\images\\default-avatar.svg"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\login-smart-home-bg.jpg",
+      "PackagePath": "staticwebassets\\images\\login-smart-home-bg.jpg"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\login-smart-home-bg.svg",
+      "PackagePath": "staticwebassets\\images\\login-smart-home-bg.svg"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\qr-scan-icon.svg",
+      "PackagePath": "staticwebassets\\images\\qr-scan-icon.svg"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\js\\dashboard.js",
+      "PackagePath": "staticwebassets\\js\\dashboard.js"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\lib\\html5-qrcode\\LICENSE",
+      "PackagePath": "staticwebassets\\lib\\html5-qrcode"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\lib\\html5-qrcode\\html5-qrcode.min.js",
+      "PackagePath": "staticwebassets\\lib\\html5-qrcode\\html5-qrcode.min.js"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\manifest.webmanifest",
+      "PackagePath": "staticwebassets\\manifest.webmanifest"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\service-worker.js",
+      "PackagePath": "staticwebassets\\service-worker.js"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\.gitkeep",
+      "PackagePath": "staticwebassets\\uploads\\.gitkeep"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\hang-hoa\\.gitkeep",
+      "PackagePath": "staticwebassets\\uploads\\hang-hoa\\.gitkeep"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\hang-hoa\\hang-hoa-3436c0c614e54ae4ad031023afe15da0-20260422023729427.jpg",
+      "PackagePath": "staticwebassets\\uploads\\hang-hoa\\hang-hoa-3436c0c614e54ae4ad031023afe15da0-20260422023729427.jpg"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\vat-tu\\.gitkeep",
+      "PackagePath": "staticwebassets\\uploads\\vat-tu\\.gitkeep"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\vat-tu\\vat-tu-1e7f553f76564fc6ad555cd4428567e9-20260422064530785.png",
+      "PackagePath": "staticwebassets\\uploads\\vat-tu\\vat-tu-1e7f553f76564fc6ad555cd4428567e9-20260422064530785.png"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\vat-tu\\vat-tu-3484705a6f8f4283b6317989fdb067db-20260422064530747.jpg",
+      "PackagePath": "staticwebassets\\uploads\\vat-tu\\vat-tu-3484705a6f8f4283b6317989fdb067db-20260422064530747.jpg"
+    },
+    {
+      "Id": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\uploads\\vat-tu\\vat-tu-bc888e83695b4491b08cd8a299a1ad99-20260422064530715.jpg",
+      "PackagePath": "staticwebassets\\uploads\\vat-tu\\vat-tu-bc888e83695b4491b08cd8a299a1ad99-20260422064530715.jpg"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.ApptechDashboard.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.build.ApptechDashboard.props",
+      "PackagePath": "build\\ApptechDashboard.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.ApptechDashboard.props",
+      "PackagePath": "buildMultiTargeting\\ApptechDashboard.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.buildTransitive.ApptechDashboard.props",
+      "PackagePath": "buildTransitive\\ApptechDashboard.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

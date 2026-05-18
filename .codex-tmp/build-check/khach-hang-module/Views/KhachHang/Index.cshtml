@@ -1,0 +1,332 @@
+@model KhachHangManagementViewModel
+@{
+    ViewData["Title"] = "Khách hàng";
+    ViewData["Breadcrumb"] = "Trang chủ / Kỹ thuật / Khách hàng";
+
+    var tenKhachHangHasError = ViewData.ModelState.TryGetValue("Form.TenKhachHang", out var tenKhachHangState) && tenKhachHangState.Errors.Count > 0;
+    var maKhachHangHasError = ViewData.ModelState.TryGetValue("Form.MaKhachHang", out var maKhachHangState) && maKhachHangState.Errors.Count > 0;
+    var diaChiHasError = ViewData.ModelState.TryGetValue("Form.DiaChi", out var diaChiState) && diaChiState.Errors.Count > 0;
+    var soDienThoaiHasError = ViewData.ModelState.TryGetValue("Form.SoDienThoai", out var soDienThoaiState) && soDienThoaiState.Errors.Count > 0;
+    var nguoiDaiDienHasError = ViewData.ModelState.TryGetValue("Form.NguoiDaiDien", out var nguoiDaiDienState) && nguoiDaiDienState.Errors.Count > 0;
+    var nganhNgheHasError = ViewData.ModelState.TryGetValue("Form.NganhNghe", out var nganhNgheState) && nganhNgheState.Errors.Count > 0;
+    var zaloIdHasError = ViewData.ModelState.TryGetValue("Form.ZaloID", out var zaloIdState) && zaloIdState.Errors.Count > 0;
+    var ghiChuHasError = ViewData.ModelState.TryGetValue("Form.GhiChu", out var ghiChuState) && ghiChuState.Errors.Count > 0;
+    var summaryErrors = ViewData.ModelState.TryGetValue(string.Empty, out var summaryState)
+        ? summaryState.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToArray()
+        : [];
+}
+
+<section class="master-data-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="floating-status-toast @Model.StatusType"
+             data-status-toast
+             role="status"
+             aria-live="polite">
+            <div class="floating-status-toast-icon" aria-hidden="true">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            </div>
+            <div class="floating-status-toast-body">
+                <strong>@(Model.StatusType == "success" ? "Thành công" : Model.StatusType == "error" ? "Có lỗi xảy ra" : "Thông báo")</strong>
+                <span>@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="floating-status-toast-close" data-status-toast-close aria-label="Đóng thông báo">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
+    }
+
+    <article class="panel master-data-panel">
+        <div class="panel-header master-data-header">
+            <div>
+                <h3>Danh sách khách hàng</h3>
+                <p>Quản lý danh sách và thông tin liên hệ khách hàng.</p>
+            </div>
+
+            <div class="master-data-header-actions">
+                <a class="master-data-add-button"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-page="@Model.CurrentPage"
+                   asp-route-showCreatePopup="true">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    <span>Thêm mới</span>
+                </a>
+            </div>
+        </div>
+
+        <form method="get" asp-action="Index" class="master-data-filter-form">
+            <label class="master-data-filter-field" for="keyword">
+                <span>Tìm theo tên, mã, số điện thoại, người đại diện hoặc Zalo</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-address-book" aria-hidden="true"></i>
+                    <input id="keyword" name="keyword" type="search" value="@Model.Filter.Keyword" placeholder="Nhập từ khóa tìm kiếm..." />
+                </span>
+            </label>
+
+            <div class="master-data-filter-actions">
+                <button type="submit" class="primary-button master-data-filter-button">
+                    <span class="button-content">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <span>Tìm kiếm</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang xử lý</span>
+                    </span>
+                </button>
+
+                <a class="secondary-button master-data-reset-button" asp-action="Index">Làm mới</a>
+            </div>
+        </form>
+
+        <div class="master-data-summary">
+            <div><strong>@Model.TotalCount</strong> khách hàng</div>
+            <div>Trang <strong>@Model.CurrentPage</strong>@(Model.TotalPages > 0 ? $" / {Model.TotalPages}" : "")</div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table master-data-table">
+                <thead>
+                    <tr>
+                        <th>Tên khách hàng</th>
+                        <th>Mã khách hàng</th>
+                        <th>Liên hệ</th>
+                        <th>Người đại diện</th>
+                        <th>Ngành nghề</th>
+                        <th class="actions-col">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="master-data-empty">Không có dữ liệu phù hợp.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="master-data-name">@item.TenKhachHang</div>
+                                    <div>@(string.IsNullOrWhiteSpace(item.DiaChi) ? "-" : item.DiaChi)</div>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(item.MaKhachHang) ? "-" : item.MaKhachHang)</td>
+                                <td>
+                                    <div>@(string.IsNullOrWhiteSpace(item.SoDienThoai) ? "-" : item.SoDienThoai)</div>
+                                    <div>@(string.IsNullOrWhiteSpace(item.ZaloID) ? "-" : item.ZaloID)</div>
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(item.NguoiDaiDien) ? "-" : item.NguoiDaiDien)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.NganhNghe) ? "-" : item.NganhNghe)</td>
+                                <td class="actions-col">
+                                    <div class="master-data-actions">
+                                        <a class="table-action-button edit"
+                                           asp-action="Index"
+                                           asp-route-keyword="@Model.Filter.Keyword"
+                                           asp-route-page="@Model.CurrentPage"
+                                           asp-route-editId="@item.Id">
+                                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                            <span>Sửa</span>
+                                        </a>
+
+                                        <form method="post" asp-action="Delete" class="inline-action-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="Id" value="@item.Id" />
+                                            <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+                                            <input type="hidden" name="Page" value="@Model.CurrentPage" />
+                                            <button type="submit"
+                                                    class="table-action-button delete"
+                                                    data-delete-confirm="Bạn có chắc muốn xóa khách hàng này?">
+                                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                <span>Xóa</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pagination-bar" aria-label="Phân trang khách hàng">
+                <a class="pagination-button @(Model.CurrentPage <= 1 ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-page="@(Model.CurrentPage - 1)">
+                    <i class="fa-solid fa-angle-left" aria-hidden="true"></i>
+                    <span>Trước</span>
+                </a>
+
+                <div class="pagination-pages">
+                    @foreach (var pageNumber in Model.VisiblePages)
+                    {
+                        <a class="pagination-page @(pageNumber == Model.CurrentPage ? "active" : "")"
+                           asp-action="Index"
+                           asp-route-keyword="@Model.Filter.Keyword"
+                           asp-route-page="@pageNumber">
+                            @pageNumber
+                        </a>
+                    }
+                </div>
+
+                <a class="pagination-button @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-page="@(Model.CurrentPage + 1)">
+                    <span>Sau</span>
+                    <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
+                </a>
+            </nav>
+        }
+    </article>
+</section>
+
+@if (Model.IsPopupOpen)
+{
+    <div class="crud-modal-shell" data-crud-modal-shell>
+        <div class="crud-modal-backdrop" aria-hidden="true"></div>
+
+        <section class="crud-modal" role="dialog" aria-modal="true" aria-labelledby="khach-hang-modal-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="khach-hang-modal-title">@Model.PopupTitle</h2>
+                    <p class="crud-modal-subtitle">Quản lý tên khách hàng, mã khách hàng, địa chỉ, số điện thoại, người đại diện, ngành nghề, thông tin Zalo và ghi chú.</p>
+                </div>
+
+                <a class="menu-nav-button crud-close-button"
+                   data-crud-modal-close
+                   aria-label="Đóng popup"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-page="@Model.CurrentPage">
+                    <span aria-hidden="true">&times;</span>
+                </a>
+            </div>
+
+            <form method="post" asp-action="@Model.SubmitAction" class="account-form crud-form">
+                @Html.AntiForgeryToken()
+
+                <input asp-for="Form.Id" type="hidden" />
+                <input asp-for="Form.Keyword" type="hidden" />
+                <input asp-for="Form.Page" type="hidden" />
+
+                @if (summaryErrors.Length > 0)
+                {
+                    <div class="page-alert error validation-summary">
+                        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                        <div>
+                            @foreach (var message in summaryErrors)
+                            {
+                                <div>@message</div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="account-form-grid">
+                    <label class="login-field @(tenKhachHangHasError ? "has-error" : "")">
+                        <span>Tên khách hàng</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-building" aria-hidden="true"></i>
+                            <input asp-for="Form.TenKhachHang" autocomplete="off" autofocus />
+                        </span>
+                        <span asp-validation-for="Form.TenKhachHang" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field @(maKhachHangHasError ? "has-error" : "")">
+                        <span>Mã khách hàng</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-id-badge" aria-hidden="true"></i>
+                            <input asp-for="Form.MaKhachHang" autocomplete="off" />
+                        </span>
+                        <span asp-validation-for="Form.MaKhachHang" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field @(soDienThoaiHasError ? "has-error" : "")">
+                        <span>Số điện thoại</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-phone" aria-hidden="true"></i>
+                            <input asp-for="Form.SoDienThoai" autocomplete="off" inputmode="tel" />
+                        </span>
+                        <span asp-validation-for="Form.SoDienThoai" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field @(nguoiDaiDienHasError ? "has-error" : "")">
+                        <span>Người đại diện</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+                            <input asp-for="Form.NguoiDaiDien" autocomplete="off" />
+                        </span>
+                        <span asp-validation-for="Form.NguoiDaiDien" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field @(nganhNgheHasError ? "has-error" : "")">
+                        <span>Ngành nghề</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-briefcase" aria-hidden="true"></i>
+                            <input asp-for="Form.NganhNghe" autocomplete="off" />
+                        </span>
+                        <span asp-validation-for="Form.NganhNghe" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field @(zaloIdHasError ? "has-error" : "")">
+                        <span>Thông tin Zalo</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                            <input asp-for="Form.ZaloID" autocomplete="off" />
+                        </span>
+                        <span asp-validation-for="Form.ZaloID" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field field-span-2 @(diaChiHasError ? "has-error" : "")">
+                        <span>Địa chỉ</span>
+                        <span class="login-textarea-shell">
+                            <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                            <textarea asp-for="Form.DiaChi" rows="3" placeholder="Nhập địa chỉ khách hàng..."></textarea>
+                        </span>
+                        <span asp-validation-for="Form.DiaChi" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field field-span-2 @(ghiChuHasError ? "has-error" : "")">
+                        <span>Ghi chú</span>
+                        <span class="login-textarea-shell">
+                            <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+                            <textarea asp-for="Form.GhiChu" rows="4" placeholder="Nhập ghi chú thêm về khách hàng..."></textarea>
+                        </span>
+                        <span asp-validation-for="Form.GhiChu" class="login-field-error"></span>
+                    </label>
+                </div>
+
+                <div class="crud-modal-actions">
+                    <a class="secondary-button"
+                       asp-action="Index"
+                       asp-route-keyword="@Model.Filter.Keyword"
+                       asp-route-page="@Model.CurrentPage">
+                        Hủy
+                    </a>
+
+                    <button type="submit" class="primary-button">
+                        <span class="button-content">
+                            <i class="fa-solid @(Model.PopupMode == KhachHangPopupMode.Edit ? "fa-floppy-disk" : "fa-plus")" aria-hidden="true"></i>
+                            <span>@(Model.PopupMode == KhachHangPopupMode.Edit ? "Lưu cập nhật" : "Thêm mới")</span>
+                        </span>
+                        <span class="button-processing" aria-hidden="true">
+                            <span class="button-processing-dot"></span>
+                            <span class="button-processing-text">Đang xử lý</span>
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </section>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

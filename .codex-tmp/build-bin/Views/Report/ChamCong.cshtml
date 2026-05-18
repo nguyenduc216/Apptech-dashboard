@@ -1,0 +1,419 @@
+@model ChamCongReportViewModel
+@{
+    ViewData["Title"] = "Báo cáo chấm công";
+    ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Chấm công";
+
+    var monthOptions = Enumerable.Range(1, 12).ToArray();
+    var currentYear = DateTime.Today.Year;
+    var yearOptions = Enumerable.Range(currentYear - 5, 11).Reverse().ToArray();
+    var columnCount = 3 + Model.Days.Count + 1;
+    var selectedEmployeeIds = Model.SelectedEmployeeIds.ToHashSet();
+    var selectedEmployeeQuery = Model.SelectedEmployeeIds.Count == 0
+        ? string.Empty
+        : string.Concat(Model.SelectedEmployeeIds.Select(id => $"&EmployeeIds={id}"));
+    string BuildTabUrl(string tab)
+    {
+        var url = Url.Action("ChamCong", "Report", new { month = Model.Month, year = Model.Year, tab }) ?? "#";
+        return selectedEmployeeQuery.Length == 0 ? url : $"{url}{selectedEmployeeQuery}";
+    }
+}
+
+<section class="master-data-page cham-cong-report-page">
+    <article class="panel master-data-panel cham-cong-report-panel">
+        <div class="panel-header master-data-header">
+            <div>
+                <h3>Báo cáo chấm công</h3>
+                <p>Theo dõi số giờ chấm công theo từng nhân viên trong tháng.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+        {
+            <div class="page-alert @Model.StatusType master-data-status-alert">
+                @Model.StatusMessage
+            </div>
+        }
+
+        <form method="get" asp-action="ChamCong" class="master-data-filter-form cham-cong-report-filter">
+            <input type="hidden" name="tab" value="@Model.ActiveTab" />
+            <label class="master-data-filter-field" for="month">
+                <span>Tháng</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                    <select id="month" name="month">
+                        @foreach (var month in monthOptions)
+                        {
+                            <option value="@month" selected="@(month == Model.Month ? "selected" : null)">Tháng @month</option>
+                        }
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="year">
+                <span>Năm</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-calendar" aria-hidden="true"></i>
+                    <select id="year" name="year">
+                        @foreach (var year in yearOptions)
+                        {
+                            <option value="@year" selected="@(year == Model.Year ? "selected" : null)">@year</option>
+                        }
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </span>
+            </label>
+
+            <div class="master-data-filter-field cham-cong-report-employee-filter" data-report-employee-picker>
+                <span>Nhân viên</span>
+                <button type="button"
+                        class="login-input-shell cham-cong-report-employee-button"
+                        data-report-employee-toggle
+                        aria-expanded="false">
+                    <i class="fa-solid fa-users" aria-hidden="true"></i>
+                    <span data-report-employee-summary>@(Model.AllEmployeesSelected ? "Tất cả nhân viên" : $"{Model.SelectedEmployeeIds.Count} nhân viên")</span>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </button>
+                <div class="cham-cong-report-employee-menu" data-report-employee-menu hidden>
+                    <label class="cham-cong-report-employee-choice cham-cong-report-employee-choice-all">
+                        <input type="checkbox" data-report-employee-all checked="@Model.AllEmployeesSelected" />
+                        <span>Tất cả nhân viên</span>
+                    </label>
+                    @foreach (var employee in Model.EmployeeOptions)
+                    {
+                        var isChecked = Model.AllEmployeesSelected || selectedEmployeeIds.Contains(employee.EmployeeId);
+                        <label class="cham-cong-report-employee-choice">
+                            <input type="checkbox"
+                                   name="EmployeeIds"
+                                   value="@employee.EmployeeId"
+                                   data-report-employee-checkbox
+                                   checked="@isChecked" />
+                            <span>@employee.DisplayText</span>
+                        </label>
+                    }
+                </div>
+            </div>
+
+            <div class="master-data-filter-actions">
+                <button type="submit" class="primary-button master-data-filter-button">
+                    <span class="button-content">
+                        <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                        <span>Xem báo cáo</span>
+                    </span>
+                </button>
+                <a class="secondary-button master-data-reset-button" asp-action="ChamCong">Tháng hiện tại</a>
+            </div>
+        </form>
+
+        <div class="crud-tabs cham-cong-report-tabs">
+            <div class="crud-tab-list" role="tablist" aria-label="Nhóm báo cáo chấm công">
+                <a class="crud-tab-button @(Model.ActiveTab == "gio-cong" ? "is-active" : "")"
+                   href="@BuildTabUrl("gio-cong")"
+                   role="tab"
+                   aria-selected="@(Model.ActiveTab == "gio-cong" ? "true" : "false")">
+                    <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                    <span>Giờ công</span>
+                </a>
+                <a class="crud-tab-button @(Model.ActiveTab == "di-tre-ve-som" ? "is-active" : "")"
+                   href="@BuildTabUrl("di-tre-ve-som")"
+                   role="tab"
+                   aria-selected="@(Model.ActiveTab == "di-tre-ve-som" ? "true" : "false")">
+                    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                    <span>Đi trễ / về sớm</span>
+                </a>
+                <a class="crud-tab-button @(Model.ActiveTab == "checkin-out" ? "is-active" : "")"
+                   href="@BuildTabUrl("checkin-out")"
+                   role="tab"
+                   aria-selected="@(Model.ActiveTab == "checkin-out" ? "true" : "false")">
+                    <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                    <span>Checkin/out</span>
+                </a>
+            </div>
+
+            @if (Model.ActiveTab == "gio-cong")
+            {
+                <div class="table-wrap cham-cong-report-wrap" role="tabpanel">
+                    <table class="data-table master-data-table cham-cong-report-table">
+                        <thead>
+                            <tr>
+                                <th class="report-index-col" rowspan="2">TT</th>
+                                <th class="report-name-col" rowspan="2">Họ và tên</th>
+                                <th class="report-role-col" rowspan="2">Chức vụ</th>
+                                <th class="report-month-col" colspan="@Model.Days.Count">Ngày trong tháng</th>
+                                <th class="report-total-col" rowspan="2">Tổng giờ trong tháng</th>
+                            </tr>
+                            <tr>
+                                @foreach (var day in Model.Days)
+                                {
+                                    <th class="report-day-col @(day.IsSunday ? "is-sunday" : "")">
+                                        <span>@day.Day</span>
+                                        <small>@day.WeekdayLabel</small>
+                                    </th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Employees.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="@columnCount" class="master-data-empty">Chưa có dữ liệu nhân viên để lập báo cáo.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                for (var index = 0; index < Model.Employees.Count; index++)
+                                {
+                                    var employee = Model.Employees[index];
+                                    <tr>
+                                        <td class="report-index-col">@(index + 1)</td>
+                                        <td class="report-name-col">@employee.HoTen</td>
+                                        <td class="report-role-col">@(string.IsNullOrWhiteSpace(employee.ChucVu) ? "-" : employee.ChucVu)</td>
+                                        @foreach (var day in Model.Days)
+                                        {
+                                            var hasValue = employee.HoursByDay.TryGetValue(day.Day, out var hours);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                                @(hasValue ? hours.ToString("0.##") : "")
+                                            </td>
+                                        }
+                                        <td class="report-total-col">@employee.TotalHours.ToString("0.##") / @Model.MonthlyStandardHours.ToString("0.##")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        @if (Model.Employees.Count > 0)
+                        {
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3">Tổng cộng</td>
+                                    @foreach (var day in Model.Days)
+                                    {
+                                        var hasAnyValue = Model.Employees.Any(employee => employee.HoursByDay.ContainsKey(day.Day));
+                                        var total = Model.Employees.Sum(employee =>
+                                            employee.HoursByDay.TryGetValue(day.Day, out var hours) ? hours : 0m);
+                                        <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                            @(hasAnyValue ? total.ToString("0.##") : "")
+                                        </td>
+                                    }
+                                    <td class="report-total-col">@Model.GrandTotalHours.ToString("0.##") / @Model.GrandStandardHours.ToString("0.##")</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            }
+            else if (Model.ActiveTab == "di-tre-ve-som")
+            {
+                <div class="table-wrap cham-cong-report-wrap" role="tabpanel">
+                    <table class="data-table master-data-table cham-cong-report-table">
+                        <thead>
+                            <tr>
+                                <th class="report-index-col" rowspan="2">TT</th>
+                                <th class="report-name-col" rowspan="2">Họ và tên</th>
+                                <th class="report-role-col" rowspan="2">Chức vụ</th>
+                                <th class="report-month-col" colspan="@Model.Days.Count">Ngày trong tháng</th>
+                                <th class="report-total-col" rowspan="2">Tổng phút</th>
+                            </tr>
+                            <tr>
+                                @foreach (var day in Model.Days)
+                                {
+                                    <th class="report-day-col @(day.IsSunday ? "is-sunday" : "")">
+                                        <span>@day.Day</span>
+                                        <small>@day.WeekdayLabel</small>
+                                    </th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Employees.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="@columnCount" class="master-data-empty">Chưa có dữ liệu nhân viên để lập báo cáo.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                for (var index = 0; index < Model.Employees.Count; index++)
+                                {
+                                    var employee = Model.Employees[index];
+                                    <tr>
+                                        <td class="report-index-col">@(index + 1)</td>
+                                        <td class="report-name-col">@employee.HoTen</td>
+                                        <td class="report-role-col">@(string.IsNullOrWhiteSpace(employee.ChucVu) ? "-" : employee.ChucVu)</td>
+                                        @foreach (var day in Model.Days)
+                                        {
+                                            var hasValue = employee.LateEarlyMinutesByDay.TryGetValue(day.Day, out var minutes);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                                @(hasValue ? minutes.ToString("0") : "")
+                                            </td>
+                                        }
+                                        <td class="report-total-col">@employee.TotalLateEarlyMinutes.ToString("0")</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        @if (Model.Employees.Count > 0)
+                        {
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3">Tổng cộng</td>
+                                    @foreach (var day in Model.Days)
+                                    {
+                                        var hasAnyValue = Model.Employees.Any(employee => employee.LateEarlyMinutesByDay.ContainsKey(day.Day));
+                                        var total = Model.Employees.Sum(employee =>
+                                            employee.LateEarlyMinutesByDay.TryGetValue(day.Day, out var minutes) ? minutes : 0);
+                                        <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                            @(hasAnyValue ? total.ToString("0") : "")
+                                        </td>
+                                    }
+                                    <td class="report-total-col">@Model.GrandLateEarlyMinutes.ToString("0")</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrap cham-cong-report-wrap" role="tabpanel">
+                    <table class="data-table master-data-table cham-cong-report-table">
+                        <thead>
+                            <tr>
+                                <th class="report-index-col" rowspan="2">TT</th>
+                                <th class="report-name-col" rowspan="2">Họ và tên</th>
+                                <th class="report-role-col" rowspan="2">Chức vụ</th>
+                                <th class="report-month-col" colspan="@Model.Days.Count">Ngày trong tháng</th>
+                                <th class="report-total-col" rowspan="2">Tổng checkin/out</th>
+                            </tr>
+                            <tr>
+                                @foreach (var day in Model.Days)
+                                {
+                                    <th class="report-day-col @(day.IsSunday ? "is-sunday" : "")">
+                                        <span>@day.Day</span>
+                                        <small>@day.WeekdayLabel</small>
+                                    </th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Employees.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="@columnCount" class="master-data-empty">Chưa có dữ liệu nhân viên để lập báo cáo.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                for (var index = 0; index < Model.Employees.Count; index++)
+                                {
+                                    var employee = Model.Employees[index];
+                                    <tr>
+                                        <td class="report-index-col">@(index + 1)</td>
+                                        <td class="report-name-col">@employee.HoTen</td>
+                                        <td class="report-role-col">@(string.IsNullOrWhiteSpace(employee.ChucVu) ? "-" : employee.ChucVu)</td>
+                                        @foreach (var day in Model.Days)
+                                        {
+                                            var hasValue = employee.CountsByDay.TryGetValue(day.Day, out var count);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                                @(hasValue && count is not null ? $"{count.CheckinCount} / {count.CheckoutCount}" : "")
+                                            </td>
+                                        }
+                                        <td class="report-total-col">@employee.TotalCheckinCount / @employee.TotalCheckoutCount</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                        @if (Model.Employees.Count > 0)
+                        {
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3">Tổng cộng</td>
+                                    @foreach (var day in Model.Days)
+                                    {
+                                        var hasAnyValue = Model.Employees.Any(employee => employee.CountsByDay.ContainsKey(day.Day));
+                                        var totalCheckin = Model.Employees.Sum(employee =>
+                                            employee.CountsByDay.TryGetValue(day.Day, out var count) ? count.CheckinCount : 0);
+                                        var totalCheckout = Model.Employees.Sum(employee =>
+                                            employee.CountsByDay.TryGetValue(day.Day, out var count) ? count.CheckoutCount : 0);
+                                        <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                            @(hasAnyValue ? $"{totalCheckin} / {totalCheckout}" : "")
+                                        </td>
+                                    }
+                                    <td class="report-total-col">@Model.GrandCheckinCount / @Model.GrandCheckoutCount</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+
+@section Scripts {
+    <script>
+        (() => {
+            const picker = document.querySelector("[data-report-employee-picker]");
+            if (!(picker instanceof HTMLElement)) {
+                return;
+            }
+
+            const toggle = picker.querySelector("[data-report-employee-toggle]");
+            const menu = picker.querySelector("[data-report-employee-menu]");
+            const summary = picker.querySelector("[data-report-employee-summary]");
+            const allCheckbox = picker.querySelector("[data-report-employee-all]");
+            const checkboxes = Array.from(picker.querySelectorAll("[data-report-employee-checkbox]"));
+
+            const syncSummary = () => {
+                const checked = checkboxes.filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked);
+                if (summary instanceof HTMLElement) {
+                    summary.textContent = checked.length === checkboxes.length || checked.length === 0
+                        ? "Tất cả nhân viên"
+                        : `${checked.length} nhân viên`;
+                }
+
+                if (allCheckbox instanceof HTMLInputElement) {
+                    allCheckbox.checked = checked.length === checkboxes.length || checked.length === 0;
+                    allCheckbox.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+                }
+            };
+
+            toggle?.addEventListener("click", () => {
+                if (!(menu instanceof HTMLElement)) {
+                    return;
+                }
+
+                const willOpen = menu.hidden;
+                menu.hidden = !willOpen;
+                toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+            });
+
+            allCheckbox?.addEventListener("change", () => {
+                if (!(allCheckbox instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                checkboxes.forEach((checkbox) => {
+                    if (checkbox instanceof HTMLInputElement) {
+                        checkbox.checked = allCheckbox.checked;
+                    }
+                });
+                syncSummary();
+            });
+
+            checkboxes.forEach((checkbox) => {
+                checkbox.addEventListener("change", syncSummary);
+            });
+
+            document.addEventListener("click", (event) => {
+                if (!(menu instanceof HTMLElement) || menu.hidden || picker.contains(event.target)) {
+                    return;
+                }
+
+                menu.hidden = true;
+                toggle?.setAttribute("aria-expanded", "false");
+            });
+
+            syncSummary();
+        })();
+    </script>
+}

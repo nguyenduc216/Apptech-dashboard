@@ -1,0 +1,470 @@
+@model QrCodeBatchPageViewModel
+@{
+    var quantityHasError = ViewData.ModelState.TryGetValue("Request.Quantity", out var quantityState) && quantityState.Errors.Count > 0;
+    var perRowHasError = ViewData.ModelState.TryGetValue("Request.QrPerRow", out var perRowState) && perRowState.Errors.Count > 0;
+    var widthHasError = ViewData.ModelState.TryGetValue("Request.QrWidth", out var widthState) && widthState.Errors.Count > 0;
+    var heightHasError = ViewData.ModelState.TryGetValue("Request.QrHeight", out var heightState) && heightState.Errors.Count > 0;
+    var marginLeftHasError = ViewData.ModelState.TryGetValue("Request.MarginLeft", out var marginLeftState) && marginLeftState.Errors.Count > 0;
+    var marginRightHasError = ViewData.ModelState.TryGetValue("Request.MarginRight", out var marginRightState) && marginRightState.Errors.Count > 0;
+    var marginTopHasError = ViewData.ModelState.TryGetValue("Request.MarginTop", out var marginTopState) && marginTopState.Errors.Count > 0;
+    var marginBottomHasError = ViewData.ModelState.TryGetValue("Request.MarginBottom", out var marginBottomState) && marginBottomState.Errors.Count > 0;
+    var qrColumns = Math.Max(1, Model.Request.QrPerRow);
+    var totalItems = Model.Items.Count;
+    var qrStatusOptions = new[]
+    {
+        new { Value = QrCodeAssignmentQrStatus.All, Label = "Tất cả" },
+        new { Value = QrCodeAssignmentQrStatus.MissingQr, Label = "Chưa có QR" },
+        new { Value = QrCodeAssignmentQrStatus.HasQr, Label = "Đã có QR" }
+    };
+
+    string GetSeparatorClasses(int zeroBasedIndex)
+    {
+        if (!Model.Request.ShowDashedLines || totalItems == 0)
+        {
+            return string.Empty;
+        }
+
+        var classes = new List<string>();
+        var isLastItemInRow = (zeroBasedIndex + 1) % qrColumns == 0;
+        var hasItemOnRight = !isLastItemInRow && zeroBasedIndex < totalItems - 1;
+        var hasItemBelow = zeroBasedIndex + qrColumns < totalItems;
+
+        if (hasItemOnRight)
+        {
+            classes.Add("has-right-separator");
+        }
+
+        if (hasItemBelow)
+        {
+            classes.Add("has-bottom-separator");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    var printStyle = string.Create(
+        System.Globalization.CultureInfo.InvariantCulture,
+        $"--qr-columns:{Model.Request.QrPerRow};--qr-width:{Model.Request.QrWidth}mm;--qr-height:{Model.Request.QrHeight}mm;--qr-margin-left:{Model.Request.MarginLeft}mm;--qr-margin-right:{Model.Request.MarginRight}mm;--qr-margin-top:{Model.Request.MarginTop}mm;--qr-margin-bottom:{Model.Request.MarginBottom}mm;");
+}
+
+<section class="master-data-page qr-generator-page">
+    <article class="panel master-data-panel qr-generator-panel qr-screen-only">
+        <div class="panel-header qr-generator-header">
+            <div>
+                <h3>Tạo QR để in</h3>
+                <p>Sinh tối đa 999 QR/lần theo mẫu <strong>appTech-XXXXXXXXX</strong>. Phần hậu tố dùng base36 9 ký tự và được cấp tuần tự để không trùng.</p>
+            </div>
+
+            <div class="qr-generator-header-actions">
+                <button type="button"
+                        class="secondary-button"
+                        data-qr-assignment-open
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="qrAssignmentModal">
+                    <i class="fa-solid fa-link" aria-hidden="true"></i>
+                    <span>Đánh mã QR</span>
+                </button>
+
+                @if (Model.HasGeneratedItems)
+                {
+                    <button type="button" class="primary-button" onclick="window.print()">
+                        <span class="button-content">
+                            <i class="fa-solid fa-print" aria-hidden="true"></i>
+                            <span>In danh sách</span>
+                        </span>
+                        <span class="button-processing" aria-hidden="true">
+                            <span class="button-processing-dot"></span>
+                            <span class="button-processing-text">Đang xử lý</span>
+                        </span>
+                    </button>
+
+                    <button type="submit" class="secondary-button qr-export-pdf-button" form="qrExportPdfForm">
+                        <i class="fa-regular fa-file-pdf" aria-hidden="true"></i>
+                        <span>Xuất PDF</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <form method="post" asp-action="Index" class="qr-generator-form">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="page-alert error"></div>
+
+            <div class="account-form-grid qr-settings-grid">
+                <label class="login-field @(quantityHasError ? "has-error" : "")">
+                    <span>Số lượng QR</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-hashtag" aria-hidden="true"></i>
+                        <input asp-for="Request.Quantity" type="number" min="1" max="999" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.Quantity" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(perRowHasError ? "has-error" : "")">
+                    <span>Số QR / hàng</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-table-cells-large" aria-hidden="true"></i>
+                        <input asp-for="Request.QrPerRow" type="number" min="1" max="20" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.QrPerRow" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(widthHasError ? "has-error" : "")">
+                    <span>Kích thước ngang QR (mm)</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i>
+                        <input asp-for="Request.QrWidth" type="number" min="10" max="135" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.QrWidth" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(heightHasError ? "has-error" : "")">
+                    <span>Kích thước dọc QR (mm)</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-arrows-up-down" aria-hidden="true"></i>
+                        <input asp-for="Request.QrHeight" type="number" min="10" max="135" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.QrHeight" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(marginLeftHasError ? "has-error" : "")">
+                    <span>Khoảng cách trái (mm)</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-left-long" aria-hidden="true"></i>
+                        <input asp-for="Request.MarginLeft" type="number" min="0" max="32" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.MarginLeft" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(marginRightHasError ? "has-error" : "")">
+                    <span>Khoảng cách phải (mm)</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-right-long" aria-hidden="true"></i>
+                        <input asp-for="Request.MarginRight" type="number" min="0" max="32" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.MarginRight" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(marginTopHasError ? "has-error" : "")">
+                    <span>Khoảng cách trên (mm)</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-up-long" aria-hidden="true"></i>
+                        <input asp-for="Request.MarginTop" type="number" min="0" max="32" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.MarginTop" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field @(marginBottomHasError ? "has-error" : "")">
+                    <span>Khoảng cách dưới (mm)</span>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-down-long" aria-hidden="true"></i>
+                        <input asp-for="Request.MarginBottom" type="number" min="0" max="32" inputmode="numeric" />
+                    </span>
+                    <span asp-validation-for="Request.MarginBottom" class="login-field-error"></span>
+                </label>
+
+                <label class="login-field qr-checkbox-field">
+                    <span>Đường kẻ dash</span>
+                    <span class="switch-field-shell qr-checkbox-shell">
+                        <span class="switch-field-icon">
+                            <i class="fa-solid fa-grip-lines" aria-hidden="true"></i>
+                        </span>
+                        <span class="status-switch">
+                            <input asp-for="Request.ShowDashedLines" type="checkbox" class="status-switch-input" />
+                            <span class="status-switch-track">
+                                <span class="status-switch-thumb"></span>
+                            </span>
+                            <span class="status-switch-labels">
+                                <span>Tắt</span>
+                                <span>Bật</span>
+                            </span>
+                        </span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="qr-generator-form-actions">
+                <button type="submit" class="primary-button" data-processing-button data-processing-text="Đang tạo">
+                    <span class="button-content">
+                        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                        <span>Tạo QR</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang tạo</span>
+                    </span>
+                </button>
+            </div>
+        </form>
+
+        @if (Model.HasGeneratedItems)
+        {
+            <form method="post" asp-action="ExportPdf" id="qrExportPdfForm" class="qr-export-form">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Request.Quantity" />
+                <input type="hidden" asp-for="Request.QrPerRow" />
+                <input type="hidden" asp-for="Request.QrWidth" />
+                <input type="hidden" asp-for="Request.QrHeight" />
+                <input type="hidden" asp-for="Request.MarginLeft" />
+                <input type="hidden" asp-for="Request.MarginRight" />
+                <input type="hidden" asp-for="Request.MarginTop" />
+                <input type="hidden" asp-for="Request.MarginBottom" />
+                <input type="hidden" asp-for="Request.ShowDashedLines" />
+                @for (var index = 0; index < Model.Items.Count; index++)
+                {
+                    <input type="hidden" name="Values" value="@Model.Items[index].Value" />
+                }
+            </form>
+        }
+    </article>
+
+    @if (Model.HasGeneratedItems)
+    {
+        <article class="panel master-data-panel qr-generator-panel qr-screen-only" data-qr-export-source>
+            <div class="panel-header">
+                <div>
+                    <h3>Bản xem trước</h3>
+                    <p>
+                        Đã tạo <strong>@Model.Items.Count</strong> mã.
+                        Dải số <strong>@Model.FirstSequence</strong> đến <strong>@Model.LastSequence</strong>.
+                        Thời điểm tạo <strong>@Model.GeneratedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="qr-batch-sheet qr-batch-preview @(Model.Request.ShowDashedLines ? "has-guides" : null)" style="@printStyle">
+                <div class="qr-batch-grid">
+                    @for (var index = 0; index < Model.Items.Count; index++)
+                    {
+                        var item = Model.Items[index];
+                        <article class="qr-batch-item @GetSeparatorClasses(index)">
+                            <div class="qr-batch-code">
+                                <div class="qr-batch-code-graphic">@Html.Raw(item.SvgMarkup)</div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </div>
+        </article>
+
+        <section class="qr-print-layout">
+            <div class="qr-print-meta">
+                <div>Tạo lúc: @Model.GeneratedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</div>
+                <div>Số lượng: @Model.Items.Count</div>
+            </div>
+
+            <div class="qr-batch-sheet @(Model.Request.ShowDashedLines ? "has-guides" : null)" style="@printStyle">
+                <div class="qr-batch-grid">
+                    @for (var index = 0; index < Model.Items.Count; index++)
+                    {
+                        var item = Model.Items[index];
+                        <article class="qr-batch-item @GetSeparatorClasses(index)">
+                            <div class="qr-batch-code">
+                                <div class="qr-batch-code-graphic">@Html.Raw(item.SvgMarkup)</div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+</section>
+
+<div class="crud-modal-shell" data-qr-assignment-shell hidden>
+    <div class="crud-modal-backdrop" aria-hidden="true"></div>
+
+    <section class="crud-modal qr-assignment-modal" id="qrAssignmentModal" role="dialog" aria-modal="true" aria-labelledby="qr-assignment-title">
+        <div class="crud-modal-header">
+            <div class="crud-modal-heading">
+                <h2 id="qr-assignment-title">Đánh mã QR cho vật tư</h2>
+                <p class="crud-modal-subtitle">Quét QR hợp lệ để gán trực tiếp cho vật tư trong danh sách. Sau mỗi lần thành công, vật tư sẽ được loại khỏi danh sách chờ.</p>
+                <div class="qr-assignment-header-progress" data-qr-assignment-header-progress>Còn 0 / 0 vật tư</div>
+            </div>
+
+            <button type="button"
+                    class="menu-nav-button crud-close-button"
+                    data-qr-assignment-close
+                    aria-label="Đóng popup đánh mã QR">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+
+        <div class="qr-assignment-modal-body"
+             data-qr-assignment-root
+             data-search-url="@Url.Action("SearchAssignmentTargets", "QrCode")"
+             data-assign-url="@Url.Action("AssignToVatTu", "QrCode")">
+            <form class="qr-assignment-search-form" data-qr-assignment-search-form>
+                @Html.AntiForgeryToken()
+
+                <div class="qr-scanner-shell qr-assignment-scanner">
+                    <div class="qr-scanner-layout">
+                        <div class="qr-scanner-main">
+                            <div class="qr-display-card is-empty qr-assignment-display-card">
+                                <div class="qr-display-default" data-qr-assignment-default>
+                                    <div class="qr-display-icon">
+                                        <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                                    </div>
+                                </div>
+                                <div class="qr-scanner-panel" data-qr-assignment-panel hidden>
+                                    <div class="qr-scanner-reader" data-qr-assignment-reader></div>
+                                    <div class="qr-scanner-frame" aria-hidden="true"></div>
+                                </div>
+                            </div>
+
+                            <input type="hidden" data-qr-assignment-result />
+                            <span class="login-input-shell readonly-shell qr-result-shell is-hidden"
+                                  data-qr-assignment-result-shell>
+                                <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                                <span data-qr-assignment-result-display></span>
+                            </span>
+                        </div>
+
+                        <div class="qr-scanner-side">
+                            <div class="qr-scanner-actions">
+                                <button type="button" class="secondary-button qr-scanner-button" data-qr-assignment-start>
+                                    <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                    <span>Quét camera</span>
+                                </button>
+
+                                <label class="secondary-button qr-scanner-button qr-file-button" for="qrAssignmentImageFile">
+                                    <i class="fa-regular fa-image" aria-hidden="true"></i>
+                                    <span>Quét từ ảnh</span>
+                                </label>
+
+                                <button type="button" class="secondary-button qr-scanner-button" data-qr-assignment-stop hidden>
+                                    <i class="fa-solid fa-stop" aria-hidden="true"></i>
+                                    <span>Dừng quét</span>
+                                </button>
+
+                                <div class="qr-camera-select-shell" data-qr-assignment-camera-shell hidden>
+                                    <span class="login-input-shell select-shell">
+                                        <i class="fa-solid fa-camera-rotate" aria-hidden="true"></i>
+                                        <select data-qr-assignment-camera></select>
+                                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                    </span>
+                                </div>
+
+                                <input type="file"
+                                       id="qrAssignmentImageFile"
+                                       accept="image/*"
+                                       hidden
+                                       data-qr-assignment-file />
+                            </div>
+
+                            <div class="qr-scanner-status" data-qr-assignment-status>
+                                Tìm danh sách vật tư trước, sau đó quét QR bằng camera hoặc ảnh.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-alert info qr-assignment-active-card" data-qr-assignment-active-card>
+                    <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                    <div class="qr-assignment-active-copy">
+                        <strong data-qr-assignment-active-title>Chưa có vật tư mục tiêu</strong>
+                        <span data-qr-assignment-active-meta>Tìm kiếm để nạp danh sách vật tư cần đánh mã QR.</span>
+                    </div>
+                </div>
+
+                <div class="account-form-grid qr-assignment-filter-grid">
+                    <label class="login-field">
+                        <span>Hàng hóa</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                            <select name="HangHoaId">
+                                <option value="">Tất cả hàng hóa</option>
+                                @foreach (var option in Model.Assignment.HangHoaOptions)
+                                {
+                                    <option value="@option.Id">@option.Label</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Tên chi tiết</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-cubes" aria-hidden="true"></i>
+                            <input type="search" name="TenChiTiet" autocomplete="off" />
+                        </span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Kho</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
+                            <select name="KhoId">
+                                <option value="">Tất cả kho</option>
+                                @foreach (var option in Model.Assignment.KhoOptions)
+                                {
+                                    <option value="@option.Id">@option.Label</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Vị trí kho</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                            <input type="search" name="ViTriLuuKho" autocomplete="off" />
+                        </span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Mã số lô</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-barcode" aria-hidden="true"></i>
+                            <input type="search" name="MaSoLo" autocomplete="off" />
+                        </span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Trạng thái QR</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                            <select name="QrStatus">
+                                @foreach (var option in qrStatusOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="qr-assignment-search-actions">
+                    <button type="submit"
+                            class="primary-button"
+                            data-qr-assignment-search-button>
+                        <span class="button-content">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                            <span>Tìm vật tư</span>
+                        </span>
+                    </button>
+
+                    <button type="button"
+                            class="secondary-button"
+                            data-qr-assignment-reset>
+                        Làm mới bộ lọc
+                    </button>
+                </div>
+            </form>
+
+            <div class="master-data-summary qr-assignment-summary">
+                <div><strong data-qr-assignment-count>0</strong> vật tư chờ đánh mã</div>
+                <div data-qr-assignment-hint>Danh sách sẽ hiển thị sau khi tìm kiếm.</div>
+            </div>
+
+            <div class="qr-assignment-result-list" data-qr-assignment-results>
+                <div class="master-data-empty qr-assignment-empty">
+                    Chưa có danh sách vật tư để đánh mã QR.
+                </div>
+            </div>
+        </div>
+    </section>
+</div>

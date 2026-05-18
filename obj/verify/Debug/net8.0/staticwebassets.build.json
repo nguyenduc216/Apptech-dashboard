@@ -1,0 +1,77 @@
+{
+  "Version": 1,
+  "Hash": "cSxJW3SLoERZzPfEHGXAVH0Up27FAu6ekceGnu2ACUo=",
+  "Source": "ApptechDashboard",
+  "BasePath": "_content/ApptechDashboard",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "ApptechDashboard\\wwwroot",
+      "Source": "ApptechDashboard",
+      "ContentRoot": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\",
+      "BasePath": "_content/ApptechDashboard",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\css\\site.css",
+      "SourceId": "ApptechDashboard",
+      "SourceType": "Discovered",
+      "ContentRoot": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\",
+      "BasePath": "_content/ApptechDashboard",
+      "RelativePath": "css/site.css",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "PreserveNewest",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\css\\site.css"
+    },
+    {
+      "Identity": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\images\\apptech-logo-512.png",
+      "SourceId": "ApptechDashboard",
+      "SourceType": "Discovered",
+      "ContentRoot": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\",
+      "BasePath": "_content/ApptechDashboard",
+      "RelativePath": "images/apptech-logo-512.png",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "PreserveNewest",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\images\\apptech-logo-512.png"
+    },
+    {
+      "Identity": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\js\\dashboard.js",
+      "SourceId": "ApptechDashboard",
+      "SourceType": "Discovered",
+      "ContentRoot": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\wwwroot\\",
+      "BasePath": "_content/ApptechDashboard",
+      "RelativePath": "js/dashboard.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "PreserveNewest",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\js\\dashboard.js"
+    }
+  ]
+}

@@ -1,0 +1,1873 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = Model.DashboardTitle;
+    var chamCong = Model.ChamCong;
+    var invariantCulture = System.Globalization.CultureInfo.InvariantCulture;
+    var isolateChamCongDashboard = true;
+    var allChamCongEmployeesSelected = chamCong.EmployeeOptions.Count > 0 &&
+        chamCong.SelectedEmployeeIds.Count >= chamCong.EmployeeOptions.Count;
+
+    string GetPriorityClass(string priority) => priority switch
+    {
+        "Cao" => "cao",
+        "Trung bình" => "trung-binh",
+        "Thấp" => "thap",
+        _ => "thap"
+    };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIINfQ8QzPI5Z7nU03RLX10PVtPY3GqB4iI="
+          crossorigin="" />
+}
+
+@if (!isolateChamCongDashboard)
+{
+<section class="hero-panel">
+    <div>
+        <div class="eyebrow">GIÁM SÁT TRUNG TÂM</div>
+        <h2>@Model.CompanyName</h2>
+        <p>@Model.Subtitle</p>
+    </div>
+    <div class="hero-stats">
+        <div class="hero-pill">
+            <span>Khách hàng đang kết nối</span>
+            <strong>32 công trình</strong>
+        </div>
+        <div class="hero-pill">
+            <span>Tỷ lệ hệ thống ổn định</span>
+            <strong>94.8%</strong>
+        </div>
+    </div>
+</section>
+
+<section class="metrics-grid">
+    @foreach (var item in Model.MetricCards)
+    {
+        <article class="metric-card @item.Variant">
+            <div class="metric-title">@item.Title</div>
+            <div class="metric-value">@item.Value</div>
+            <div class="metric-note">@item.Note</div>
+        </article>
+    }
+</section>
+}
+
+<section class="panel cham-cong-panel"
+         data-cham-cong
+         data-history-url="@Url.Action("ChamCongHistory", "Home")"
+         data-checkin-url="@Url.Action("ChamCongCheckin", "Home")"
+         data-checkout-url="@Url.Action("ChamCongCheckout", "Home")"
+         data-distance-limit="@(chamCong.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? "")"
+         data-current-employee-id="@(chamCong.CurrentEmployeeId?.ToString(invariantCulture) ?? "")"
+         data-action-employee-id="@(chamCong.SelectedEmployeeIds.FirstOrDefault(chamCong.CurrentEmployeeId ?? 0).ToString(invariantCulture))"
+         data-can-select-employees="@chamCong.CanSelectEmployees.ToString().ToLowerInvariant()"
+         data-can-admin-manage-attendance="@chamCong.CanAdminManageAttendance.ToString().ToLowerInvariant()"
+         data-today-date="@DateTime.Today.ToString("yyyy-MM-dd")"
+         data-open-checkin-id="@(chamCong.OpenCheckin?.Id.ToString(invariantCulture) ?? "")">
+    <div class="panel-header">
+        <div>
+            <h3>Chấm công</h3>
+            <p>Checkin tại địa điểm khách hàng AppTech và theo dõi lịch sử trong ngày.</p>
+        </div>
+        <form class="cham-cong-date-form" method="get" asp-action="Index">
+            <label class="master-data-filter-field" for="chamCongDate">
+                <span>Ngày xem</span>
+                <span class="cham-cong-date-stepper">
+                    <button type="button"
+                            class="cham-cong-date-step-button"
+                            data-cham-cong-date-step="-1"
+                            aria-label="Ngày trước"
+                            title="Ngày trước">
+                        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                    </button>
+                    <span class="login-input-shell">
+                        <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                        <input id="chamCongDate"
+                               name="chamCongDate"
+                               type="date"
+                               value="@chamCong.SelectedDate.ToString("yyyy-MM-dd")"
+                               data-cham-cong-date />
+                    </span>
+                    <button type="button"
+                            class="cham-cong-date-step-button"
+                            data-cham-cong-date-step="1"
+                            aria-label="Ngày sau"
+                            title="Ngày sau">
+                        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </span>
+            </label>
+            @if (chamCong.CanSelectEmployees)
+            {
+                <label class="master-data-filter-field" for="chamCongEmployees">
+                    <span>Nhân viên</span>
+                    <span class="cham-cong-employee-picker" data-cham-cong-employee-picker>
+                        <button type="button"
+                                class="login-input-shell cham-cong-employee-picker-button"
+                                id="chamCongEmployees"
+                                data-cham-cong-employee-toggle
+                                aria-expanded="false">
+                            <i class="fa-solid fa-users" aria-hidden="true"></i>
+                            <span data-cham-cong-employee-summary>Chọn nhân viên</span>
+                            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <span class="cham-cong-employee-menu" data-cham-cong-employee-menu hidden>
+                            <label class="cham-cong-employee-choice cham-cong-employee-choice-all">
+                                <input type="checkbox"
+                                       checked="@allChamCongEmployeesSelected"
+                                       data-cham-cong-employee-all />
+                                <span>Tất cả nhân viên</span>
+                            </label>
+                            @foreach (var employee in chamCong.EmployeeOptions)
+                            {
+                                <label class="cham-cong-employee-choice">
+                                    <input type="checkbox"
+                                           name="employeeIds"
+                                           value="@employee.Id"
+                                           checked="@chamCong.SelectedEmployeeIds.Contains(employee.Id)"
+                                           data-cham-cong-employee-checkbox />
+                                    <span>@employee.HoTen</span>
+                                </label>
+                            }
+                        </span>
+                    </span>
+                </label>
+            }
+        </form>
+    </div>
+
+    @Html.AntiForgeryToken()
+
+    <div class="cham-cong-body">
+        <div class="cham-cong-timeline">
+            <div class="cham-cong-timeline-head">
+                <strong>Lịch sử chấm công</strong>
+                <span data-cham-cong-history-count>@chamCong.History.Count lượt</span>
+            </div>
+            <div class="cham-cong-timeline-list" data-cham-cong-history>
+                @if (chamCong.History.Count == 0)
+                {
+                    <div class="cham-cong-empty">Chưa có dữ liệu chấm công trong ngày đã chọn.</div>
+                }
+                else
+                {
+                    var orderedHistory = chamCong.History
+                        .OrderBy(item => item.ThoiDiem ?? DateTime.MaxValue)
+                        .ThenBy(item => item.Id)
+                        .ToList();
+                    for (var historyIndex = 0; historyIndex < orderedHistory.Count; historyIndex++)
+                    {
+                        var item = orderedHistory[historyIndex];
+                        <div class="cham-cong-timeline-item @(item.ThoiDiemCheckOut.HasValue ? "is-complete" : "is-pending") @(item.IsOpen ? "is-open" : "")" style="order:@historyIndex">
+                            <div class="cham-cong-dot"></div>
+                            <div class="cham-cong-split">
+                                <strong class="cham-cong-employee-name">@(item.HoTenNhanVien ?? "Nhân viên")</strong>
+                                <section class="cham-cong-attendance-line is-checkin @(item.IsCheckinViolation ? "is-attendance-violation" : "")">
+                                    <div class="cham-cong-entry-photo">
+                                        @if (!string.IsNullOrWhiteSpace(item.ImgPath))
+                                        {
+                                            <button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="@item.ImgPath" data-image-title="Ảnh checkin @item.HoTenNhanVien">
+                                                <img src="@item.ImgPath" alt="Ảnh checkin" />
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
+                                        }
+                                    </div>
+                                    <div class="cham-cong-entry-content">
+                                        <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>@(item.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "--:--")</strong>
+                                        @if (!string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
+                                        {
+                                            <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuNhanVien</span></p>
+                                        }
+                                    </div>
+                                </section>
+                                <section class="cham-cong-attendance-line @(item.ThoiDiemCheckOut.HasValue ? "is-checkout-complete" : "is-checkout-pending") @(item.IsCheckoutViolation ? "is-attendance-violation" : "")">
+                                    <div class="cham-cong-entry-photo">
+                                        @if (!string.IsNullOrWhiteSpace(item.ImgPathCheckOut))
+                                        {
+                                            <button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="@item.ImgPathCheckOut" data-image-title="Ảnh checkout @item.HoTenNhanVien">
+                                                <img src="@item.ImgPathCheckOut" alt="Ảnh checkout" />
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
+                                        }
+                                    </div>
+                                    <div class="cham-cong-entry-content">
+                                        <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>@(item.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa checkout")</strong>
+                                        @if (!string.IsNullOrWhiteSpace(item.GhiChuCheckOut))
+                                        {
+                                            <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuCheckOut</span></p>
+                                        }
+                                    </div>
+                                </section>
+                                <section class="cham-cong-entry">
+                                    <div class="cham-cong-entry-photo">
+                                        @if (!string.IsNullOrWhiteSpace(item.ImgPath))
+                                        {
+                                            <img src="@item.ImgPath" alt="Ảnh checkin" />
+                                        }
+                                        else
+                                        {
+                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
+                                        }
+                                    </div>
+                                    <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>@(item.ThoiDiem?.ToString("HH:mm") ?? "--:--")</strong>
+                                    @if (!string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
+                                    {
+                                        <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuNhanVien</span></p>
+                                    }
+                                </section>
+                                <section class="cham-cong-entry">
+                                    <div class="cham-cong-entry-photo">
+                                        @if (!string.IsNullOrWhiteSpace(item.ImgPathCheckOut))
+                                        {
+                                            <img src="@item.ImgPathCheckOut" alt="Ảnh checkout" />
+                                        }
+                                        else
+                                        {
+                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
+                                        }
+                                    </div>
+                                    <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>@(item.ThoiDiemCheckOut?.ToString("HH:mm") ?? "Đang làm")</strong>
+                                    @if (!string.IsNullOrWhiteSpace(item.GhiChuCheckOut))
+                                    {
+                                        <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuCheckOut</span></p>
+                                    }
+                                </section>
+                                <strong>@(item.ThoiDiem?.ToString("HH:mm") ?? "--:--") - @(item.ThoiDiemCheckOut?.ToString("HH:mm") ?? "Đang làm")</strong>
+                                <span>@(item.TenKhachHang ?? "AppTech")</span>
+                                @if (!string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
+                                {
+                                    <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuNhanVien</span></p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.GhiChuCheckOut))
+                                {
+                                    <p class="cham-cong-note"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i><span>@item.GhiChuCheckOut</span></p>
+                                }
+                                <small>@(string.IsNullOrWhiteSpace(item.DiaChi) ? "Chưa có địa chỉ" : item.DiaChi)</small>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="cham-cong-control">
+            <label class="master-data-filter-field @(chamCong.LocationOptions.Count <= 1 ? "cham-cong-location-hidden" : "")" for="chamCongLocation">
+                <span>Địa điểm AppTech</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                    <select id="chamCongLocation" data-cham-cong-location @(chamCong.OpenCheckin is not null ? "disabled" : null)>
+                        @if (chamCong.LocationOptions.Count == 0)
+                        {
+                            <option value="">Chưa có địa điểm AppTech</option>
+                        }
+                        else
+                        {
+                            @foreach (var location in chamCong.LocationOptions)
+                            {
+                                <option value="@location.IDDiaDiem"
+                                        data-lat="@(location.LatAddress?.ToString(invariantCulture) ?? "")"
+                                        data-long="@(location.LongAddress?.ToString(invariantCulture) ?? "")">
+                                    @location.DisplayText
+                                </option>
+                            }
+                        }
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </span>
+            </label>
+
+            <div class="cham-cong-actions">
+                <button type="button"
+                        class="primary-button"
+                        data-cham-cong-checkin
+                        @(chamCong.OpenCheckin is null && chamCong.CanCheckin ? null : "hidden")>
+                    <span class="button-content">
+                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
+                        <span>Checkin</span>
+                    </span>
+                </button>
+                <button type="button"
+                        class="primary-button"
+                        data-cham-cong-checkout
+                        @(chamCong.OpenCheckin is not null ? null : "hidden")>
+                    <span class="button-content">
+                        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                        <span>Checkout</span>
+                    </span>
+                </button>
+            </div>
+
+            <div class="page-alert info cham-cong-status" data-cham-cong-status>
+                @if (!chamCong.CurrentEmployeeId.HasValue)
+                {
+                    <span>Tài khoản chưa liên kết nhân viên nên chưa thể chấm công.</span>
+                }
+                else if (chamCong.LocationOptions.Count == 0)
+                {
+                    <span>Chưa có địa điểm khách hàng mã AppTech để chấm công.</span>
+                }
+                else if (chamCong.OpenCheckin is not null)
+                {
+                    <span>Đang có lượt checkin chưa checkout.</span>
+                }
+                else
+                {
+                    <span>Sẵn sàng chấm công. Trình duyệt sẽ hỏi quyền GPS và camera khi bấm Checkin hoặc Checkout.</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="crud-modal-shell" data-cham-cong-camera-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true"></div>
+        <section class="crud-modal yeu-cau-checkin-modal" role="dialog" aria-modal="true" aria-labelledby="cham-cong-camera-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="cham-cong-camera-title" data-cham-cong-camera-title>Chụp ảnh chấm công</h2>
+                    <p class="crud-modal-subtitle" data-cham-cong-camera-subtitle>Đang chờ lấy vị trí GPS.</p>
+                </div>
+                <button type="button" class="crud-modal-close" data-cham-cong-camera-close aria-label="Đóng">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="crud-form yeu-cau-checkin-body">
+                <input type="file" accept="image/*" data-cham-cong-file hidden />
+                <div class="cham-cong-camera-map-shell">
+                    <button type="button"
+                            class="yeu-cau-checkin-distance-toggle"
+                            data-state="info"
+                            data-cham-cong-map-toggle
+                            aria-expanded="false">
+                        <span data-cham-cong-map-title>Khoảng cách: đang chờ GPS</span>
+                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="yeu-cau-checkin-distance-content cham-cong-map-content" data-cham-cong-map-content hidden>
+                        <div class="yeu-cau-checkin-distance-map cham-cong-camera-map" data-cham-cong-map></div>
+                        <div class="yeu-cau-checkin-distance-status" data-cham-cong-map-status>
+                            Đang chờ GPS để hiển thị vị trí chấm công.
+                        </div>
+                        <button type="button" class="secondary-button cham-cong-map-expand-button" data-cham-cong-map-fullscreen-open>
+                            <i class="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true"></i>
+                            <span>Mở rộng bản đồ</span>
+                        </button>
+                        <button type="button" class="secondary-button cham-cong-map-refresh-gps-button" data-cham-cong-refresh-gps>
+                            <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
+                            <span>Láº¥y láº¡i GPS</span>
+                        </button>
+                    </div>
+                </div>
+                <label class="login-field attendance-camera-select-shell" data-cham-cong-camera-select-shell hidden>
+                    <span>Camera</span>
+                    <span class="login-input-shell select-shell">
+                        <i class="fa-solid fa-camera-rotate" aria-hidden="true"></i>
+                        <select data-cham-cong-camera-select></select>
+                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                    </span>
+                </label>
+                <div class="yeu-cau-checkin-camera">
+                    <video playsinline autoplay muted data-cham-cong-video></video>
+                    <canvas data-cham-cong-canvas hidden></canvas>
+                    <img data-cham-cong-preview alt="Ảnh chấm công vừa chụp" hidden />
+                    <div class="yeu-cau-checkin-placeholder" data-cham-cong-placeholder>
+                        <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                        <span>Đang bật camera</span>
+                    </div>
+                </div>
+                <div class="yeu-cau-checkin-actions">
+                    <button type="button" class="secondary-button" data-cham-cong-capture>
+                        <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                        <span>Chụp ảnh</span>
+                    </button>
+                    <button type="button" class="secondary-button" data-cham-cong-retake disabled>
+                        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        <span>Bỏ ảnh</span>
+                    </button>
+                </div>
+                @if (chamCong.CanSelectEmployees)
+                {
+                    <label class="master-data-filter-field" for="chamCongTime">
+                        <span data-cham-cong-time-label>Thời gian checkin</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                            <input id="chamCongTime" type="datetime-local" data-cham-cong-time />
+                        </span>
+                    </label>
+                }
+                <label class="master-data-filter-field cham-cong-note-field" for="chamCongNote">
+                    <span data-cham-cong-note-label>Ghi chú checkin</span>
+                    <span class="login-textarea-shell">
+                        <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>
+                        <textarea id="chamCongNote" rows="3" maxlength="1000" data-cham-cong-note></textarea>
+                    </span>
+                </label>
+                <div class="page-alert info cham-cong-status" data-cham-cong-camera-status hidden></div>
+            </div>
+            <div class="crud-modal-footer cham-cong-camera-footer">
+                <button type="button" class="primary-button" data-cham-cong-save>
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                    <span>Lưu</span>
+                </button>
+                <button type="button" class="secondary-button crud-cancel-button" data-cham-cong-camera-close>Hủy</button>
+            </div>
+        </section>
+    </div>
+
+    <div class="crud-modal-shell cham-cong-map-fullscreen-shell" data-location-view-shell data-cham-cong-map-fullscreen-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-cham-cong-map-fullscreen-close></div>
+        <section class="crud-modal khach-hang-location-viewer cham-cong-map-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="cham-cong-map-fullscreen-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="cham-cong-map-fullscreen-title">Bản đồ chấm công</h2>
+                    <p class="crud-modal-subtitle" data-cham-cong-map-fullscreen-subtitle>Phóng to để xem chi tiết điểm khách hàng và vị trí hiện tại.</p>
+                </div>
+                <button type="button" class="crud-modal-close" data-cham-cong-map-fullscreen-close aria-label="Đóng bản đồ">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="crud-form khach-hang-location-viewer-body cham-cong-map-fullscreen-body">
+                <div class="khach-hang-location-viewer-map-shell">
+                    <div class="khach-hang-location-map khach-hang-location-viewer-map cham-cong-map-fullscreen-canvas" data-cham-cong-map-fullscreen></div>
+                    <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ">
+                        <button type="button"
+                                class="khach-hang-location-map-action"
+                                data-cham-cong-map-refresh
+                                aria-label="Làm mới bản đồ">
+                            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                        </button>
+                        <button type="button"
+                                class="khach-hang-location-map-action"
+                                data-cham-cong-map-route
+                                aria-label="Chỉ đường">
+                            <i class="fa-solid fa-route" aria-hidden="true"></i>
+                        </button>
+                        <a class="khach-hang-location-map-action"
+                           href="#"
+                           target="_blank"
+                           rel="noopener"
+                           data-cham-cong-map-external
+                           aria-label="Mở bản đồ ngoài">
+                            <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                    <div class="khach-hang-location-viewer-status" data-cham-cong-map-route-status hidden></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="crud-modal-shell cham-cong-image-viewer-shell" data-cham-cong-image-viewer-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-cham-cong-image-close></div>
+        <section class="crud-modal cham-cong-image-viewer" role="dialog" aria-modal="true" aria-labelledby="cham-cong-image-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="cham-cong-image-title" data-cham-cong-image-title>Ảnh chấm công</h2>
+                </div>
+                <div class="cham-cong-image-toolbar">
+                    <button type="button" class="menu-nav-button" data-cham-cong-image-zoom-out aria-label="Thu nhỏ"><i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i></button>
+                    <button type="button" class="menu-nav-button" data-cham-cong-image-zoom-in aria-label="Phóng to"><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i></button>
+                    <button type="button" class="menu-nav-button" data-cham-cong-image-rotate aria-label="Xoay"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i></button>
+                    <a class="menu-nav-button" href="#" download data-cham-cong-image-download aria-label="Tải xuống"><i class="fa-solid fa-download" aria-hidden="true"></i></a>
+                    <button type="button" class="menu-nav-button" data-cham-cong-image-close aria-label="Đóng" title="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </div>
+            </div>
+            <div class="crud-form cham-cong-image-stage">
+                <img data-cham-cong-image-viewer-img alt="Ảnh chấm công" />
+            </div>
+        </section>
+    </div>
+</section>
+
+@if (!isolateChamCongDashboard)
+{
+<section class="dashboard-grid">
+    <article class="panel chart-panel span-2">
+        <div class="panel-header">
+            <div>
+                <h3>Xu hướng điện năng 12 tháng</h3>
+                <p>Dữ liệu mẫu cho dashboard .NET 8</p>
+            </div>
+        </div>
+        <canvas id="energyChart"
+                class="chart-canvas"
+                data-series="@string.Join(',', Model.MonthlyEnergy)"></canvas>
+        <div class="chart-legend">
+            <span><i></i>Điện năng tiêu thụ (kWh)</span>
+        </div>
+    </article>
+
+    <article class="panel donut-panel">
+        <div class="panel-header">
+            <div>
+                <h3>Phân bổ thiết bị</h3>
+                <p>Smart lock, camera, đèn, cảm biến</p>
+            </div>
+        </div>
+        <div id="deviceDonut"
+             class="donut-visual"
+             data-values="@string.Join(',', Model.DeviceDistribution.Values)">
+        </div>
+        <div class="donut-list">
+            @foreach (var item in Model.DeviceDistribution)
+            {
+                <div class="donut-item">
+                    <span>@item.Key</span>
+                    <strong>@item.Value</strong>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <h3>Tình trạng khu vực</h3>
+                <p>Các công trình và khu vực đang được giám sát</p>
+            </div>
+        </div>
+        <div class="zone-list">
+            @foreach (var zone in Model.Zones)
+            {
+                <div class="zone-item">
+                    <div>
+                        <div class="zone-title">@zone.Name</div>
+                        <div class="zone-subtitle">@zone.Description</div>
+                    </div>
+                    <div class="zone-status-block">
+                        <span class="status-tag">@zone.Status</span>
+                        <div class="progress-track">
+                            <div class="progress-bar" style="width:@zone.HealthPercent%"></div>
+                        </div>
+                        <strong>@zone.HealthPercent%</strong>
+                    </div>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <h3>Kịch bản nhanh</h3>
+                <p>Các tác vụ tự động thường dùng</p>
+            </div>
+        </div>
+        <div class="action-list">
+            @foreach (var action in Model.QuickActions)
+            {
+                <div class="action-item">
+                    <div class="action-title">@action.Title</div>
+                    <div class="action-note">@action.Description</div>
+                </div>
+            }
+        </div>
+    </article>
+
+    <article class="panel span-2">
+        <div class="panel-header">
+            <div>
+                <h3>Cảnh báo gần nhất</h3>
+                <p>Danh sách sự kiện hệ thống mới phát sinh</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Thiết bị</th>
+                        <th>Nội dung</th>
+                        <th>Thời gian</th>
+                        <th>Mức độ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var alert in Model.Alerts)
+                    {
+                        <tr>
+                            <td>@alert.Device</td>
+                            <td>@alert.Message</td>
+                            <td>@alert.Time</td>
+                            <td><span class="priority priority-@GetPriorityClass(alert.Priority)">@alert.Priority</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <div>
+                <h3>Phiếu bảo trì</h3>
+                <p>Công việc nội bộ</p>
+            </div>
+        </div>
+        <div class="workorders">
+            @foreach (var item in Model.WorkOrders)
+            {
+                <div class="workorder-item">
+                    <div class="workorder-code">@item.Code</div>
+                    <div class="workorder-name">@item.Name</div>
+                    <div class="workorder-meta">@item.Assignee · @item.Status</div>
+                </div>
+            }
+        </div>
+    </article>
+</section>
+}
+
+@section Scripts {
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script>
+        (() => {
+            const root = document.querySelector("[data-cham-cong]");
+            if (!root) {
+                return;
+            }
+
+            const tokenInput = root.querySelector("input[name='__RequestVerificationToken']");
+            const dateInput = root.querySelector("[data-cham-cong-date]");
+            const dateStepButtons = root.querySelectorAll("[data-cham-cong-date-step]");
+            const employeePicker = root.querySelector("[data-cham-cong-employee-picker]");
+            const employeeToggle = root.querySelector("[data-cham-cong-employee-toggle]");
+            const employeeMenu = root.querySelector("[data-cham-cong-employee-menu]");
+            const employeeSummary = root.querySelector("[data-cham-cong-employee-summary]");
+            const employeeAllCheckbox = root.querySelector("[data-cham-cong-employee-all]");
+            const employeeCheckboxes = root.querySelectorAll("[data-cham-cong-employee-checkbox]");
+            const locationSelect = root.querySelector("[data-cham-cong-location]");
+            const checkinButton = root.querySelector("[data-cham-cong-checkin]");
+            const checkoutButton = root.querySelector("[data-cham-cong-checkout]");
+            const statusElement = root.querySelector("[data-cham-cong-status]");
+            const historyElement = root.querySelector("[data-cham-cong-history]");
+            const historyCount = root.querySelector("[data-cham-cong-history-count]");
+            const mobileHistoryMedia = window.matchMedia("(max-width: 639px)");
+            const cameraShell = root.querySelector("[data-cham-cong-camera-shell]");
+            const cameraCloseButtons = root.querySelectorAll("[data-cham-cong-camera-close]");
+            const cameraTitle = root.querySelector("[data-cham-cong-camera-title]");
+            const cameraSubtitle = root.querySelector("[data-cham-cong-camera-subtitle]");
+            const cameraStatus = root.querySelector("[data-cham-cong-camera-status]");
+            const cameraSelectShell = root.querySelector("[data-cham-cong-camera-select-shell]");
+            const cameraSelect = root.querySelector("[data-cham-cong-camera-select]");
+            const video = root.querySelector("[data-cham-cong-video]");
+            const canvas = root.querySelector("[data-cham-cong-canvas]");
+            const preview = root.querySelector("[data-cham-cong-preview]");
+            const placeholder = root.querySelector("[data-cham-cong-placeholder]");
+            const captureButton = root.querySelector("[data-cham-cong-capture]");
+            const retakeButton = root.querySelector("[data-cham-cong-retake]");
+            const saveButton = root.querySelector("[data-cham-cong-save]");
+            const timeInput = root.querySelector("[data-cham-cong-time]");
+            const timeLabel = root.querySelector("[data-cham-cong-time-label]");
+            const noteInput = root.querySelector("[data-cham-cong-note]");
+            const noteLabel = root.querySelector("[data-cham-cong-note-label]");
+            const mapElement = root.querySelector("[data-cham-cong-map]");
+            const mapStatus = root.querySelector("[data-cham-cong-map-status]");
+            const mapToggle = root.querySelector("[data-cham-cong-map-toggle]");
+            const mapTitle = root.querySelector("[data-cham-cong-map-title]");
+            const mapContent = root.querySelector("[data-cham-cong-map-content]");
+            const mapFullscreenOpen = root.querySelector("[data-cham-cong-map-fullscreen-open]");
+            const mapFullscreenShell = root.querySelector("[data-cham-cong-map-fullscreen-shell]");
+            const mapFullscreenCloseButtons = root.querySelectorAll("[data-cham-cong-map-fullscreen-close]");
+            const mapFullscreenElement = root.querySelector("[data-cham-cong-map-fullscreen]");
+            const mapFullscreenSubtitle = root.querySelector("[data-cham-cong-map-fullscreen-subtitle]");
+            const mapFullscreenRouteButton = root.querySelector("[data-cham-cong-map-route]");
+            const mapFullscreenRefreshButton = root.querySelector("[data-cham-cong-map-refresh]");
+            const mapFullscreenExternalLink = root.querySelector("[data-cham-cong-map-external]");
+            const mapFullscreenRouteStatus = root.querySelector("[data-cham-cong-map-route-status]");
+            const refreshGpsButton = root.querySelector("[data-cham-cong-refresh-gps]");
+            const imageViewerShell = root.querySelector("[data-cham-cong-image-viewer-shell]");
+            const imageViewerImg = root.querySelector("[data-cham-cong-image-viewer-img]");
+            const imageViewerTitle = root.querySelector("[data-cham-cong-image-title]");
+            const imageViewerCloseButtons = root.querySelectorAll("[data-cham-cong-image-close]");
+            const imageZoomInButton = root.querySelector("[data-cham-cong-image-zoom-in]");
+            const imageZoomOutButton = root.querySelector("[data-cham-cong-image-zoom-out]");
+            const imageRotateButton = root.querySelector("[data-cham-cong-image-rotate]");
+            const imageDownloadLink = root.querySelector("[data-cham-cong-image-download]");
+            const distanceLimit = Number.parseFloat(root.dataset.distanceLimit || "");
+            let cameraStream = null;
+            let attendanceCameraDevices = [];
+            let selectedAttendanceCameraId = "";
+            let activeMode = "checkin";
+            let activeGps = null;
+            let capturedBlob = null;
+            let attendanceMap = null;
+            let customerMarker = null;
+            let currentMarker = null;
+            let distanceLine = null;
+            let fullscreenMap = null;
+            let fullscreenCustomerMarker = null;
+            let fullscreenCurrentMarker = null;
+            let fullscreenDistanceLine = null;
+            let fullscreenRouteLayer = null;
+            let imageZoom = 1;
+            let imageRotation = 0;
+            const defaultCenter = [12.2388, 109.1967];
+            const defaultZoom = 13;
+            const focusZoom = 16;
+
+            refreshGpsButton?.querySelector("span")?.replaceChildren(document.createTextNode("L\u1EA5y GPS"));
+
+            const setStatus = (element, message, type = "info") => {
+                if (!element) {
+                    return;
+                }
+                element.hidden = !message;
+                element.classList.remove("info", "success", "warning", "error");
+                element.classList.add(type);
+                element.dataset.state = type;
+                element.textContent = message || "";
+            };
+
+            const setFullscreenRouteStatus = (message, type = "info") => {
+                if (!(mapFullscreenRouteStatus instanceof HTMLElement)) {
+                    return;
+                }
+                mapFullscreenRouteStatus.hidden = !message;
+                mapFullscreenRouteStatus.dataset.state = type;
+                mapFullscreenRouteStatus.textContent = message || "";
+            };
+
+            const setMapCollapsed = (collapsed) => {
+                if (mapContent instanceof HTMLElement) {
+                    mapContent.hidden = collapsed;
+                }
+                if (mapToggle instanceof HTMLButtonElement) {
+                    mapToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+                    mapToggle.dataset.state = mapToggle.dataset.state || "info";
+                    const icon = mapToggle.querySelector("i");
+                    icon?.classList.toggle("fa-chevron-down", collapsed);
+                    icon?.classList.toggle("fa-chevron-up", !collapsed);
+                }
+                if (!collapsed && attendanceMap) {
+                    syncAttendanceMap(activeGps);
+                }
+            };
+
+            const setMapTitle = (message, type = "info") => {
+                if (mapTitle) {
+                    mapTitle.textContent = message;
+                }
+                if (mapToggle instanceof HTMLButtonElement) {
+                    mapToggle.dataset.state = type;
+                }
+            };
+
+            const getSelectedLocation = () => {
+                if (!(locationSelect instanceof HTMLSelectElement)) {
+                    return null;
+                }
+                const option = locationSelect.selectedOptions[0];
+                if (!option || !locationSelect.value) {
+                    return null;
+                }
+                return {
+                    id: locationSelect.value,
+                    lat: Number.parseFloat(option.dataset.lat || ""),
+                    long: Number.parseFloat(option.dataset.long || "")
+                };
+            };
+
+            const getNavigationPoints = () => {
+                const location = getSelectedLocation();
+                const hasLocation = location && Number.isFinite(location.lat) && Number.isFinite(location.long);
+                const hasGps = activeGps && Number.isFinite(activeGps.lat) && Number.isFinite(activeGps.long);
+                return {
+                    location,
+                    customerPoint: hasLocation ? [location.lat, location.long] : null,
+                    currentPoint: hasGps ? [activeGps.lat, activeGps.long] : null
+                };
+            };
+
+            const syncMapExternalLink = () => {
+                if (!(mapFullscreenExternalLink instanceof HTMLAnchorElement)) {
+                    return;
+                }
+                const { customerPoint, currentPoint } = getNavigationPoints();
+                if (customerPoint && currentPoint) {
+                    mapFullscreenExternalLink.href = `https://www.google.com/maps/dir/?api=1&origin=${currentPoint[0]},${currentPoint[1]}&destination=${customerPoint[0]},${customerPoint[1]}`;
+                    mapFullscreenExternalLink.classList.remove("disabled");
+                    return;
+                }
+                if (customerPoint) {
+                    mapFullscreenExternalLink.href = `https://www.google.com/maps/search/?api=1&query=${customerPoint[0]},${customerPoint[1]}`;
+                    mapFullscreenExternalLink.classList.remove("disabled");
+                    return;
+                }
+                mapFullscreenExternalLink.href = "#";
+                mapFullscreenExternalLink.classList.add("disabled");
+            };
+
+            const distanceMeters = (startLat, startLong, endLat, endLong) => {
+                const toRad = (value) => value * Math.PI / 180;
+                const earthRadius = 6371000;
+                const deltaLat = toRad(endLat - startLat);
+                const deltaLong = toRad(endLong - startLong);
+                const lat1 = toRad(startLat);
+                const lat2 = toRad(endLat);
+                const haversine = Math.sin(deltaLat / 2) ** 2 +
+                    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLong / 2) ** 2;
+                return 2 * earthRadius * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+            };
+
+            const getDistanceState = (distance) => Number.isFinite(distanceLimit) && distanceLimit > 0 && distance > distanceLimit
+                ? "error"
+                : "success";
+
+            const validateDistance = (gps) => {
+                const location = getSelectedLocation();
+                if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.long)) {
+                    throw new Error("Địa điểm chấm công chưa có tọa độ nên không thể kiểm tra khoảng cách.");
+                }
+                if (Number.isFinite(distanceLimit) && distanceLimit > 0) {
+                    const distance = distanceMeters(location.lat, location.long, gps.lat, gps.long);
+                    if (distance > distanceLimit) {
+                        throw new Error(`Khoảng cách chấm công không được quá ${distanceLimit.toLocaleString("vi-VN")} mét.`);
+                    }
+                }
+            };
+
+            const createAttendanceTileLayer = () => {
+                const tileLayer = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap contributors"
+                });
+                tileLayer.on("tileerror", (event) => {
+                    const map = event?.target?._map;
+                    if (map === fullscreenMap) {
+                        setFullscreenRouteStatus("Không tải được một phần bản đồ. Vui lòng bấm làm mới bản đồ.", "warning");
+                    }
+                });
+                return tileLayer;
+            };
+
+            const ensureAttendanceMap = () => {
+                if (mapContent instanceof HTMLElement && mapContent.hidden) {
+                    return false;
+                }
+                if (!(mapElement instanceof HTMLElement) || !(window.L && typeof window.L.map === "function")) {
+                    return false;
+                }
+                if (attendanceMap) {
+                    window.setTimeout(() => attendanceMap.invalidateSize(), 120);
+                    return true;
+                }
+
+                attendanceMap = window.L.map(mapElement, {
+                    zoomControl: false,
+                    attributionControl: false,
+                    dragging: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    boxZoom: false,
+                    keyboard: false,
+                    tap: false,
+                    touchZoom: false
+                });
+                createAttendanceTileLayer().addTo(attendanceMap);
+                attendanceMap.setView(defaultCenter, defaultZoom);
+                window.setTimeout(() => attendanceMap.invalidateSize(), 120);
+                return true;
+            };
+
+            const fitAttendanceMap = (customerPoint, currentPoint = null) => {
+                if (!attendanceMap) {
+                    return;
+                }
+
+                attendanceMap.invalidateSize();
+                if (customerPoint && currentPoint) {
+                    attendanceMap.fitBounds(window.L.latLngBounds([customerPoint, currentPoint]).pad(0.35), { maxZoom: 16 });
+                } else if (customerPoint) {
+                    attendanceMap.setView(customerPoint, focusZoom);
+                } else if (currentPoint) {
+                    attendanceMap.setView(currentPoint, focusZoom);
+                } else {
+                    attendanceMap.setView(defaultCenter, defaultZoom);
+                }
+
+                customerMarker?.bringToFront();
+                currentMarker?.bringToFront();
+            };
+
+            const scheduleFitAttendanceMap = (customerPoint, currentPoint = null) => {
+                window.requestAnimationFrame(() => fitAttendanceMap(customerPoint, currentPoint));
+                window.setTimeout(() => fitAttendanceMap(customerPoint, currentPoint), 160);
+                window.setTimeout(() => fitAttendanceMap(customerPoint, currentPoint), 420);
+            };
+
+            const ensureFullscreenMap = () => {
+                if (!(mapFullscreenElement instanceof HTMLElement) || !(window.L && typeof window.L.map === "function")) {
+                    return false;
+                }
+                if (fullscreenMap) {
+                    window.setTimeout(() => fullscreenMap.invalidateSize(), 120);
+                    return true;
+                }
+
+                fullscreenMap = window.L.map(mapFullscreenElement, {
+                    zoomControl: true,
+                    attributionControl: false
+                });
+                createAttendanceTileLayer().addTo(fullscreenMap);
+                fullscreenMap.setView(defaultCenter, defaultZoom);
+                window.setTimeout(() => fullscreenMap.invalidateSize(), 120);
+                return true;
+            };
+
+            const fitFullscreenMap = (customerPoint, currentPoint = null) => {
+                if (!fullscreenMap) {
+                    return;
+                }
+
+                fullscreenMap.invalidateSize();
+                if (customerPoint && currentPoint) {
+                    fullscreenMap.fitBounds(window.L.latLngBounds([customerPoint, currentPoint]).pad(0.35), { maxZoom: 16 });
+                } else if (customerPoint) {
+                    fullscreenMap.setView(customerPoint, focusZoom);
+                } else if (currentPoint) {
+                    fullscreenMap.setView(currentPoint, focusZoom);
+                } else {
+                    fullscreenMap.setView(defaultCenter, defaultZoom);
+                }
+            };
+
+            const refreshFullscreenMap = () => {
+                if (!fullscreenMap) {
+                    return;
+                }
+                const { customerPoint, currentPoint } = getNavigationPoints();
+                fullscreenMap.invalidateSize(true);
+                fitFullscreenMap(customerPoint, currentPoint);
+                window.setTimeout(() => {
+                    fullscreenMap.invalidateSize(true);
+                    fitFullscreenMap(customerPoint, currentPoint);
+                }, 180);
+            };
+
+            const syncFullscreenMap = () => {
+                const { location, customerPoint, currentPoint } = getNavigationPoints();
+
+                if (!ensureFullscreenMap()) {
+                    return;
+                }
+
+                if (customerPoint) {
+                    if (!fullscreenCustomerMarker) {
+                        fullscreenCustomerMarker = window.L.circleMarker(customerPoint, {
+                            radius: 9,
+                            color: "#0a6aa1",
+                            weight: 3,
+                            fillColor: "#1f8fd1",
+                            fillOpacity: 0.95
+                        }).addTo(fullscreenMap).bindTooltip("Điểm khách hàng");
+                    } else {
+                        fullscreenCustomerMarker.setLatLng(customerPoint);
+                    }
+                }
+
+                if (currentPoint) {
+                    if (!fullscreenCurrentMarker) {
+                        fullscreenCurrentMarker = window.L.circleMarker(currentPoint, {
+                            radius: 9,
+                            color: "#0aa17d",
+                            weight: 3,
+                            fillColor: "#11c59b",
+                            fillOpacity: 0.92
+                        }).addTo(fullscreenMap).bindTooltip("Vị trí hiện tại");
+                    } else {
+                        fullscreenCurrentMarker.setLatLng(currentPoint);
+                    }
+                }
+
+                if (customerPoint && currentPoint) {
+                    if (fullscreenRouteLayer) {
+                        fullscreenMap.removeLayer(fullscreenRouteLayer);
+                        fullscreenRouteLayer = null;
+                    }
+                    if (!fullscreenDistanceLine) {
+                        fullscreenDistanceLine = window.L.polyline([customerPoint, currentPoint], {
+                            color: "#0a6aa1",
+                            weight: 4,
+                            opacity: 0.88,
+                            dashArray: "8 8"
+                        }).addTo(fullscreenMap);
+                    } else {
+                        fullscreenDistanceLine.setLatLngs([customerPoint, currentPoint]);
+                    }
+
+                    const distance = distanceMeters(location.lat, location.long, activeGps.lat, activeGps.long);
+                    if (mapFullscreenSubtitle) {
+                        mapFullscreenSubtitle.textContent = `Khoảng cách hiện tại: ${Math.round(distance).toLocaleString("vi-VN")} m.`;
+                    }
+                }
+
+                syncMapExternalLink();
+                window.setTimeout(() => fitFullscreenMap(customerPoint, currentPoint), 250);
+            };
+
+            const loadFullscreenRoute = async () => {
+                const { location, customerPoint, currentPoint } = getNavigationPoints();
+                if (!fullscreenMap || !customerPoint || !currentPoint || !location || !activeGps) {
+                    setFullscreenRouteStatus("Chưa đủ tọa độ để chỉ đường.", "warning");
+                    return;
+                }
+
+                try {
+                    if (mapFullscreenRouteButton instanceof HTMLButtonElement) {
+                        mapFullscreenRouteButton.disabled = true;
+                    }
+                    setFullscreenRouteStatus("Đang tải tuyến đường...", "info");
+                    const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${activeGps.long},${activeGps.lat};${location.long},${location.lat}?overview=full&geometries=geojson`);
+                    const payload = await response.json();
+                    const route = Array.isArray(payload.routes) ? payload.routes[0] : null;
+                    if (!response.ok || !route?.geometry) {
+                        throw new Error("Không tìm thấy tuyến đường phù hợp.");
+                    }
+
+                    if (fullscreenRouteLayer) {
+                        fullscreenMap.removeLayer(fullscreenRouteLayer);
+                    }
+                    if (fullscreenDistanceLine) {
+                        fullscreenMap.removeLayer(fullscreenDistanceLine);
+                        fullscreenDistanceLine = null;
+                    }
+                    fullscreenRouteLayer = window.L.geoJSON(route.geometry, {
+                        style: {
+                            color: "#0b4f9c",
+                            weight: 5,
+                            opacity: 0.82
+                        }
+                    }).addTo(fullscreenMap);
+                    const routeBounds = fullscreenRouteLayer.getBounds();
+                    if (routeBounds.isValid()) {
+                        fullscreenMap.fitBounds(routeBounds.pad(0.15));
+                    }
+                    const distanceKm = (route.distance / 1000).toFixed(1);
+                    const durationMinutes = Math.round(route.duration / 60);
+                    setFullscreenRouteStatus(`Tuyến đường khoảng ${distanceKm} km, ${durationMinutes} phút.`, "success");
+                } catch (error) {
+                    setFullscreenRouteStatus(error instanceof Error ? error.message : "Không thể tải tuyến đường.", "error");
+                } finally {
+                    if (mapFullscreenRouteButton instanceof HTMLButtonElement) {
+                        mapFullscreenRouteButton.disabled = false;
+                    }
+                }
+            };
+
+            const openFullscreenMap = () => {
+                if (mapFullscreenShell instanceof HTMLElement) {
+                    mapFullscreenShell.hidden = false;
+                    document.body.classList.add("modal-open");
+                }
+                window.requestAnimationFrame(syncFullscreenMap);
+                window.setTimeout(syncFullscreenMap, 220);
+                window.setTimeout(refreshFullscreenMap, 520);
+                window.setTimeout(refreshFullscreenMap, 1100);
+            };
+
+            const closeFullscreenMap = () => {
+                if (mapFullscreenShell instanceof HTMLElement) {
+                    mapFullscreenShell.hidden = true;
+                }
+                if (!(cameraShell instanceof HTMLElement) || cameraShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            const syncAttendanceMap = (gps = activeGps) => {
+                const location = getSelectedLocation();
+                if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.long)) {
+                    setMapTitle("Khoảng cách: địa điểm chưa có tọa độ", "warning");
+                    setStatus(mapStatus, "Địa điểm chấm công chưa có tọa độ.", "warning");
+                    if (!ensureAttendanceMap()) {
+                        return;
+                    }
+                    if (gps && Number.isFinite(gps.lat) && Number.isFinite(gps.long)) {
+                        attendanceMap.setView([gps.lat, gps.long], 16);
+                    }
+                    return;
+                }
+
+                const customerPoint = [location.lat, location.long];
+                const hasGps = gps && Number.isFinite(gps.lat) && Number.isFinite(gps.long);
+                const currentPoint = hasGps ? [gps.lat, gps.long] : null;
+                let distance = null;
+                let state = "info";
+
+                if (hasGps) {
+                    distance = distanceMeters(location.lat, location.long, gps.lat, gps.long);
+                    state = getDistanceState(distance);
+                    const roundedDistance = Math.round(distance).toLocaleString("vi-VN");
+                    const limitText = Number.isFinite(distanceLimit) && distanceLimit > 0
+                        ? ` Giới hạn: ${distanceLimit.toLocaleString("vi-VN")} m.`
+                        : "";
+                    setMapTitle(`Khoảng cách từ điểm hiện tại tới địa điểm khách hàng: ${roundedDistance} m`, state);
+                    setStatus(
+                        mapStatus,
+                        state === "error"
+                            ? `Khoảng cách hiện tại: ${roundedDistance} m. Vượt quá giới hạn chấm công.${limitText}`
+                            : `Khoảng cách đường chim bay: ${roundedDistance} m.${limitText}`,
+                        state);
+                } else {
+                    setMapTitle("Khoảng cách: đang chờ GPS hiện tại", "warning");
+                    setStatus(mapStatus, "Đang chờ GPS hiện tại.", "info");
+                }
+
+                if (!ensureAttendanceMap()) {
+                    return;
+                }
+
+                if (!customerMarker) {
+                    customerMarker = window.L.circleMarker(customerPoint, {
+                        radius: 8,
+                        color: "#0a6aa1",
+                        weight: 3,
+                        fillColor: "#1f8fd1",
+                        fillOpacity: 0.95
+                    }).addTo(attendanceMap);
+                } else {
+                    customerMarker.setLatLng(customerPoint);
+                }
+
+                if (hasGps) {
+                    if (!currentMarker) {
+                        currentMarker = window.L.circleMarker(currentPoint, {
+                            radius: 8,
+                            color: "#0aa17d",
+                            weight: 2,
+                            fillColor: "#11c59b",
+                            fillOpacity: 0.9
+                        }).addTo(attendanceMap);
+                    } else {
+                        currentMarker.setLatLng(currentPoint);
+                    }
+
+                    if (!distanceLine) {
+                        distanceLine = window.L.polyline([customerPoint, currentPoint], {
+                            color: "#0a6aa1",
+                            weight: 3,
+                            dashArray: "6 6"
+                        }).addTo(attendanceMap);
+                    } else {
+                        distanceLine.setLatLngs([customerPoint, currentPoint]);
+                    }
+
+                    scheduleFitAttendanceMap(customerPoint, currentPoint);
+                } else {
+                    scheduleFitAttendanceMap(customerPoint);
+                }
+                if (mapFullscreenShell instanceof HTMLElement && !mapFullscreenShell.hidden) {
+                    syncFullscreenMap();
+                }
+            };
+
+            const getCurrentPosition = () => new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error("Trình duyệt không hỗ trợ GPS."));
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 0
+                });
+            });
+
+            const resolveGps = async () => {
+                setStatus(cameraStatus, "Đang lấy vị trí GPS...", "info");
+                const position = await getCurrentPosition();
+                const gps = {
+                    lat: position.coords.latitude,
+                    long: position.coords.longitude
+                };
+                return gps;
+            };
+
+            const refreshGps = async () => {
+                if (refreshGpsButton instanceof HTMLButtonElement) {
+                    refreshGpsButton.disabled = true;
+                }
+
+                try {
+                    activeGps = await resolveGps();
+                    if (cameraSubtitle) {
+                        cameraSubtitle.textContent = `GPS hiá»‡n táº¡i: ${activeGps.lat.toFixed(5)}, ${activeGps.long.toFixed(5)}`;
+                    }
+                    syncAttendanceMap(activeGps);
+                    setStatus(cameraStatus, "ÄÃ£ cáº­p nháº­t láº¡i GPS hiá»‡n táº¡i.", "success");
+                } catch (error) {
+                    setStatus(cameraStatus, error instanceof Error ? error.message : "KhÃ´ng thá»ƒ láº¥y láº¡i GPS.", "error");
+                } finally {
+                    if (refreshGpsButton instanceof HTMLButtonElement) {
+                        refreshGpsButton.disabled = false;
+                    }
+                }
+            };
+
+            const getCameraLabel = (device, index) => {
+                const label = (device?.label || "").trim();
+                return label || `Camera ${index + 1}`;
+            };
+
+            const syncAttendanceCameraSelect = () => {
+                if (!(cameraSelect instanceof HTMLSelectElement)) {
+                    return;
+                }
+
+                cameraSelect.innerHTML = "";
+                attendanceCameraDevices.forEach((device, index) => {
+                    const option = document.createElement("option");
+                    option.value = device.deviceId;
+                    option.textContent = getCameraLabel(device, index);
+                    cameraSelect.appendChild(option);
+                });
+
+                if (!selectedAttendanceCameraId && attendanceCameraDevices.length > 0) {
+                    const backCamera = attendanceCameraDevices.find((device) => /back|rear|environment|sau/i.test(device.label || ""));
+                    selectedAttendanceCameraId = (backCamera || attendanceCameraDevices[0]).deviceId;
+                }
+
+                if (selectedAttendanceCameraId) {
+                    cameraSelect.value = selectedAttendanceCameraId;
+                }
+
+                if (cameraSelectShell instanceof HTMLElement) {
+                    cameraSelectShell.hidden = attendanceCameraDevices.length <= 1;
+                }
+            };
+
+            const loadAttendanceCameraDevices = async () => {
+                if (!navigator.mediaDevices?.enumerateDevices) {
+                    return;
+                }
+
+                try {
+                    attendanceCameraDevices = (await navigator.mediaDevices.enumerateDevices())
+                        .filter((device) => device.kind === "videoinput" && device.deviceId);
+                    syncAttendanceCameraSelect();
+                } catch {
+                }
+            };
+
+            const buildAttendanceCameraConstraints = () => selectedAttendanceCameraId
+                ? { deviceId: { exact: selectedAttendanceCameraId } }
+                : { facingMode: { ideal: "environment" } };
+
+            const startCamera = async () => {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new Error("Trình duyệt không hỗ trợ camera.");
+                }
+                stopCamera();
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: buildAttendanceCameraConstraints(),
+                    audio: false
+                });
+                if (video instanceof HTMLVideoElement) {
+                    video.srcObject = cameraStream;
+                    await video.play();
+                }
+                if (placeholder instanceof HTMLElement) {
+                    placeholder.hidden = true;
+                }
+                await loadAttendanceCameraDevices();
+            };
+
+            const stopCamera = () => {
+                cameraStream?.getTracks().forEach((track) => track.stop());
+                cameraStream = null;
+                if (video instanceof HTMLVideoElement) {
+                    video.srcObject = null;
+                }
+            };
+
+            const resetPhoto = () => {
+                capturedBlob = null;
+                if (preview instanceof HTMLImageElement) {
+                    preview.hidden = true;
+                    preview.removeAttribute("src");
+                }
+                if (video instanceof HTMLVideoElement) {
+                    video.hidden = false;
+                }
+                if (retakeButton instanceof HTMLButtonElement) {
+                    retakeButton.disabled = true;
+                }
+            };
+
+            const formatDateTimeLocalValue = (date = new Date()) => {
+                const pad = (value) => `${value}`.padStart(2, "0");
+                return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+            };
+
+            const getSelectedActionEmployeeId = () => {
+                const selected = Array.from(employeeCheckboxes)
+                    .filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked && checkbox.value)
+                    .map((checkbox) => Number.parseInt(checkbox.value, 10))
+                    .find((value) => Number.isFinite(value) && value > 0);
+                return selected || Number.parseInt(root.dataset.actionEmployeeId || "", 10) || null;
+            };
+
+            const getSelectedDateValue = () => dateInput instanceof HTMLInputElement && dateInput.value
+                ? dateInput.value
+                : root.dataset.todayDate || "";
+
+            const getSelectedDateWithCurrentTime = () => {
+                const selectedDate = getSelectedDateValue();
+                const match = selectedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                const now = new Date();
+                return match
+                    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), now.getHours(), now.getMinutes())
+                    : now;
+            };
+
+            const shiftSelectedDate = (dayDelta) => {
+                if (!(dateInput instanceof HTMLInputElement) || !Number.isFinite(dayDelta) || dayDelta === 0) {
+                    return false;
+                }
+
+                const match = getSelectedDateValue().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (!match) {
+                    return false;
+                }
+
+                const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+                date.setDate(date.getDate() + dayDelta);
+                const pad = (value) => `${value}`.padStart(2, "0");
+                dateInput.value = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+                dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+                return true;
+            };
+
+            const canUseAttendanceAction = () => {
+                const selectedDate = getSelectedDateValue();
+                const today = root.dataset.todayDate || selectedDate;
+                if (selectedDate > today) {
+                    return false;
+                }
+
+                const isPast = selectedDate < today;
+                if (!isPast) {
+                    return true;
+                }
+
+                const canSelectEmployees = root.dataset.canSelectEmployees === "true";
+                if (!canSelectEmployees) {
+                    return false;
+                }
+
+                const canAdminManageAttendance = root.dataset.canAdminManageAttendance === "true";
+                const currentEmployeeId = Number.parseInt(root.dataset.currentEmployeeId || "", 10) || 0;
+                const actionEmployeeId = getSelectedActionEmployeeId() || 0;
+                return canAdminManageAttendance || actionEmployeeId === currentEmployeeId;
+            };
+
+            const capturePhoto = async () => {
+                if (!(video instanceof HTMLVideoElement) || !(canvas instanceof HTMLCanvasElement)) {
+                    return;
+                }
+                const width = video.videoWidth || 1280;
+                const height = video.videoHeight || 720;
+                canvas.width = width;
+                canvas.height = height;
+                const context = canvas.getContext("2d");
+                context?.drawImage(video, 0, 0, width, height);
+                capturedBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+                if (preview instanceof HTMLImageElement && capturedBlob) {
+                    preview.src = URL.createObjectURL(capturedBlob);
+                    preview.hidden = false;
+                    video.hidden = true;
+                }
+                if (retakeButton instanceof HTMLButtonElement) {
+                    retakeButton.disabled = !capturedBlob;
+                }
+                setStatus(cameraStatus, "Đã chụp ảnh. Bấm Lưu để hoàn tất.", "success");
+            };
+
+            const openCameraModal = async (mode) => {
+                activeMode = mode;
+                activeGps = null;
+                resetPhoto();
+                if (noteInput instanceof HTMLTextAreaElement) {
+                    noteInput.value = "";
+                }
+                if (noteLabel instanceof HTMLElement) {
+                    noteLabel.textContent = mode === "checkout" ? "Ghi chú checkout" : "Ghi chú checkin";
+                }
+                if (timeInput instanceof HTMLInputElement) {
+                    timeInput.value = formatDateTimeLocalValue(getSelectedDateWithCurrentTime());
+                }
+                if (timeLabel instanceof HTMLElement) {
+                    timeLabel.textContent = mode === "checkout" ? "Thời gian checkout" : "Thời gian checkin";
+                }
+                if (cameraTitle) {
+                    cameraTitle.textContent = mode === "checkout" ? "Chụp ảnh checkout" : "Chụp ảnh checkin";
+                }
+                if (cameraSubtitle) {
+                    cameraSubtitle.textContent = "Đang kiểm tra GPS và khoảng cách.";
+                }
+                if (cameraShell instanceof HTMLElement) {
+                    cameraShell.hidden = false;
+                    document.body.classList.add("modal-open");
+                }
+                setMapCollapsed(true);
+                syncAttendanceMap(null);
+                try {
+                    activeGps = await resolveGps();
+                    if (cameraSubtitle) {
+                        cameraSubtitle.textContent = `GPS hiện tại: ${activeGps.lat.toFixed(5)}, ${activeGps.long.toFixed(5)}`;
+                    }
+                    syncAttendanceMap(activeGps);
+                    await startCamera();
+                    setStatus(cameraStatus, "Camera đã sẵn sàng. Vui lòng chụp ảnh chấm công.", "success");
+                } catch (error) {
+                    setStatus(cameraStatus, error instanceof Error ? error.message : "Không thể mở camera.", "error");
+                }
+            };
+
+            const closeCameraModal = () => {
+                stopCamera();
+                resetPhoto();
+                closeFullscreenMap();
+                if (cameraShell instanceof HTMLElement) {
+                    cameraShell.hidden = true;
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            const postForm = async (url, values, imageBlob) => {
+                const payload = new FormData();
+                if (tokenInput instanceof HTMLInputElement) {
+                    payload.append("__RequestVerificationToken", tokenInput.value);
+                }
+                Object.entries(values).forEach(([key, value]) => payload.append(key, `${value}`));
+                payload.append("imageFile", new File([imageBlob], `chamcong-${Date.now()}.jpg`, { type: "image/jpeg" }));
+
+                const response = await fetch(url, {
+                    method: "POST",
+                    body: payload,
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.succeeded === false) {
+                    throw new Error(data.message || "Không thể lưu chấm công.");
+                }
+                return data;
+            };
+
+            const renderHistory = (items) => {
+                if (!historyElement) {
+                    return;
+                }
+                const sortedItems = [...items].sort((left, right) => {
+                    const leftTime = Number.parseInt(left.checkinSortKey || "", 10) || parseHistoryDate(left.thoiDiem);
+                    const rightTime = Number.parseInt(right.checkinSortKey || "", 10) || parseHistoryDate(right.thoiDiem);
+                    return leftTime - rightTime || (Number(left.id) || 0) - (Number(right.id) || 0);
+                });
+                if (historyCount) {
+                    historyCount.textContent = `${sortedItems.length} lượt`;
+                }
+                if (sortedItems.length === 0) {
+                    historyElement.innerHTML = '<div class="cham-cong-empty">Chưa có dữ liệu chấm công trong ngày đã chọn.</div>';
+                    updateHistoryCounter();
+                    return;
+                }
+                historyElement.innerHTML = sortedItems.map((item, index) => {
+                    const range = `${item.checkinTime || "--:--"} - ${item.checkoutTime || "Đang làm"}`;
+                    const customer = item.tenKhachHang || "AppTech";
+                    const checkinNote = item.ghiChuNhanVien
+                        ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuNhanVien)}</span></p>`
+                        : "";
+                    const checkoutNote = item.ghiChuCheckOut
+                        ? `<p class="cham-cong-note"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuCheckOut)}</span></p>`
+                        : "";
+                    const address = item.diaChi || "Chưa có địa chỉ";
+                    const employeeName = item.hoTenNhanVien || "Nhân viên";
+                    const checkinPhoto = item.imgPath
+                        ? `<button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="${escapeHtml(item.imgPath)}" data-image-title="Ảnh checkin ${escapeHtml(employeeName)}"><img src="${escapeHtml(item.imgPath)}" alt="Ảnh checkin" /></button>`
+                        : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
+                    const checkoutPhoto = item.imgPathCheckOut
+                        ? `<button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="${escapeHtml(item.imgPathCheckOut)}" data-image-title="Ảnh checkout ${escapeHtml(employeeName)}"><img src="${escapeHtml(item.imgPathCheckOut)}" alt="Ảnh checkout" /></button>`
+                        : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
+                    const checkinLineNote = item.ghiChuNhanVien
+                        ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuNhanVien)}</span></p>`
+                        : "";
+                    const checkoutLineNote = item.ghiChuCheckOut
+                        ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuCheckOut)}</span></p>`
+                        : "";
+                    const checkinClass = `is-checkin ${item.isCheckinViolation ? "is-attendance-violation" : ""}`;
+                    const checkoutClass = item.thoiDiemCheckOut ? "is-checkout-complete" : "is-checkout-pending";
+                    const checkoutViolationClass = item.isCheckoutViolation ? " is-attendance-violation" : "";
+                    return `
+                        <div class="cham-cong-timeline-item ${item.thoiDiemCheckOut ? "is-complete" : "is-pending"} ${item.isOpen ? "is-open" : ""}" style="order:${index};">
+                            <div class="cham-cong-dot"></div>
+                            <div class="cham-cong-split">
+                                <strong class="cham-cong-employee-name">${escapeHtml(employeeName)}</strong>
+                                <section class="cham-cong-attendance-line ${checkinClass}">
+                                    <div class="cham-cong-entry-photo">${checkinPhoto}</div>
+                                    <div class="cham-cong-entry-content">
+                                        <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.thoiDiem || item.checkinTime || "--:--")}</strong>
+                                        ${checkinLineNote}
+                                    </div>
+                                </section>
+                                <section class="cham-cong-attendance-line ${checkoutClass}${checkoutViolationClass}">
+                                    <div class="cham-cong-entry-photo">${checkoutPhoto}</div>
+                                    <div class="cham-cong-entry-content">
+                                        <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>${escapeHtml(item.thoiDiemCheckOut || "Chưa checkout")}</strong>
+                                        ${checkoutLineNote}
+                                    </div>
+                                </section>
+                                <section class="cham-cong-entry">
+                                    <div class="cham-cong-entry-photo">${checkinPhoto}</div>
+                                    <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.checkinTime || "--:--")}</strong>
+                                    ${checkinNote}
+                                </section>
+                                <section class="cham-cong-entry">
+                                    <div class="cham-cong-entry-photo">${checkoutPhoto}</div>
+                                    <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>${escapeHtml(item.checkoutTime || "Đang làm")}</strong>
+                                    ${checkoutNote}
+                                </section>
+                                <strong>${escapeHtml(range)}</strong>
+                                <span>${escapeHtml(customer)}</span>
+                                <small>${escapeHtml(address)}</small>
+                                ${checkinNote}
+                                ${checkoutNote}
+                            </div>
+                        </div>`;
+                }).join("");
+                historyElement.scrollLeft = 0;
+                updateHistoryCounter();
+            };
+
+            const escapeHtml = (value) => `${value ?? ""}`.replace(/[&<>"']/g, (character) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#039;"
+            }[character]));
+
+            const parseHistoryDate = (value) => {
+                const match = `${value ?? ""}`.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
+                if (!match) {
+                    return Number.MAX_SAFE_INTEGER;
+                }
+                const [, day, month, year, hour, minute] = match;
+                return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+            };
+
+            let historyScrollFrame = 0;
+            const updateHistoryCounter = () => {
+                if (!(historyCount instanceof HTMLElement) || !(historyElement instanceof HTMLElement)) {
+                    return;
+                }
+                const items = Array.from(historyElement.querySelectorAll(".cham-cong-timeline-item"));
+                if (items.length === 0) {
+                    historyCount.textContent = mobileHistoryMedia.matches ? "0 / 0" : "0 lượt";
+                    return;
+                }
+                if (!mobileHistoryMedia.matches) {
+                    historyCount.textContent = `${items.length} lượt`;
+                    return;
+                }
+                const nearestIndex = items.reduce((bestIndex, item, index) => {
+                    const bestItem = items[bestIndex];
+                    const bestDistance = Math.abs(bestItem.offsetLeft - historyElement.scrollLeft);
+                    const itemDistance = Math.abs(item.offsetLeft - historyElement.scrollLeft);
+                    return itemDistance < bestDistance ? index : bestIndex;
+                }, 0);
+                historyCount.textContent = `${nearestIndex + 1} / ${items.length}`;
+            };
+
+            const scheduleHistoryCounterUpdate = () => {
+                window.cancelAnimationFrame(historyScrollFrame);
+                historyScrollFrame = window.requestAnimationFrame(updateHistoryCounter);
+            };
+
+            const loadHistory = async () => {
+                const url = new URL(root.dataset.historyUrl || "", window.location.origin);
+                if (dateInput instanceof HTMLInputElement && dateInput.value) {
+                    url.searchParams.set("date", dateInput.value);
+                }
+                employeeCheckboxes.forEach((checkbox) => {
+                    if (checkbox instanceof HTMLInputElement && checkbox.checked && checkbox.value) {
+                        url.searchParams.append("employeeIds", checkbox.value);
+                    }
+                });
+                const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await response.json();
+                if (!response.ok || data.succeeded === false) {
+                    throw new Error(data.message || "Không thể tải lịch sử chấm công.");
+                }
+                root.dataset.openCheckinId = data.openCheckinId ? `${data.openCheckinId}` : "";
+                root.dataset.actionEmployeeId = data.actionEmployeeId ? `${data.actionEmployeeId}` : "";
+                renderHistory(Array.isArray(data.history) ? data.history : []);
+                syncButtons();
+            };
+
+            const syncButtons = () => {
+                const hasOpen = Boolean(root.dataset.openCheckinId);
+                const canAct = canUseAttendanceAction();
+                if (checkinButton instanceof HTMLButtonElement) {
+                    checkinButton.hidden = hasOpen || !canAct;
+                }
+                if (checkoutButton instanceof HTMLButtonElement) {
+                    checkoutButton.hidden = !hasOpen || !canAct;
+                }
+                if (locationSelect instanceof HTMLSelectElement) {
+                    locationSelect.disabled = hasOpen || !canAct;
+                    const validOptions = Array.from(locationSelect.options).filter((option) => option.value);
+                    const locationField = locationSelect.closest(".master-data-filter-field");
+                    if (locationField instanceof HTMLElement) {
+                        locationField.hidden = validOptions.length <= 1;
+                        locationField.classList.toggle("cham-cong-location-hidden", validOptions.length <= 1);
+                    }
+                }
+            };
+
+            const syncEmployeeSummary = () => {
+                if (!(employeeSummary instanceof HTMLElement)) {
+                    return;
+                }
+                const selectedNames = Array.from(employeeCheckboxes)
+                    .filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked)
+                    .map((checkbox) => checkbox.closest("label")?.textContent?.trim())
+                    .filter(Boolean);
+                employeeSummary.textContent = selectedNames.length === 0
+                    ? "Chọn nhân viên"
+                    : selectedNames.length === 1
+                        ? selectedNames[0]
+                        : `${selectedNames.length} nhân viên`;
+                if (employeeAllCheckbox instanceof HTMLInputElement) {
+                    employeeAllCheckbox.checked = selectedNames.length > 0 && selectedNames.length === employeeCheckboxes.length;
+                    employeeAllCheckbox.indeterminate = selectedNames.length > 0 && selectedNames.length < employeeCheckboxes.length;
+                }
+            };
+
+            const closeEmployeeMenu = () => {
+                if (employeeMenu instanceof HTMLElement) {
+                    employeeMenu.hidden = true;
+                }
+                employeeToggle?.setAttribute("aria-expanded", "false");
+            };
+
+            const syncImageViewerTransform = () => {
+                if (imageViewerImg instanceof HTMLImageElement) {
+                    imageViewerImg.style.transform = `scale(${imageZoom}) rotate(${imageRotation}deg)`;
+                }
+            };
+
+            const openImageViewer = (src, title = "Ảnh chấm công") => {
+                if (!src || !(imageViewerShell instanceof HTMLElement) || !(imageViewerImg instanceof HTMLImageElement)) {
+                    return;
+                }
+                imageZoom = 1;
+                imageRotation = 0;
+                imageViewerImg.src = src;
+                if (imageViewerTitle instanceof HTMLElement) {
+                    imageViewerTitle.textContent = title || "Ảnh chấm công";
+                }
+                if (imageDownloadLink instanceof HTMLAnchorElement) {
+                    imageDownloadLink.href = src;
+                }
+                syncImageViewerTransform();
+                imageViewerShell.hidden = false;
+                document.body.classList.add("modal-open");
+            };
+
+            const closeImageViewer = () => {
+                if (imageViewerShell instanceof HTMLElement) {
+                    imageViewerShell.hidden = true;
+                }
+                if (imageViewerImg instanceof HTMLImageElement) {
+                    imageViewerImg.removeAttribute("src");
+                }
+                document.body.classList.remove("modal-open");
+            };
+
+            const saveAttendance = async () => {
+                if (!capturedBlob || !activeGps) {
+                    setStatus(cameraStatus, "Vui lòng chụp ảnh trước khi lưu.", "error");
+                    return;
+                }
+                try {
+                    if (saveButton instanceof HTMLButtonElement) {
+                        saveButton.disabled = true;
+                    }
+                    if (activeMode === "checkout") {
+                        const openId = root.dataset.openCheckinId;
+                        if (!openId) {
+                            throw new Error("Không có lượt checkin đang mở để checkout.");
+                        }
+                        await postForm(root.dataset.checkoutUrl || "", {
+                            Id: openId,
+                            IDNhanVien: getSelectedActionEmployeeId() || "",
+                            ThoiDiemCheckOut: timeInput instanceof HTMLInputElement ? timeInput.value : "",
+                            LongAddressCheckOut: activeGps.long,
+                            LatAddressCheckOut: activeGps.lat,
+                            GhiChuCheckOut: noteInput instanceof HTMLTextAreaElement ? noteInput.value : ""
+                        }, capturedBlob);
+                        root.dataset.openCheckinId = "";
+                        setStatus(statusElement, "Đã lưu checkout chấm công.", "success");
+                    } else {
+                        const location = getSelectedLocation();
+                        if (!location) {
+                            throw new Error("Vui lòng chọn địa điểm chấm công.");
+                        }
+                        validateDistance(activeGps);
+                        await postForm(root.dataset.checkinUrl || "", {
+                            IDDiaDiem: location.id,
+                            IDNhanVien: getSelectedActionEmployeeId() || "",
+                            ThoiDiem: timeInput instanceof HTMLInputElement ? timeInput.value : "",
+                            LongAddress: activeGps.long,
+                            LatAddress: activeGps.lat,
+                            GhiChuNhanVien: noteInput instanceof HTMLTextAreaElement ? noteInput.value : ""
+                        }, capturedBlob);
+                        setStatus(statusElement, "Đã lưu checkin chấm công.", "success");
+                    }
+                    closeCameraModal();
+                    await loadHistory();
+                } catch (error) {
+                    setStatus(cameraStatus, error instanceof Error ? error.message : "Không thể lưu chấm công.", "error");
+                } finally {
+                    if (saveButton instanceof HTMLButtonElement) {
+                        saveButton.disabled = false;
+                    }
+                }
+            };
+
+            checkinButton?.addEventListener("click", () => void openCameraModal("checkin"));
+            checkoutButton?.addEventListener("click", () => void openCameraModal("checkout"));
+            mapToggle?.addEventListener("click", () => {
+                const expanded = mapToggle.getAttribute("aria-expanded") === "true";
+                setMapCollapsed(expanded);
+                if (expanded) {
+                    return;
+                }
+                syncAttendanceMap(activeGps);
+            });
+            captureButton?.addEventListener("click", () => void capturePhoto());
+            retakeButton?.addEventListener("click", () => resetPhoto());
+            saveButton?.addEventListener("click", () => void saveAttendance());
+            mapFullscreenOpen?.addEventListener("click", openFullscreenMap);
+            refreshGpsButton?.addEventListener("click", () => void refreshGps());
+            cameraSelect?.addEventListener("change", () => {
+                if (cameraSelect instanceof HTMLSelectElement) {
+                    selectedAttendanceCameraId = cameraSelect.value;
+                }
+                if (cameraStream && cameraShell instanceof HTMLElement && !cameraShell.hidden) {
+                    void startCamera().catch((error) => {
+                        setStatus(cameraStatus, error instanceof Error ? error.message : "Khong the doi camera.", "error");
+                    });
+                }
+            });
+            mapFullscreenRefreshButton?.addEventListener("click", refreshFullscreenMap);
+            mapFullscreenRouteButton?.addEventListener("click", () => void loadFullscreenRoute());
+            mapFullscreenCloseButtons.forEach((button) => button.addEventListener("click", closeFullscreenMap));
+            cameraCloseButtons.forEach((button) => button.addEventListener("click", closeCameraModal));
+            imageViewerCloseButtons.forEach((button) => button.addEventListener("click", closeImageViewer));
+            imageZoomInButton?.addEventListener("click", () => {
+                imageZoom = Math.min(4, Number((imageZoom + 0.25).toFixed(2)));
+                syncImageViewerTransform();
+            });
+            imageZoomOutButton?.addEventListener("click", () => {
+                imageZoom = Math.max(0.25, Number((imageZoom - 0.25).toFixed(2)));
+                syncImageViewerTransform();
+            });
+            imageRotateButton?.addEventListener("click", () => {
+                imageRotation = (imageRotation + 90) % 360;
+                syncImageViewerTransform();
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape"
+                    && imageViewerShell instanceof HTMLElement
+                    && !imageViewerShell.hidden) {
+                    closeImageViewer();
+                }
+            });
+            historyElement?.addEventListener("click", (event) => {
+                const trigger = event.target instanceof Element
+                    ? event.target.closest("[data-cham-cong-image-open], .cham-cong-entry-photo img")
+                    : null;
+                if (!trigger) {
+                    return;
+                }
+                const button = trigger.closest("[data-cham-cong-image-open]");
+                const img = trigger instanceof HTMLImageElement ? trigger : trigger.querySelector("img");
+                const src = button?.dataset.imageSrc || img?.getAttribute("src") || "";
+                const title = button?.dataset.imageTitle || img?.getAttribute("alt") || "Ảnh chấm công";
+                openImageViewer(src, title);
+            });
+            dateStepButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    const dayDelta = Number.parseInt(button.dataset.chamCongDateStep || "", 10);
+                    shiftSelectedDate(dayDelta);
+                });
+            });
+            dateInput?.addEventListener("change", async () => {
+                try {
+                    setStatus(statusElement, "Đang tải lịch sử chấm công...", "info");
+                    await loadHistory();
+                    setStatus(statusElement, "Đã tải lịch sử chấm công.", "success");
+                } catch (error) {
+                    setStatus(statusElement, error instanceof Error ? error.message : "Không thể tải lịch sử chấm công.", "error");
+                }
+            });
+            employeeToggle?.addEventListener("click", () => {
+                if (!(employeeMenu instanceof HTMLElement)) {
+                    return;
+                }
+                const willOpen = employeeMenu.hidden;
+                employeeMenu.hidden = !willOpen;
+                employeeToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+            });
+            employeeAllCheckbox?.addEventListener("change", async () => {
+                if (!(employeeAllCheckbox instanceof HTMLInputElement)) {
+                    return;
+                }
+                employeeCheckboxes.forEach((checkbox) => {
+                    if (checkbox instanceof HTMLInputElement) {
+                        checkbox.checked = employeeAllCheckbox.checked;
+                    }
+                });
+                syncEmployeeSummary();
+                try {
+                    setStatus(statusElement, "Đang tải lịch sử chấm công...", "info");
+                    await loadHistory();
+                    setStatus(statusElement, "Đã tải lịch sử chấm công.", "success");
+                } catch (error) {
+                    setStatus(statusElement, error instanceof Error ? error.message : "Không thể tải lịch sử chấm công.", "error");
+                }
+            });
+            employeeCheckboxes.forEach((checkbox) => checkbox.addEventListener("change", async () => {
+                syncEmployeeSummary();
+                try {
+                    setStatus(statusElement, "Đang tải lịch sử chấm công...", "info");
+                    await loadHistory();
+                    setStatus(statusElement, "Đã tải lịch sử chấm công.", "success");
+                } catch (error) {
+                    setStatus(statusElement, error instanceof Error ? error.message : "Không thể tải lịch sử chấm công.", "error");
+                }
+            }));
+            document.addEventListener("click", (event) => {
+                if (employeePicker instanceof HTMLElement && !employeePicker.contains(event.target)) {
+                    closeEmployeeMenu();
+                }
+            });
+            historyElement?.addEventListener("scroll", scheduleHistoryCounterUpdate, { passive: true });
+            window.addEventListener("resize", scheduleHistoryCounterUpdate);
+            mobileHistoryMedia.addEventListener?.("change", updateHistoryCounter);
+
+            syncButtons();
+            syncEmployeeSummary();
+            updateHistoryCounter();
+        })();
+    </script>
+}

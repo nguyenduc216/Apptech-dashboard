@@ -1,0 +1,380 @@
+@model NhanVienDetailViewModel
+@{
+    ViewData["Title"] = Model.PageTitle;
+    ViewData["Breadcrumb"] = $"Trang chủ / Nhân viên / {Model.PageTitle}";
+
+    var summaryErrors = ViewData.ModelState.TryGetValue(string.Empty, out var summaryState)
+        ? summaryState.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToArray()
+        : [];
+}
+
+<section class="master-data-page nhan-vien-detail-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="floating-status-toast @Model.StatusType"
+             data-status-toast
+             role="status"
+             aria-live="polite">
+            <div class="floating-status-toast-icon" aria-hidden="true">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            </div>
+            <div class="floating-status-toast-body">
+                <strong>@(Model.StatusType == "success" ? "Thành công" : Model.StatusType == "error" ? "Có lỗi xảy ra" : "Thông báo")</strong>
+                <span>@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="floating-status-toast-close" data-status-toast-close aria-label="Đóng thông báo">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
+    }
+
+    <form method="post"
+          asp-action="@Model.SubmitAction"
+          enctype="multipart/form-data"
+          class="account-form"
+          data-employee-form>
+        @Html.AntiForgeryToken()
+
+        <input asp-for="Form.Id" type="hidden" />
+        <input asp-for="Form.Keyword" type="hidden" />
+        <input asp-for="Form.StatusFilter" type="hidden" />
+        <input asp-for="Form.Page" type="hidden" />
+        <input asp-for="Form.Avatar" type="hidden" />
+        <input asp-for="Form.IDTaiKhoan" type="hidden" />
+        <input asp-for="Form.IsAdministrator" type="hidden" />
+
+        <article class="panel khach-hang-detail-hero">
+            <div class="khach-hang-detail-hero-copy">
+                <div class="khach-hang-detail-eyebrow">Nhân viên</div>
+                <h2>@Model.PageTitle</h2>
+                <p>Quản lý hồ sơ nhân viên, avatar và tài khoản đăng nhập liên kết.</p>
+            </div>
+
+            <div class="khach-hang-detail-hero-actions">
+                <a class="secondary-button"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@Model.Filter.Page">
+                    Quay lại danh sách
+                </a>
+
+                <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
+                    <span class="button-content">
+                        <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                        <span>Lưu nhân viên</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang lưu</span>
+                    </span>
+                </button>
+            </div>
+        </article>
+
+        @if (summaryErrors.Length > 0)
+        {
+            <div class="page-alert error validation-summary">
+                <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                <div>
+                    @foreach (var message in summaryErrors)
+                    {
+                        <div>@message</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <article class="panel khach-hang-detail-panel">
+            <div class="panel-header">
+                <div>
+                    <h3>Thông tin nhân viên</h3>
+                    <p>Cập nhật thông tin cá nhân và trạng thái sử dụng.</p>
+                </div>
+            </div>
+
+            <div class="employee-form-layout">
+                <div class="employee-avatar-panel">
+                    <div class="employee-avatar-preview">
+                        <img src="@(string.IsNullOrWhiteSpace(Model.Form.Avatar) ? "/images/default-avatar.svg" : Model.Form.Avatar)"
+                             alt="Avatar nhân viên"
+                             data-employee-avatar-preview
+                             onerror="this.onerror=null;this.src='/images/default-avatar.svg';" />
+                    </div>
+
+                    <div class="employee-avatar-actions">
+                        <label class="secondary-button image-upload-button" for="employeeAvatarFile">
+                            <i class="fa-solid fa-image" aria-hidden="true"></i>
+                            <span>Tải từ thiết bị</span>
+                        </label>
+
+                        <label class="secondary-button image-upload-button" for="employeeAvatarCamera">
+                            <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                            <span>Chụp camera</span>
+                        </label>
+                    </div>
+                    <input id="employeeAvatarFile"
+                           asp-for="Form.AvatarFile"
+                           type="file"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                           data-employee-avatar-input
+                           hidden />
+                    <input id="employeeAvatarCamera"
+                           name="Form.AvatarFile"
+                           type="file"
+                           accept="image/*"
+                           capture="user"
+                           data-employee-avatar-input
+                           hidden />
+                    <span asp-validation-for="Form.AvatarFile" class="login-field-error"></span>
+                </div>
+
+                <div class="account-form-grid">
+                    <label class="login-field">
+                        <span>Họ</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
+                            <input asp-for="Form.Ho" autocomplete="off" autofocus />
+                        </span>
+                        <span asp-validation-for="Form.Ho" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Tên</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
+                            <input asp-for="Form.Ten" autocomplete="off" />
+                        </span>
+                        <span asp-validation-for="Form.Ten" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Giới tính</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-venus-mars" aria-hidden="true"></i>
+                            <select asp-for="Form.GioiTinh">
+                                <option value="Nam">Nam</option>
+                                <option value="Nữ">Nữ</option>
+                                <option value="Khác">Khác</option>
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                        <span asp-validation-for="Form.GioiTinh" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Ngày sinh</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                            <input asp-for="Form.NgaySinh" type="date" />
+                        </span>
+                        <span asp-validation-for="Form.NgaySinh" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Phòng ban</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-building-user" aria-hidden="true"></i>
+                            <select asp-for="Form.IDPhongBan">
+                                <option value="">Chọn phòng ban</option>
+                                @foreach (var phongBan in Model.PhongBanOptions)
+                                {
+                                    <option value="@phongBan.Id">@phongBan.TenPhongBan</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                        <span asp-validation-for="Form.IDPhongBan" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Chức vụ</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-id-badge" aria-hidden="true"></i>
+                            <input asp-for="Form.ChucVu" autocomplete="off" />
+                        </span>
+                        <span asp-validation-for="Form.ChucVu" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>Email</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+                            <input asp-for="Form.Email" autocomplete="off" inputmode="email" />
+                        </span>
+                        <span asp-validation-for="Form.Email" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field switch-field employee-status-field">
+                        <span>Trạng thái sử dụng</span>
+                        <span class="switch-field-shell">
+                            <span class="switch-field-icon">
+                                <i class="fa-solid fa-power-off" aria-hidden="true"></i>
+                            </span>
+                            <span class="status-switch">
+                                <input asp-for="Form.TrangThaiSuDung" class="status-switch-input" />
+                                <span class="status-switch-track">
+                                    <span class="status-switch-thumb"></span>
+                                </span>
+                                <span class="status-switch-labels" aria-hidden="true">
+                                    <span>Kích hoạt</span>
+                                    <span>Khóa</span>
+                                </span>
+                            </span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </article>
+
+        <article class="panel khach-hang-detail-panel">
+            <div class="panel-header">
+                <div>
+                    <h3>Tài khoản người dùng</h3>
+                    <p>Tạo hoặc cập nhật tài khoản đăng nhập liên kết với nhân viên.</p>
+                </div>
+            </div>
+
+                @if (Model.Form.IsAdministrator)
+                {
+                    <div class="page-alert warning employee-admin-warning">
+                        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                        <span>Tài khoản quản trị không được cập nhật thông tin đăng nhập tại màn hình nhân viên. Chỉ thông tin nhân viên được lưu.</span>
+                    </div>
+                }
+
+                <div class="employee-account-panel @(Model.Form.IsAdministrator ? "is-admin-locked" : null)" data-account-panel data-admin-account="@Model.Form.IsAdministrator.ToString().ToLowerInvariant()">
+                <label class="login-field switch-field employee-account-toggle">
+                    <span>Tạo tài khoản người dùng</span>
+                    <span class="switch-field-shell">
+                        <span class="switch-field-icon">
+                            <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                        </span>
+                        <span class="status-switch">
+                            <input asp-for="Form.TaoTaiKhoan" class="status-switch-input" data-account-toggle />
+                            <span class="status-switch-track">
+                                <span class="status-switch-thumb"></span>
+                            </span>
+                            <span class="status-switch-labels" aria-hidden="true">
+                                <span>Có</span>
+                                <span>Không</span>
+                            </span>
+                        </span>
+                    </span>
+                </label>
+
+                <div class="employee-account-fields" data-account-fields>
+                    <label class="login-field">
+                        <span>Tên đăng nhập</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                            <input asp-for="Form.TenDangNhap" autocomplete="off" data-account-input />
+                        </span>
+                        <span asp-validation-for="Form.TenDangNhap" class="login-field-error"></span>
+                    </label>
+
+                    <label class="login-field">
+                        <span>@(Model.Form.IDTaiKhoan.HasValue ? "Mật khẩu mới" : "Mật khẩu")</span>
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                            <input asp-for="Form.MatKhau" type="password" autocomplete="new-password" data-password-input data-account-input />
+                            <button type="button" class="login-input-action" data-password-toggle aria-label="Hiện mật khẩu">
+                                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </span>
+                        <span asp-validation-for="Form.MatKhau" class="login-field-error"></span>
+                    </label>
+                </div>
+            </div>
+        </article>
+    </form>
+</section>
+
+@section Scripts {
+    <script>
+        (function () {
+            const root = document.querySelector("[data-employee-form]");
+            if (!(root instanceof HTMLFormElement)) {
+                return;
+            }
+
+            const avatarInputs = Array.from(root.querySelectorAll("[data-employee-avatar-input]"));
+            const avatarPreview = root.querySelector(".employee-avatar-preview");
+            const accountToggle = root.querySelector("[data-account-toggle]");
+            const accountPanel = root.querySelector("[data-account-panel]");
+            const accountFields = root.querySelector("[data-account-fields]");
+            const accountInputs = Array.from(root.querySelectorAll("[data-account-input]"));
+            const passwordInput = root.querySelector("[data-password-input]");
+            const passwordToggle = root.querySelector("[data-password-toggle]");
+
+            const syncAccountFields = () => {
+                if (!(accountToggle instanceof HTMLInputElement) || !(accountFields instanceof HTMLElement)) {
+                    return;
+                }
+
+                const isAdminAccount = accountPanel instanceof HTMLElement && accountPanel.dataset.adminAccount === "true";
+                const isEnabled = accountToggle.checked;
+                accountPanel?.classList.toggle("is-disabled", !isEnabled || isAdminAccount);
+                accountFields.classList.toggle("is-disabled", !isEnabled || isAdminAccount);
+                accountInputs.forEach((input) => {
+                    if (input instanceof HTMLInputElement) {
+                        input.disabled = !isEnabled || isAdminAccount;
+                    }
+                });
+                if (passwordToggle instanceof HTMLButtonElement) {
+                    passwordToggle.disabled = isAdminAccount;
+                }
+            };
+
+            if (avatarInputs.length > 0 && avatarPreview instanceof HTMLElement) {
+                avatarInputs.forEach((avatarInput) => {
+                    if (!(avatarInput instanceof HTMLInputElement)) {
+                        return;
+                    }
+
+	                avatarInput.addEventListener("change", () => {
+	                    const file = avatarInput.files?.[0];
+	                    if (!file) {
+                        return;
+                    }
+
+                    const imageUrl = URL.createObjectURL(file);
+                    avatarPreview.innerHTML = "";
+                    const image = document.createElement("img");
+                    image.src = imageUrl;
+		                    image.alt = "Avatar nhân viên";
+                    image.onerror = () => {
+                        image.onerror = null;
+                        image.src = "/images/default-avatar.svg";
+                    };
+		                    avatarPreview.appendChild(image);
+		                });
+                });
+            }
+
+            const currentAvatar = root.querySelector("[data-employee-avatar-preview]");
+            if (currentAvatar instanceof HTMLImageElement) {
+                currentAvatar.addEventListener("error", () => {
+                    currentAvatar.src = "/images/default-avatar.svg";
+                }, { once: true });
+            }
+
+            if (passwordInput instanceof HTMLInputElement && passwordToggle instanceof HTMLButtonElement) {
+                passwordToggle.addEventListener("click", () => {
+                    const shouldShow = passwordInput.type === "password";
+                    passwordInput.type = shouldShow ? "text" : "password";
+                    passwordToggle.setAttribute("aria-label", shouldShow ? "Ẩn mật khẩu" : "Hiện mật khẩu");
+                    const icon = passwordToggle.querySelector("i");
+                    if (icon instanceof HTMLElement) {
+                        icon.className = shouldShow ? "fa-solid fa-eye-slash" : "fa-solid fa-eye";
+                    }
+                });
+            }
+
+            if (accountToggle instanceof HTMLInputElement) {
+                accountToggle.addEventListener("change", syncAccountFields);
+                syncAccountFields();
+            }
+        })();
+    </script>
+}

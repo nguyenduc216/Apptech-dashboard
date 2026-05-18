@@ -1,0 +1,2162 @@
+@using System.Globalization
+@model KhachHangDetailViewModel
+@{
+    ViewData["Title"] = Model.PageTitle;
+    ViewData["Breadcrumb"] = $"Trang chủ / Kỹ thuật / Khách hàng / {Model.PageTitle}";
+
+    var tenKhachHangHasError = ViewData.ModelState.TryGetValue("Form.TenKhachHang", out var tenKhachHangState) && tenKhachHangState.Errors.Count > 0;
+    var maKhachHangHasError = ViewData.ModelState.TryGetValue("Form.MaKhachHang", out var maKhachHangState) && maKhachHangState.Errors.Count > 0;
+    var diaChiHasError = ViewData.ModelState.TryGetValue("Form.DiaChi", out var diaChiState) && diaChiState.Errors.Count > 0;
+    var soDienThoaiHasError = ViewData.ModelState.TryGetValue("Form.SoDienThoai", out var soDienThoaiState) && soDienThoaiState.Errors.Count > 0;
+    var nguoiDaiDienHasError = ViewData.ModelState.TryGetValue("Form.NguoiDaiDien", out var nguoiDaiDienState) && nguoiDaiDienState.Errors.Count > 0;
+    var nganhNgheHasError = ViewData.ModelState.TryGetValue("Form.NganhNghe", out var nganhNgheState) && nganhNgheState.Errors.Count > 0;
+    var zaloIdHasError = ViewData.ModelState.TryGetValue("Form.ZaloID", out var zaloIdState) && zaloIdState.Errors.Count > 0;
+    var ghiChuHasError = ViewData.ModelState.TryGetValue("Form.GhiChu", out var ghiChuState) && ghiChuState.Errors.Count > 0;
+    var summaryErrors = ViewData.ModelState.TryGetValue(string.Empty, out var summaryState)
+        ? summaryState.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToArray()
+        : [];
+    var diaDiemLamViec = Model.Form.DiaDiemLamViec.ToList();
+    var invariantCulture = CultureInfo.InvariantCulture;
+    var activeTab = string.IsNullOrWhiteSpace(Model.Form.ActiveTab) ? "thong-tin" : Model.Form.ActiveTab;
+    var canModifyCustomer = Model.CurrentUserIsAdmin || !Model.IsProtectedApptechCustomer;
+}
+
+<section class="master-data-page khach-hang-detail-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="floating-status-toast @Model.StatusType"
+             data-status-toast
+             role="status"
+             aria-live="polite">
+            <div class="floating-status-toast-icon" aria-hidden="true">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            </div>
+            <div class="floating-status-toast-body">
+                <strong>@(Model.StatusType == "success" ? "Thành công" : Model.StatusType == "error" ? "Có lỗi xảy ra" : "Thông báo")</strong>
+                <span>@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="floating-status-toast-close" data-status-toast-close aria-label="Đóng thông báo">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
+    }
+
+    <form method="post"
+          asp-action="@Model.SubmitAction"
+          class="account-form khach-hang-detail-form"
+          data-khach-hang-detail-root
+          data-edit-mode="@(Model.IsEditMode ? "true" : "false")"
+          data-location-save-url="@Url.Action("SaveLocation", "KhachHang")"
+          data-location-delete-url="@Url.Action("DeleteLocation", "KhachHang")">
+        @Html.AntiForgeryToken()
+
+        <input asp-for="Form.Id" type="hidden" />
+        <input asp-for="Form.Keyword" type="hidden" />
+        <input asp-for="Form.Page" type="hidden" />
+
+        <article class="panel khach-hang-detail-hero">
+            <div class="khach-hang-detail-hero-copy">
+                <div class="khach-hang-detail-eyebrow">Khách hàng</div>
+                <h2>@Model.PageTitle</h2>
+                <p>@Model.PageDescription</p>
+            </div>
+
+            <div class="khach-hang-detail-hero-actions">
+                <a class="secondary-button"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-page="@Model.Filter.Page">
+                    Quay lại danh sách
+                </a>
+
+                @if (canModifyCustomer)
+                {
+                <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
+                    <span class="button-content">
+                        <i class="fa-solid @(Model.IsEditMode ? "fa-floppy-disk" : "fa-plus")" aria-hidden="true"></i>
+                        <span>@(Model.IsEditMode ? "Lưu cập nhật" : "Thêm mới")</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang lưu</span>
+                    </span>
+                </button>
+                }
+            </div>
+        </article>
+
+        @if (summaryErrors.Length > 0)
+        {
+            <div class="page-alert error validation-summary">
+                <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                <div>
+                    @foreach (var message in summaryErrors)
+                    {
+                        <div>@message</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <article class="panel khach-hang-detail-panel">
+            <div class="crud-tabs khach-hang-detail-tabs" data-tab-group>
+                <input asp-for="Form.ActiveTab" type="hidden" data-active-tab-input />
+
+                <div class="crud-tab-list" role="tablist" aria-label="Nhóm thông tin khách hàng">
+                    <button type="button"
+                            class="crud-tab-button @(activeTab == "thong-tin" ? "is-active" : "")"
+                            data-tab-button
+                            data-tab="thong-tin"
+                            role="tab"
+                            aria-selected="@(activeTab == "thong-tin" ? "true" : "false")">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                        <span>Thông tin</span>
+                    </button>
+
+                    <button type="button"
+                            class="crud-tab-button @(activeTab == "dia-diem-lam-viec" ? "is-active" : "")"
+                            data-tab-button
+                            data-tab="dia-diem-lam-viec"
+                            role="tab"
+                            aria-selected="@(activeTab == "dia-diem-lam-viec" ? "true" : "false")">
+                        <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                        <span>Địa điểm làm việc</span>
+                    </button>
+                </div>
+
+                <div class="crud-tab-panel @(activeTab == "thong-tin" ? "is-active" : "")"
+                     data-tab-panel
+                     data-tab="thong-tin"
+                     role="tabpanel"
+                     @(activeTab == "thong-tin" ? null : "hidden")>
+                    <div class="panel-header">
+                        <div>
+                            <h3>Thông tin khách hàng</h3>
+                            <p>Cập nhật toàn bộ thông tin chi tiết của khách hàng trên một trang riêng.</p>
+                        </div>
+                    </div>
+
+                    <div class="account-form-grid">
+                        <label class="login-field @(tenKhachHangHasError ? "has-error" : "")">
+                            <span>Tên khách hàng</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-building" aria-hidden="true"></i>
+                                <input asp-for="Form.TenKhachHang" autocomplete="off" autofocus />
+                            </span>
+                            <span asp-validation-for="Form.TenKhachHang" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field @(maKhachHangHasError ? "has-error" : "")">
+                            <span>Mã khách hàng</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-id-badge" aria-hidden="true"></i>
+                                <input asp-for="Form.MaKhachHang" autocomplete="off" />
+                            </span>
+                            <span asp-validation-for="Form.MaKhachHang" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field @(soDienThoaiHasError ? "has-error" : "")">
+                            <span>Số điện thoại</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-phone" aria-hidden="true"></i>
+                                <input asp-for="Form.SoDienThoai" autocomplete="off" inputmode="tel" />
+                            </span>
+                            <span asp-validation-for="Form.SoDienThoai" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field @(nguoiDaiDienHasError ? "has-error" : "")">
+                            <span>Người đại diện</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+                                <input asp-for="Form.NguoiDaiDien" autocomplete="off" />
+                            </span>
+                            <span asp-validation-for="Form.NguoiDaiDien" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field @(nganhNgheHasError ? "has-error" : "")">
+                            <span>Ngành nghề</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-briefcase" aria-hidden="true"></i>
+                                <input asp-for="Form.NganhNghe" autocomplete="off" />
+                            </span>
+                            <span asp-validation-for="Form.NganhNghe" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field @(zaloIdHasError ? "has-error" : "")">
+                            <span>Thông tin Zalo</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                                <input asp-for="Form.ZaloID" autocomplete="off" />
+                            </span>
+                            <span asp-validation-for="Form.ZaloID" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field field-span-2 @(diaChiHasError ? "has-error" : "")">
+                            <span>Địa chỉ khách hàng</span>
+                            <span class="login-textarea-shell">
+                                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                <textarea asp-for="Form.DiaChi" rows="3" placeholder="Nhập địa chỉ khách hàng..."></textarea>
+                            </span>
+                            <span asp-validation-for="Form.DiaChi" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field field-span-2 @(ghiChuHasError ? "has-error" : "")">
+                            <span>Ghi chú</span>
+                            <span class="login-textarea-shell">
+                                <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+                                <textarea asp-for="Form.GhiChu" rows="4" placeholder="Nhập ghi chú thêm về khách hàng..."></textarea>
+                            </span>
+                            <span asp-validation-for="Form.GhiChu" class="login-field-error"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="crud-tab-panel @(activeTab == "dia-diem-lam-viec" ? "is-active" : "")"
+                     data-tab-panel
+                     data-tab="dia-diem-lam-viec"
+                     role="tabpanel"
+                     @(activeTab == "dia-diem-lam-viec" ? null : "hidden")>
+                    <div class="khach-hang-location-panel" data-khach-hang-location-manager>
+                        <div class="panel-header khach-hang-location-toolbar">
+                            <div>
+                                <h3>Địa điểm làm việc</h3>
+                                <p>Mỗi địa điểm hiển thị dưới dạng thẻ tóm tắt. Khi cần cập nhật chi tiết hoặc chỉnh map, hệ thống sẽ mở popup chỉnh sửa.</p>
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    asp-permission-action="insert"
+                                    data-location-add
+                                    hidden="@(!canModifyCustomer)"
+                                    disabled="@(!canModifyCustomer)">
+                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                <span>Thêm địa điểm</span>
+                            </button>
+                        </div>
+
+                        <div class="page-alert error khach-hang-location-status" data-location-status-message hidden></div>
+
+                        <div class="khach-hang-location-empty @(diaDiemLamViec.Count > 0 ? "is-hidden" : null)" data-location-empty>
+                            <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                            <span>Chưa có địa điểm làm việc nào. Nhấn "Thêm địa điểm" để bắt đầu.</span>
+                        </div>
+
+                        <div class="khach-hang-location-list khach-hang-location-summary-list" data-location-list>
+                            @for (var index = 0; index < diaDiemLamViec.Count; index++)
+                            {
+	                                var diaDiem = diaDiemLamViec[index];
+	                                var longValue = diaDiem.LongAddress?.ToString(invariantCulture) ?? string.Empty;
+	                                var latValue = diaDiem.LatAddress?.ToString(invariantCulture) ?? string.Empty;
+	                                var phoneHref = string.IsNullOrWhiteSpace(diaDiem.DienThoai)
+	                                    ? string.Empty
+	                                    : new string(diaDiem.DienThoai.Where(character => char.IsDigit(character) || character == '+').ToArray());
+
+                                <article class="khach-hang-location-item khach-hang-location-summary-card" data-location-item data-location-id="@diaDiem.Id">
+                                    <div class="khach-hang-location-item-header">
+                                        <div class="khach-hang-location-header-copy">
+                                            <span class="khach-hang-location-badge">
+                                                Địa điểm <strong data-location-label>@(index + 1)</strong>
+                                            </span>
+                                        </div>
+
+                                        <div class="khach-hang-location-header-actions">
+                                            @if (canModifyCustomer)
+                                            {
+                                                <button type="button" class="table-action-button edit" asp-permission-action="update" data-location-edit>
+                                                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                                    <span>Cập nhật</span>
+                                                </button>
+
+                                                <button type="button" class="table-action-button delete" asp-permission-action="delete" data-location-remove>
+                                                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                    <span>Xóa</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="khach-hang-location-summary-layout">
+                                        <button type="button"
+                                                class="khach-hang-location-map-preview"
+                                                data-location-map-preview
+                                                aria-label="Xem bản đồ địa điểm @(index + 1)">
+                                            <div class="khach-hang-location-map-preview-canvas" data-location-preview-map></div>
+                                            <div class="khach-hang-location-map-preview-copy">
+                                                <span data-location-preview-title>@(diaDiem.LatAddress.HasValue && diaDiem.LongAddress.HasValue ? "Xem bản đồ" : "Chưa có ghim")</span>
+                                                <small>Nhấn để mở bản đồ lớn</small>
+                                            </div>
+                                        </button>
+
+                                        <div class="khach-hang-location-summary-grid">
+                                            <div class="khach-hang-location-summary-block">
+                                                <span class="khach-hang-location-summary-label">Địa chỉ</span>
+                                                <strong data-location-summary-address>
+                                                    @(string.IsNullOrWhiteSpace(diaDiem.DiaChi) ? "Chưa có địa chỉ." : diaDiem.DiaChi)
+                                                </strong>
+                                            </div>
+
+                                            <div class="khach-hang-location-summary-block">
+                                                <span class="khach-hang-location-summary-label">Người liên hệ</span>
+                                                <strong data-location-summary-contact>
+                                                    @(string.IsNullOrWhiteSpace(diaDiem.NguoiLienHe) ? "-" : diaDiem.NguoiLienHe)
+                                                </strong>
+                                            </div>
+
+	                                            <div class="khach-hang-location-summary-block">
+	                                                <span class="khach-hang-location-summary-label">Điện thoại</span>
+	                                                <strong data-location-summary-phone>
+	                                                    @if (string.IsNullOrWhiteSpace(diaDiem.DienThoai))
+	                                                    {
+	                                                        @:-
+	                                                    }
+	                                                    else
+	                                                    {
+	                                                        <a href="tel:@phoneHref">@diaDiem.DienThoai</a>
+	                                                    }
+	                                                </strong>
+	                                            </div>
+
+                                            <div class="khach-hang-location-summary-block">
+                                                <span class="khach-hang-location-summary-label">Tọa độ</span>
+                                                <strong data-location-summary-coordinates>
+                                                    @if (diaDiem.LatAddress.HasValue && diaDiem.LongAddress.HasValue)
+                                                    {
+                                                        @($"{diaDiem.LatAddress.Value.ToString("0.00000", invariantCulture)}, {diaDiem.LongAddress.Value.ToString("0.00000", invariantCulture)}")
+                                                    }
+                                                    else
+                                                    {
+                                                        @:Chưa chọn ghim
+                                                    }
+                                                </strong>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <input type="hidden"
+                                           value="@diaDiem.Id"
+                                           data-location-db-id />
+                                    <input type="hidden"
+                                           name="Form.DiaDiemLamViec[@index].TrangThaiSuDung"
+                                           value="@(diaDiem.TrangThaiSuDung ? "true" : "false")"
+                                           data-location-status />
+                                    <input type="hidden"
+                                           name="Form.DiaDiemLamViec[@index].DiaChi"
+                                           value="@diaDiem.DiaChi"
+                                           data-location-address />
+                                    <input type="hidden"
+                                           name="Form.DiaDiemLamViec[@index].NguoiLienHe"
+                                           value="@diaDiem.NguoiLienHe"
+                                           data-location-contact />
+                                    <input type="hidden"
+                                           name="Form.DiaDiemLamViec[@index].DienThoai"
+                                           value="@diaDiem.DienThoai"
+                                           data-location-phone />
+                                    <input type="hidden"
+                                           name="Form.DiaDiemLamViec[@index].LongAddress"
+                                           value="@longValue"
+                                           data-location-long />
+                                    <input type="hidden"
+                                           name="Form.DiaDiemLamViec[@index].LatAddress"
+                                           value="@latValue"
+                                           data-location-lat />
+                                </article>
+                            }
+                        </div>
+
+                        <template data-location-template>
+                            <article class="khach-hang-location-item khach-hang-location-summary-card" data-location-item>
+                                <div class="khach-hang-location-item-header">
+                                    <div class="khach-hang-location-header-copy">
+                                        <span class="khach-hang-location-badge">
+                                            Địa điểm <strong data-location-label>1</strong>
+                                        </span>
+                                    </div>
+
+                                    <div class="khach-hang-location-header-actions">
+                                        <button type="button" class="table-action-button edit" asp-permission-action="update" data-location-edit>
+                                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                            <span>Cập nhật</span>
+                                        </button>
+
+                                        <button type="button" class="table-action-button delete" asp-permission-action="delete" data-location-remove>
+                                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                            <span>Xóa</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="khach-hang-location-summary-layout">
+                                    <button type="button"
+                                            class="khach-hang-location-map-preview"
+                                            data-location-map-preview
+                                            aria-label="Xem bản đồ địa điểm">
+                                        <div class="khach-hang-location-map-preview-canvas" data-location-preview-map></div>
+                                        <div class="khach-hang-location-map-preview-copy">
+                                            <span data-location-preview-title>Chưa có ghim</span>
+                                            <small>Nhấn để mở bản đồ lớn</small>
+                                        </div>
+                                    </button>
+
+                                    <div class="khach-hang-location-summary-grid">
+                                        <div class="khach-hang-location-summary-block">
+                                            <span class="khach-hang-location-summary-label">Địa chỉ</span>
+                                            <strong data-location-summary-address>Chưa có địa chỉ.</strong>
+                                        </div>
+
+                                        <div class="khach-hang-location-summary-block">
+                                            <span class="khach-hang-location-summary-label">Người liên hệ</span>
+                                            <strong data-location-summary-contact>-</strong>
+                                        </div>
+
+                                        <div class="khach-hang-location-summary-block">
+                                            <span class="khach-hang-location-summary-label">Điện thoại</span>
+                                            <strong data-location-summary-phone>-</strong>
+                                        </div>
+
+                                        <div class="khach-hang-location-summary-block">
+                                            <span class="khach-hang-location-summary-label">Tọa độ</span>
+                                            <strong data-location-summary-coordinates>Chưa chọn ghim</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <input type="hidden" value="" data-location-db-id />
+                                <input type="hidden" value="true" data-location-status />
+                                <input type="hidden" value="" data-location-address />
+                                <input type="hidden" value="" data-location-contact />
+                                <input type="hidden" value="" data-location-phone />
+                                <input type="hidden" value="" data-location-long />
+                                <input type="hidden" value="" data-location-lat />
+                            </article>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <div class="khach-hang-detail-footer">
+            <a class="secondary-button"
+               asp-action="Index"
+               asp-route-keyword="@Model.Filter.Keyword"
+               asp-route-page="@Model.Filter.Page">
+                Quay lại danh sách
+            </a>
+
+            @if (canModifyCustomer)
+            {
+                <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
+                    <span class="button-content">
+                        <i class="fa-solid @(Model.IsEditMode ? "fa-floppy-disk" : "fa-plus")" aria-hidden="true"></i>
+                        <span>@(Model.IsEditMode ? "Lưu cập nhật" : "Thêm mới")</span>
+                    </span>
+                    <span class="button-processing" aria-hidden="true">
+                        <span class="button-processing-dot"></span>
+                        <span class="button-processing-text">Đang lưu</span>
+                    </span>
+                </button>
+            }
+        </div>
+
+        <div class="crud-modal-shell" data-location-editor-shell hidden>
+            <div class="crud-modal-backdrop" aria-hidden="true" data-location-editor-close></div>
+
+            <section class="crud-modal khach-hang-location-editor" role="dialog" aria-modal="true" aria-labelledby="khach-hang-location-editor-title">
+                <div class="crud-modal-header">
+                    <div class="crud-modal-heading">
+                        <h2 id="khach-hang-location-editor-title" data-location-editor-title>Cập nhật địa điểm làm việc</h2>
+                        <p class="crud-modal-subtitle">Cập nhật địa chỉ, người liên hệ, điện thoại và vị trí bản đồ cho địa điểm làm việc.</p>
+                    </div>
+
+                    <button type="button"
+                            class="menu-nav-button crud-close-button"
+                            aria-label="Đóng popup địa điểm"
+                            data-location-editor-close>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="crud-form khach-hang-location-editor-body">
+                    <div class="account-form-grid">
+                        <label class="login-field field-span-2">
+                            <span>Địa chỉ làm việc</span>
+                            <span class="login-textarea-shell">
+                                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                <textarea rows="3"
+                                          placeholder="Nhập địa chỉ địa điểm..."
+                                          data-location-editor-address></textarea>
+                            </span>
+                        </label>
+
+                        <label class="login-field">
+                            <span>Người liên hệ</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                <input type="text"
+                                       maxlength="150"
+                                       autocomplete="off"
+                                       data-location-editor-contact />
+                            </span>
+                        </label>
+
+                        <label class="login-field">
+                            <span>Điện thoại người liên hệ</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-phone" aria-hidden="true"></i>
+                                <input type="text"
+                                       maxlength="50"
+                                       autocomplete="off"
+                                       inputmode="tel"
+                                       data-location-editor-phone />
+                            </span>
+                        </label>
+
+                        <div class="khach-hang-location-map-tools field-span-2">
+                            <label class="login-field">
+                                <span>Tìm địa chỉ trên bản đồ</span>
+                                <span class="login-input-shell">
+                                    <i class="fa-solid fa-magnifying-glass-location" aria-hidden="true"></i>
+                                    <input type="search"
+                                           autocomplete="off"
+                                           placeholder="Gõ địa chỉ để nhận gợi ý..."
+                                           data-location-editor-search />
+                                </span>
+                                <div class="khach-hang-location-suggestion-list" data-location-editor-suggestions hidden></div>
+                            </label>
+
+                            <div class="khach-hang-location-tool-actions">
+                                <button type="button" class="secondary-button" data-location-editor-search-button>
+                                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                                    <span>Tìm trên map</span>
+                                </button>
+
+                                <button type="button" class="secondary-button" asp-permission-code="KhachHang_XoaMap" data-location-editor-clear-point>
+                                    <i class="fa-regular fa-circle-xmark" aria-hidden="true"></i>
+                                    <span>Xóa ghim</span>
+                                </button>
+
+                                <button type="button" class="secondary-button" data-location-editor-current-point hidden>
+                                    <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
+                                    <span>Lấy tọa độ hiện tại</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="khach-hang-location-map-shell field-span-2">
+                            <div class="khach-hang-location-map" data-location-editor-map></div>
+
+                            <div class="khach-hang-location-viewer-map-actions khach-hang-location-editor-map-actions" aria-label="Tác vụ bản đồ chỉnh sửa">
+                                <button type="button"
+                                        class="menu-nav-button khach-hang-location-map-action"
+                                        aria-label="Mở full map"
+                                        title="Mở full map"
+                                        data-location-editor-fullscreen>
+                                    <i class="fa-solid fa-expand" aria-hidden="true"></i>
+                                </button>
+                            </div>
+
+                            <div class="khach-hang-location-map-meta">
+                                <span class="khach-hang-location-map-hint" data-location-editor-map-hint>
+                                    Bấm lên bản đồ để đặt ghim hoặc gõ địa chỉ để tìm nhanh.
+                                </span>
+
+                                <div class="khach-hang-location-coordinates">
+                                    <span>Kinh độ: <strong data-location-editor-long-label>-</strong></span>
+                                    <span>Vĩ độ: <strong data-location-editor-lat-label>-</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="crud-modal-actions">
+                    <button type="button" class="secondary-button" data-location-editor-close>Hủy</button>
+
+                    <button type="button" class="primary-button" asp-permission-action="update" data-location-editor-save>
+                        <span class="button-content">
+                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                            <span>Lưu địa điểm</span>
+                        </span>
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <div class="crud-modal-shell" data-location-editor-fullscreen-shell hidden>
+            <div class="crud-modal-backdrop" aria-hidden="true" data-location-editor-fullscreen-close></div>
+
+            <section class="crud-modal khach-hang-location-viewer" role="dialog" aria-modal="true" aria-labelledby="khach-hang-location-editor-fullscreen-title">
+                <div class="crud-modal-header">
+                    <div class="crud-modal-heading">
+                        <h2 id="khach-hang-location-editor-fullscreen-title">Bản đồ chọn vị trí</h2>
+                        <p class="crud-modal-subtitle" data-location-editor-fullscreen-address>Chọn hoặc kéo ghim để cập nhật vị trí địa điểm làm việc.</p>
+                    </div>
+
+                    <button type="button"
+                            class="menu-nav-button crud-close-button"
+                            aria-label="Đóng full map"
+                            data-location-editor-fullscreen-close>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="crud-form khach-hang-location-viewer-body">
+                    <div class="khach-hang-location-viewer-map-shell">
+                        <div class="khach-hang-location-map khach-hang-location-viewer-map" data-location-editor-fullscreen-map></div>
+
+                        <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ chọn vị trí">
+                            <button type="button"
+                                    class="menu-nav-button khach-hang-location-map-action"
+                                    aria-label="Xóa ghim"
+                                    title="Xóa ghim"
+                                    asp-permission-code="KhachHang_XoaMap"
+                                    data-location-editor-fullscreen-clear>
+                                <i class="fa-regular fa-circle-xmark" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        <div class="khach-hang-location-viewer-status" data-location-editor-fullscreen-status>
+                            Bấm lên bản đồ để đặt ghim hoặc kéo ghim để tinh chỉnh.
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="crud-modal-shell" data-location-view-shell hidden>
+            <div class="crud-modal-backdrop" aria-hidden="true" data-location-view-close></div>
+
+            <section class="crud-modal khach-hang-location-viewer" role="dialog" aria-modal="true" aria-labelledby="khach-hang-location-view-title">
+                <div class="crud-modal-header">
+	                    <div class="crud-modal-heading">
+	                        <h2 id="khach-hang-location-view-title" data-location-view-title>Bản đồ địa điểm làm việc</h2>
+	                        <p class="crud-modal-subtitle" data-location-view-address>Chưa có địa chỉ.</p>
+	                    </div>
+
+                    <button type="button"
+                            class="menu-nav-button crud-close-button"
+                            aria-label="Đóng popup bản đồ"
+                            data-location-view-close>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+	                <div class="crud-form khach-hang-location-viewer-body">
+	                    <div class="khach-hang-location-viewer-map-shell">
+	                        <div class="khach-hang-location-map khach-hang-location-viewer-map" data-location-view-map></div>
+
+	                        <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ">
+	                            <button type="button"
+	                                    class="menu-nav-button khach-hang-location-map-action"
+	                                    aria-label="Chỉ đường từ vị trí hiện tại"
+	                                    title="Chỉ đường từ vị trí hiện tại"
+	                                    data-location-view-route>
+	                                <i class="fa-solid fa-route" aria-hidden="true"></i>
+	                            </button>
+
+	                            <a class="menu-nav-button khach-hang-location-map-action"
+	                               href="#"
+	                               target="_blank"
+	                               rel="noreferrer"
+	                               aria-label="Mở Google Maps"
+	                               title="Mở Google Maps"
+	                               data-location-view-external>
+	                                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+	                            </a>
+	                        </div>
+
+	                        <div class="khach-hang-location-viewer-status" data-location-view-route-status hidden></div>
+	                    </div>
+	                </div>
+	            </section>
+	        </div>
+    </form>
+</section>
+
+@section Styles {
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin="" />
+}
+
+@section Scripts {
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script>
+        (function () {
+            const root = document.querySelector("[data-khach-hang-detail-root]");
+            if (!(root instanceof HTMLFormElement)) {
+                return;
+            }
+
+            const saveLocationUrl = root.dataset.locationSaveUrl;
+            const deleteLocationUrl = root.dataset.locationDeleteUrl;
+            const isEditMode = root.dataset.editMode === "true";
+            const antiForgeryTokenInput = root.querySelector("input[name='__RequestVerificationToken']");
+            const tabGroup = root.querySelector("[data-tab-group]");
+            const activeTabInput = tabGroup?.querySelector("[data-active-tab-input]");
+            const tabButtons = Array.from(tabGroup?.querySelectorAll("[data-tab-button]") ?? []);
+            const tabPanels = Array.from(tabGroup?.querySelectorAll("[data-tab-panel]") ?? []);
+
+            const manager = root.querySelector("[data-khach-hang-location-manager]");
+            const list = manager?.querySelector("[data-location-list]");
+            const emptyState = manager?.querySelector("[data-location-empty]");
+            const addButton = manager?.querySelector("[data-location-add]");
+            const template = manager?.querySelector("[data-location-template]");
+            const locationStatus = manager?.querySelector("[data-location-status-message]");
+            const editorShell = root.querySelector("[data-location-editor-shell]");
+            const editorTitle = root.querySelector("[data-location-editor-title]");
+            const editorAddress = root.querySelector("[data-location-editor-address]");
+            const editorContact = root.querySelector("[data-location-editor-contact]");
+            const editorPhone = root.querySelector("[data-location-editor-phone]");
+            const editorSearch = root.querySelector("[data-location-editor-search]");
+            const editorSuggestions = root.querySelector("[data-location-editor-suggestions]");
+            const editorSearchButton = root.querySelector("[data-location-editor-search-button]");
+            const editorFullscreenButton = root.querySelector("[data-location-editor-fullscreen]");
+            const editorClearPointButton = root.querySelector("[data-location-editor-clear-point]");
+            const editorCurrentPointButton = root.querySelector("[data-location-editor-current-point]");
+            const editorSaveButton = root.querySelector("[data-location-editor-save]");
+            const editorHint = root.querySelector("[data-location-editor-map-hint]");
+            const editorLongLabel = root.querySelector("[data-location-editor-long-label]");
+            const editorLatLabel = root.querySelector("[data-location-editor-lat-label]");
+            const editorMapElement = root.querySelector("[data-location-editor-map]");
+            const closeButtons = root.querySelectorAll("[data-location-editor-close]");
+            const editorFullscreenShell = root.querySelector("[data-location-editor-fullscreen-shell]");
+            const editorFullscreenMapElement = root.querySelector("[data-location-editor-fullscreen-map]");
+            const editorFullscreenAddress = root.querySelector("[data-location-editor-fullscreen-address]");
+            const editorFullscreenStatus = root.querySelector("[data-location-editor-fullscreen-status]");
+            const editorFullscreenClearButton = root.querySelector("[data-location-editor-fullscreen-clear]");
+            const editorFullscreenCloseButtons = root.querySelectorAll("[data-location-editor-fullscreen-close]");
+	            const viewShell = root.querySelector("[data-location-view-shell]");
+	            const viewTitle = root.querySelector("[data-location-view-title]");
+	            const viewMapElement = root.querySelector("[data-location-view-map]");
+	            const viewAddress = root.querySelector("[data-location-view-address]");
+	            const viewRouteStatus = root.querySelector("[data-location-view-route-status]");
+	            const viewRouteButton = root.querySelector("[data-location-view-route]");
+            const viewExternalLink = root.querySelector("[data-location-view-external]");
+            const viewCloseButtons = root.querySelectorAll("[data-location-view-close]");
+            const debugLocation = () => { };
+
+            if (!(tabGroup instanceof HTMLElement) ||
+                !(activeTabInput instanceof HTMLInputElement) ||
+                !(manager instanceof HTMLElement) ||
+                !(list instanceof HTMLElement) ||
+                !(emptyState instanceof HTMLElement) ||
+                !(addButton instanceof HTMLButtonElement) ||
+                !(template instanceof HTMLTemplateElement) ||
+                !(locationStatus instanceof HTMLElement) ||
+                !(editorShell instanceof HTMLElement) ||
+                !(editorTitle instanceof HTMLElement) ||
+                !(editorAddress instanceof HTMLTextAreaElement) ||
+                !(editorContact instanceof HTMLInputElement) ||
+                !(editorPhone instanceof HTMLInputElement) ||
+                !(editorSearch instanceof HTMLInputElement) ||
+                !(editorSuggestions instanceof HTMLElement) ||
+                !(editorSearchButton instanceof HTMLButtonElement) ||
+                !(editorFullscreenButton instanceof HTMLButtonElement) ||
+                !(editorCurrentPointButton instanceof HTMLButtonElement) ||
+                !(editorSaveButton instanceof HTMLButtonElement) ||
+                !(editorHint instanceof HTMLElement) ||
+                !(editorLongLabel instanceof HTMLElement) ||
+                !(editorLatLabel instanceof HTMLElement) ||
+                !(editorMapElement instanceof HTMLElement) ||
+	                !(viewShell instanceof HTMLElement) ||
+	                !(viewTitle instanceof HTMLElement) ||
+	                !(viewMapElement instanceof HTMLElement) ||
+	                !(viewAddress instanceof HTMLElement) ||
+	                !(viewRouteStatus instanceof HTMLElement) ||
+	                !(viewRouteButton instanceof HTMLButtonElement) ||
+	                !(viewExternalLink instanceof HTMLAnchorElement)) {
+                debugLocation("Không khởi tạo được script địa điểm vì thiếu element bắt buộc.", {
+                    editorClearPointButton: editorClearPointButton instanceof HTMLButtonElement,
+                    editorSaveButton: editorSaveButton instanceof HTMLButtonElement,
+                    editorShell: editorShell instanceof HTMLElement,
+                    list: list instanceof HTMLElement,
+                    addButton: addButton instanceof HTMLButtonElement,
+                    viewShell: viewShell instanceof HTMLElement
+                });
+                return;
+            }
+
+            debugLocation("Script địa điểm đã khởi tạo.", {
+                itemCount: list.querySelectorAll("[data-location-item]").length,
+                hasClearPointPermissionButton: editorClearPointButton instanceof HTMLButtonElement
+            });
+
+            const defaultCenter = [12.23879, 109.19675];
+            const defaultZoom = 12;
+            const focusZoom = 16;
+            const suggestionMinLength = 3;
+	            const formatCoordinate = (value) => Number.isFinite(value) ? value.toFixed(5) : "";
+	            const formatCoordinateLabel = (value) => Number.isFinite(value) ? value.toFixed(5) : "-";
+	            const formatPhoneHref = (value) => `${value || ""}`.replace(/[^\d+]/g, "");
+	            const getItems = () => Array.from(list.querySelectorAll("[data-location-item]"));
+                const customerId = () => {
+                    const input = root.querySelector("input[name='Form.Id']");
+                    if (!(input instanceof HTMLInputElement)) {
+                        return null;
+                    }
+
+                    const parsed = Number.parseInt(input.value, 10);
+                    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+                };
+
+            let editingItem = null;
+	            let currentLat = null;
+	            let currentLng = null;
+	            let editorMap = null;
+	            let editorMarker = null;
+                let editorFullscreenMap = null;
+                let editorFullscreenMarker = null;
+	            let viewingItem = null;
+            let viewMap = null;
+            let viewMarker = null;
+            let viewRouteLayer = null;
+            let viewCurrentMarker = null;
+	            let editorSuggestionItems = [];
+	            let suggestionActiveIndex = -1;
+	            let suggestionDebounceTimer = 0;
+	            let suggestionAbortController = null;
+	            const previewMapStore = new WeakMap();
+                let locationSaveInFlight = false;
+                let locationDeleteInFlight = false;
+                let defaultLocationPreparing = false;
+
+            const setActiveTab = (tabName) => {
+                activeTabInput.value = tabName;
+
+                tabButtons.forEach((button) => {
+                    const isActive = button instanceof HTMLElement && button.dataset.tab === tabName;
+                    button.classList.toggle("is-active", isActive);
+                    button.setAttribute("aria-selected", isActive ? "true" : "false");
+                });
+
+                tabPanels.forEach((panel) => {
+                    const isActive = panel instanceof HTMLElement && panel.dataset.tab === tabName;
+                    panel.classList.toggle("is-active", isActive);
+                    panel.hidden = !isActive;
+                });
+
+                if (tabName === "dia-diem-lam-viec") {
+                    invalidatePreviewMaps();
+                }
+            };
+
+            const syncEmptyState = () => {
+                emptyState.classList.toggle("is-hidden", getItems().length > 0);
+            };
+
+            const updateEditorHint = (message) => {
+                editorHint.textContent = message;
+            };
+
+            const setLocationStatus = (message, type = "error") => {
+                locationStatus.textContent = message;
+                locationStatus.className = `page-alert ${type} khach-hang-location-status`;
+                locationStatus.hidden = !message;
+            };
+
+            const updateEditorCoordinateDisplay = () => {
+                editorLongLabel.textContent = formatCoordinateLabel(currentLng);
+                editorLatLabel.textContent = formatCoordinateLabel(currentLat);
+            };
+
+            const hasEditorPoint = () => Number.isFinite(currentLat) && Number.isFinite(currentLng);
+
+            const syncEditorCurrentPointButton = () => {
+                editorCurrentPointButton.hidden = hasEditorPoint();
+            };
+
+            const updateEditorFullscreenStatus = (message) => {
+                if (editorFullscreenStatus instanceof HTMLElement) {
+                    editorFullscreenStatus.textContent = message;
+                }
+            };
+
+            const clearSuggestionList = () => {
+                editorSuggestionItems = [];
+                suggestionActiveIndex = -1;
+                editorSuggestions.innerHTML = "";
+                editorSuggestions.hidden = true;
+            };
+
+            const highlightSuggestion = (index) => {
+                editorSuggestionItems.forEach((button, buttonIndex) => {
+                    button.classList.toggle("is-active", buttonIndex === index);
+                });
+                suggestionActiveIndex = index;
+            };
+
+            const applySuggestion = (result) => {
+                const lat = Number.parseFloat(`${result.lat || ""}`);
+                const lng = Number.parseFloat(`${result.lon || ""}`);
+
+                editorSearch.value = result.display_name || editorSearch.value;
+                editorAddress.value = result.display_name || editorAddress.value;
+                clearSuggestionList();
+
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                    setEditorPoint(lat, lng, focusZoom);
+                } else {
+                    updateEditorHint("Đã chọn địa chỉ nhưng chưa lấy được tọa độ.");
+                }
+            };
+
+            const renderSuggestionList = (results) => {
+                clearSuggestionList();
+
+                if (!Array.isArray(results) || results.length === 0) {
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+
+                results.forEach((result, index) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "khach-hang-location-suggestion-item";
+                    button.textContent = result.display_name || `Địa chỉ gợi ý ${index + 1}`;
+                    button.addEventListener("mouseenter", () => {
+                        highlightSuggestion(index);
+                    });
+                    button.addEventListener("click", () => {
+                        applySuggestion(result);
+                    });
+                    fragment.appendChild(button);
+                    editorSuggestionItems.push(button);
+                });
+
+                editorSuggestions.appendChild(fragment);
+                editorSuggestions.hidden = false;
+                highlightSuggestion(0);
+            };
+
+            const fetchSuggestions = async (query) => {
+                if (suggestionAbortController) {
+                    suggestionAbortController.abort();
+                }
+
+                suggestionAbortController = new AbortController();
+
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&accept-language=vi&q=${encodeURIComponent(query)}`, {
+                        headers: {
+                            Accept: "application/json"
+                        },
+                        signal: suggestionAbortController.signal
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Suggestion lookup failed.");
+                    }
+
+                    const results = await response.json();
+                    renderSuggestionList(results);
+                } catch (error) {
+                    if (error instanceof DOMException && error.name === "AbortError") {
+                        return;
+                    }
+
+                    clearSuggestionList();
+                }
+            };
+
+            const queueSuggestionLookup = () => {
+                const query = editorSearch.value.trim();
+
+                window.clearTimeout(suggestionDebounceTimer);
+
+                if (query.length < suggestionMinLength) {
+                    clearSuggestionList();
+                    return;
+                }
+
+                suggestionDebounceTimer = window.setTimeout(() => {
+                    void fetchSuggestions(query);
+                }, 240);
+            };
+
+	            const updateViewRouteStatus = (message, type = "info") => {
+	                viewRouteStatus.textContent = message;
+	                viewRouteStatus.dataset.state = type;
+	                viewRouteStatus.hidden = false;
+	            };
+
+	            const clearViewRoute = () => {
+	                if (viewMap && viewRouteLayer) {
+	                    viewMap.removeLayer(viewRouteLayer);
+	                    viewRouteLayer = null;
+	                }
+
+	                if (viewMap && viewCurrentMarker) {
+	                    viewMap.removeLayer(viewCurrentMarker);
+	                    viewCurrentMarker = null;
+	                }
+
+	                viewRouteStatus.hidden = true;
+	                viewRouteStatus.textContent = "";
+	                delete viewRouteStatus.dataset.state;
+	            };
+
+            const ensurePreviewMap = (item) => {
+                if (!(window.L && typeof window.L.map === "function")) {
+                    setLocationStatus("Không tải được thư viện bản đồ. Vui lòng kiểm tra kết nối mạng hoặc CDN Leaflet.", "error");
+                    return null;
+                }
+
+                const existing = previewMapStore.get(item);
+                if (existing) {
+                    return existing;
+                }
+
+                const previewElement = item.querySelector("[data-location-preview-map]");
+                if (!(previewElement instanceof HTMLElement)) {
+                    return null;
+                }
+
+                const map = window.L.map(previewElement, {
+                    zoomControl: false,
+                    attributionControl: false,
+                    dragging: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    boxZoom: false,
+                    keyboard: false,
+                    tap: false,
+                    touchZoom: false
+                });
+
+                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19
+                }).addTo(map);
+
+                const mapApi = {
+                    map,
+                    marker: null,
+                    invalidate() {
+                        window.setTimeout(() => {
+                            map.invalidateSize();
+                        }, 100);
+                    }
+                };
+
+                previewMapStore.set(item, mapApi);
+                return mapApi;
+            };
+
+            const syncPreviewMap = (item) => {
+                const mapApi = ensurePreviewMap(item);
+                if (!mapApi) {
+                    return;
+                }
+
+                const data = readItemData(item);
+                const previewTitle = item.querySelector("[data-location-preview-title]");
+
+                if (Number.isFinite(data.latAddress) && Number.isFinite(data.longAddress)) {
+                    if (!mapApi.marker) {
+                        mapApi.marker = window.L.marker([data.latAddress, data.longAddress]).addTo(mapApi.map);
+                    } else {
+                        mapApi.marker.setLatLng([data.latAddress, data.longAddress]);
+                    }
+
+                    mapApi.map.setView([data.latAddress, data.longAddress], 15);
+
+                    if (previewTitle instanceof HTMLElement) {
+                        previewTitle.textContent = "Xem bản đồ";
+                    }
+                } else {
+                    if (mapApi.marker) {
+                        mapApi.map.removeLayer(mapApi.marker);
+                        mapApi.marker = null;
+                    }
+
+                    mapApi.map.setView(defaultCenter, defaultZoom);
+
+                    if (previewTitle instanceof HTMLElement) {
+                        previewTitle.textContent = "Chưa có ghim";
+                    }
+                }
+
+                mapApi.invalidate();
+            };
+
+            const invalidatePreviewMaps = () => {
+                getItems().forEach((item) => {
+                    const mapApi = previewMapStore.get(item);
+                    mapApi?.invalidate();
+                });
+            };
+
+            const ensureViewMap = () => {
+                if (!(window.L && typeof window.L.map === "function")) {
+                    setLocationStatus("Không tải được thư viện bản đồ. Popup vẫn mở nhưng không thể hiển thị map.", "error");
+                    updateViewRouteStatus("Không tải được thư viện bản đồ.", "error");
+                    return false;
+                }
+
+                if (viewMap) {
+                    window.setTimeout(() => viewMap.invalidateSize(), 120);
+                    return true;
+                }
+
+                viewMap = window.L.map(viewMapElement, {
+                    zoomControl: true
+                });
+
+                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap contributors"
+                }).addTo(viewMap);
+
+                viewMap.setView(defaultCenter, defaultZoom);
+                window.setTimeout(() => viewMap.invalidateSize(), 120);
+                return true;
+            };
+
+            const setEditorPoint = (lat, lng, zoom = focusZoom) => {
+                if (!Number.isFinite(lat) || !Number.isFinite(lng) || !editorMap) {
+                    return;
+                }
+
+                currentLat = lat;
+                currentLng = lng;
+
+                if (!editorMarker) {
+                    editorMarker = window.L.marker([lat, lng], {
+                        draggable: true
+                    }).addTo(editorMap);
+
+                    editorMarker.on("dragend", () => {
+                        const position = editorMarker.getLatLng();
+                        currentLat = position.lat;
+                        currentLng = position.lng;
+                        updateEditorCoordinateDisplay();
+                        syncEditorCurrentPointButton();
+                        updateEditorHint("Đã cập nhật tọa độ từ vị trí ghim.");
+                    });
+                } else {
+                    editorMarker.setLatLng([lat, lng]);
+                }
+
+                updateEditorCoordinateDisplay();
+                syncEditorCurrentPointButton();
+                editorMap.setView([lat, lng], zoom);
+                updateEditorHint("Đã chọn vị trí trên bản đồ. Có thể kéo ghim để tinh chỉnh.");
+                syncEditorFullscreenMap(zoom);
+            };
+
+            const clearEditorPoint = () => {
+                currentLat = null;
+                currentLng = null;
+
+                if (editorMap && editorMarker) {
+                    editorMap.removeLayer(editorMarker);
+                    editorMarker = null;
+                }
+
+                if (editorFullscreenMap && editorFullscreenMarker) {
+                    editorFullscreenMap.removeLayer(editorFullscreenMarker);
+                    editorFullscreenMarker = null;
+                }
+
+                updateEditorCoordinateDisplay();
+                syncEditorCurrentPointButton();
+                updateEditorHint("Đã xóa ghim. Bấm lên bản đồ hoặc tìm địa chỉ để chọn lại.");
+                updateEditorFullscreenStatus("Đã xóa ghim. Bấm lên bản đồ để đặt lại vị trí.");
+            };
+
+            const ensureEditorMap = () => {
+                if (!(window.L && typeof window.L.map === "function")) {
+                    setLocationStatus("Không tải được thư viện bản đồ. Popup chỉnh sửa vẫn mở để bạn cập nhật thông tin, nhưng không thể chỉnh ghim map.", "error");
+                    updateEditorHint("Không tải được thư viện bản đồ.");
+                    return false;
+                }
+
+                if (editorMap) {
+                    window.setTimeout(() => editorMap.invalidateSize(), 120);
+                    return true;
+                }
+
+                editorMap = window.L.map(editorMapElement, {
+                    zoomControl: true
+                });
+
+                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap contributors"
+                }).addTo(editorMap);
+
+                editorMap.on("click", (event) => {
+                    setEditorPoint(event.latlng.lat, event.latlng.lng, Math.max(editorMap.getZoom(), focusZoom));
+                });
+
+                editorMap.setView(defaultCenter, defaultZoom);
+                window.setTimeout(() => editorMap.invalidateSize(), 120);
+                return true;
+            };
+
+            const ensureEditorFullscreenMap = () => {
+                if (!(editorFullscreenMapElement instanceof HTMLElement)) {
+                    updateEditorHint("Chức năng mở full map chưa sẵn sàng trên giao diện này.");
+                    return false;
+                }
+
+                if (!(window.L && typeof window.L.map === "function")) {
+                    updateEditorFullscreenStatus("Không tải được thư viện bản đồ.");
+                    return false;
+                }
+
+                if (editorFullscreenMap) {
+                    window.setTimeout(() => editorFullscreenMap.invalidateSize(), 120);
+                    return true;
+                }
+
+                editorFullscreenMap = window.L.map(editorFullscreenMapElement, {
+                    zoomControl: true
+                });
+
+                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap contributors"
+                }).addTo(editorFullscreenMap);
+
+                editorFullscreenMap.on("click", (event) => {
+                    setEditorPoint(event.latlng.lat, event.latlng.lng, Math.max(editorFullscreenMap.getZoom(), focusZoom));
+                    updateEditorFullscreenStatus("Đã cập nhật vị trí từ full map.");
+                });
+
+                editorFullscreenMap.setView(defaultCenter, defaultZoom);
+                window.setTimeout(() => editorFullscreenMap.invalidateSize(), 120);
+                return true;
+            };
+
+            const syncEditorFullscreenMap = (zoom = focusZoom) => {
+                if (!(editorFullscreenShell instanceof HTMLElement) || editorFullscreenShell.hidden) {
+                    return;
+                }
+
+                if (!ensureEditorFullscreenMap()) {
+                    return;
+                }
+
+                if (Number.isFinite(currentLat) && Number.isFinite(currentLng)) {
+                    if (!editorFullscreenMarker) {
+                        editorFullscreenMarker = window.L.marker([currentLat, currentLng], {
+                            draggable: true
+                        }).addTo(editorFullscreenMap);
+
+                        editorFullscreenMarker.on("dragend", () => {
+                            const position = editorFullscreenMarker.getLatLng();
+                            setEditorPoint(position.lat, position.lng, Math.max(editorFullscreenMap.getZoom(), focusZoom));
+                            updateEditorFullscreenStatus("Đã cập nhật vị trí từ ghim full map.");
+                        });
+                    } else {
+                        editorFullscreenMarker.setLatLng([currentLat, currentLng]);
+                    }
+
+                    editorFullscreenMap.setView([currentLat, currentLng], zoom);
+                } else {
+                    if (editorFullscreenMarker) {
+                        editorFullscreenMap.removeLayer(editorFullscreenMarker);
+                        editorFullscreenMarker = null;
+                    }
+
+                    editorFullscreenMap.setView(defaultCenter, defaultZoom);
+                }
+
+                window.setTimeout(() => editorFullscreenMap.invalidateSize(), 100);
+            };
+
+            const openEditorFullscreen = () => {
+                if (!(editorFullscreenShell instanceof HTMLElement) ||
+                    !(editorFullscreenAddress instanceof HTMLElement)) {
+                    updateEditorHint("Chức năng mở full map chưa sẵn sàng trên giao diện này.");
+                    return;
+                }
+
+                editorFullscreenAddress.textContent = editorAddress.value.trim() || "Chọn hoặc kéo ghim để cập nhật vị trí địa điểm làm việc.";
+                editorFullscreenShell.hidden = false;
+                updateEditorFullscreenStatus("Bấm lên bản đồ để đặt ghim hoặc kéo ghim để tinh chỉnh.");
+                syncEditorFullscreenMap();
+            };
+
+            const closeEditorFullscreen = () => {
+                if (editorFullscreenShell instanceof HTMLElement) {
+                    editorFullscreenShell.hidden = true;
+                }
+            };
+
+            const readCoordinate = (input) => {
+                if (!(input instanceof HTMLInputElement)) {
+                    return null;
+                }
+
+                const rawValue = `${input.value || ""}`.trim().replace(",", ".");
+                if (!rawValue) {
+                    return null;
+                }
+
+                const parsed = Number.parseFloat(rawValue);
+                return Number.isFinite(parsed) ? parsed : null;
+            };
+
+            const setHiddenValue = (item, selector, value) => {
+                const input = item.querySelector(selector);
+                if (input instanceof HTMLInputElement) {
+                    input.value = value ?? "";
+                }
+            };
+
+            const getRequestHeaders = () => {
+                const headers = {
+                    "Content-Type": "application/json",
+                    Accept: "application/json"
+                };
+
+                if (antiForgeryTokenInput instanceof HTMLInputElement && antiForgeryTokenInput.value) {
+                    headers.RequestVerificationToken = antiForgeryTokenInput.value;
+                }
+
+                return headers;
+            };
+
+            const readItemData = (item) => {
+                const idInput = item.querySelector("[data-location-db-id]");
+                const addressInput = item.querySelector("[data-location-address]");
+                const contactInput = item.querySelector("[data-location-contact]");
+                const phoneInput = item.querySelector("[data-location-phone]");
+                const longInput = item.querySelector("[data-location-long]");
+                const latInput = item.querySelector("[data-location-lat]");
+
+                const rawId = idInput instanceof HTMLInputElement ? Number.parseInt(idInput.value, 10) : Number.NaN;
+
+                return {
+                    id: Number.isFinite(rawId) && rawId > 0 ? rawId : null,
+                    diaChi: addressInput instanceof HTMLInputElement ? addressInput.value.trim() : "",
+                    nguoiLienHe: contactInput instanceof HTMLInputElement ? contactInput.value.trim() : "",
+                    dienThoai: phoneInput instanceof HTMLInputElement ? phoneInput.value.trim() : "",
+                    longAddress: readCoordinate(longInput),
+                    latAddress: readCoordinate(latInput)
+                };
+            };
+
+            const syncItemPresentation = (item) => {
+                const data = readItemData(item);
+                const summaryAddress = item.querySelector("[data-location-summary-address]");
+                const summaryContact = item.querySelector("[data-location-summary-contact]");
+                const summaryPhone = item.querySelector("[data-location-summary-phone]");
+                const summaryCoordinates = item.querySelector("[data-location-summary-coordinates]");
+
+                if (summaryAddress instanceof HTMLElement) {
+                    summaryAddress.textContent = data.diaChi || "Chưa có địa chỉ.";
+                }
+
+                if (summaryContact instanceof HTMLElement) {
+                    summaryContact.textContent = data.nguoiLienHe || "-";
+                }
+
+	                if (summaryPhone instanceof HTMLElement) {
+	                    summaryPhone.replaceChildren();
+
+	                    if (data.dienThoai) {
+	                        const phoneLink = document.createElement("a");
+	                        phoneLink.href = `tel:${formatPhoneHref(data.dienThoai)}`;
+	                        phoneLink.textContent = data.dienThoai;
+	                        summaryPhone.appendChild(phoneLink);
+	                    } else {
+	                        summaryPhone.textContent = "-";
+	                    }
+	                }
+
+                if (summaryCoordinates instanceof HTMLElement) {
+                    summaryCoordinates.textContent =
+                        Number.isFinite(data.latAddress) && Number.isFinite(data.longAddress)
+                            ? `${formatCoordinate(data.latAddress)}, ${formatCoordinate(data.longAddress)}`
+                            : "Chưa chọn ghim";
+                }
+
+                syncPreviewMap(item);
+            };
+
+            const updateIndexes = () => {
+                getItems().forEach((item, index) => {
+                    const label = item.querySelector("[data-location-label]");
+                    const idInput = item.querySelector("[data-location-db-id]");
+                    const statusInput = item.querySelector("[data-location-status]");
+                    const addressInput = item.querySelector("[data-location-address]");
+                    const contactInput = item.querySelector("[data-location-contact]");
+                    const phoneInput = item.querySelector("[data-location-phone]");
+                    const longInput = item.querySelector("[data-location-long]");
+                    const latInput = item.querySelector("[data-location-lat]");
+                    const prefix = `Form.DiaDiemLamViec[${index}]`;
+
+                    if (label instanceof HTMLElement) {
+                        label.textContent = `${index + 1}`;
+                    }
+
+                    if (idInput instanceof HTMLInputElement) {
+                        idInput.name = `${prefix}.Id`;
+                        item.dataset.locationId = idInput.value;
+                    }
+
+                    if (statusInput instanceof HTMLInputElement) {
+                        statusInput.name = `${prefix}.TrangThaiSuDung`;
+                    }
+
+                    if (addressInput instanceof HTMLInputElement) {
+                        addressInput.name = `${prefix}.DiaChi`;
+                    }
+
+                    if (contactInput instanceof HTMLInputElement) {
+                        contactInput.name = `${prefix}.NguoiLienHe`;
+                    }
+
+                    if (phoneInput instanceof HTMLInputElement) {
+                        phoneInput.name = `${prefix}.DienThoai`;
+                    }
+
+                    if (longInput instanceof HTMLInputElement) {
+                        longInput.name = `${prefix}.LongAddress`;
+                    }
+
+                    if (latInput instanceof HTMLInputElement) {
+                        latInput.name = `${prefix}.LatAddress`;
+                    }
+
+                    syncItemPresentation(item);
+                });
+
+                syncEmptyState();
+            };
+
+            const buildLocationPayload = (item, data) => {
+                return {
+                    id: data.id,
+                    idKhachHang: customerId(),
+                    diaChi: data.diaChi || null,
+                    nguoiLienHe: data.nguoiLienHe || null,
+                    dienThoai: data.dienThoai || null,
+                    longAddress: Number.isFinite(data.longAddress) ? data.longAddress : null,
+                    latAddress: Number.isFinite(data.latAddress) ? data.latAddress : null,
+                    trangThaiSuDung: true
+                };
+            };
+
+            const openMapViewer = (item) => {
+                setLocationStatus("", "info");
+                if (!editorShell.hidden) {
+                    closeEditor();
+                }
+
+                viewingItem = item;
+                const data = readItemData(item);
+                const label = item.querySelector("[data-location-label]");
+	                const itemLabel = label instanceof HTMLElement ? label.textContent?.trim() : "";
+
+	                viewTitle.textContent = itemLabel ? `Bản đồ địa điểm ${itemLabel}` : "Bản đồ địa điểm làm việc";
+	                viewAddress.textContent = data.diaChi || "Chưa có địa chỉ.";
+
+	                if (Number.isFinite(data.latAddress) && Number.isFinite(data.longAddress)) {
+	                    viewRouteButton.disabled = false;
+                    viewExternalLink.href = `https://www.google.com/maps/dir/?api=1&destination=${data.latAddress},${data.longAddress}&travelmode=driving`;
+                    viewExternalLink.removeAttribute("aria-disabled");
+                    viewExternalLink.classList.remove("disabled");
+                } else if (data.diaChi) {
+                    viewRouteButton.disabled = true;
+                    viewExternalLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.diaChi)}`;
+                    viewExternalLink.removeAttribute("aria-disabled");
+                    viewExternalLink.classList.remove("disabled");
+                } else {
+                    viewRouteButton.disabled = true;
+                    viewExternalLink.href = "#";
+                    viewExternalLink.setAttribute("aria-disabled", "true");
+                    viewExternalLink.classList.add("disabled");
+                }
+
+                clearViewRoute();
+                viewShell.hidden = false;
+
+                if (ensureViewMap()) {
+                    if (Number.isFinite(data.latAddress) && Number.isFinite(data.longAddress)) {
+                        if (!viewMarker) {
+                            viewMarker = window.L.marker([data.latAddress, data.longAddress]).addTo(viewMap);
+                        } else {
+                            viewMarker.setLatLng([data.latAddress, data.longAddress]);
+                        }
+
+	                        viewMap.setView([data.latAddress, data.longAddress], focusZoom);
+	                    } else {
+	                        if (viewMarker) {
+	                            viewMap.removeLayer(viewMarker);
+                            viewMarker = null;
+	                        }
+
+	                        viewMap.setView(defaultCenter, defaultZoom);
+	                    }
+	                }
+	            };
+
+            const closeMapViewer = () => {
+                viewingItem = null;
+                clearViewRoute();
+                viewShell.hidden = true;
+            };
+
+            const requestDirections = async () => {
+                if (!(viewingItem instanceof HTMLElement)) {
+                    return;
+                }
+
+                const data = readItemData(viewingItem);
+                if (!Number.isFinite(data.latAddress) || !Number.isFinite(data.longAddress)) {
+                    updateViewRouteStatus("Địa điểm chưa có tọa độ để chỉ đường.", "warning");
+                    return;
+                }
+
+                if (!navigator.geolocation) {
+                    updateViewRouteStatus("Trình duyệt không hỗ trợ lấy vị trí hiện tại. Bạn có thể dùng nút Google Maps.", "warning");
+                    return;
+                }
+
+                updateViewRouteStatus("Đang lấy vị trí hiện tại...", "info");
+
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const startLat = position.coords.latitude;
+                    const startLng = position.coords.longitude;
+
+                    updateViewRouteStatus("Đang tính lộ trình...", "info");
+
+                    try {
+                        const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${data.longAddress},${data.latAddress}?overview=full&geometries=geojson`);
+                        if (!response.ok) {
+                            throw new Error("Route lookup failed.");
+                        }
+
+                        const payload = await response.json();
+                        const route = Array.isArray(payload.routes) ? payload.routes[0] : null;
+                        if (!route || !route.geometry) {
+                            updateViewRouteStatus("Không lấy được dữ liệu chỉ đường. Bạn có thể mở Google Maps để tiếp tục.", "warning");
+                            return;
+                        }
+
+                        clearViewRoute();
+
+                        viewRouteLayer = window.L.geoJSON(route.geometry, {
+                            style: {
+                                color: "#0aa17d",
+                                weight: 5,
+                                opacity: 0.9
+                            }
+                        }).addTo(viewMap);
+
+                        viewCurrentMarker = window.L.circleMarker([startLat, startLng], {
+                            radius: 7,
+                            color: "#0b4f9c",
+                            weight: 2,
+                            fillColor: "#3b82f6",
+                            fillOpacity: 0.95
+                        }).addTo(viewMap);
+
+                        const routeBounds = viewRouteLayer.getBounds();
+                        if (routeBounds.isValid()) {
+                            viewMap.fitBounds(routeBounds.pad(0.15));
+                        }
+
+                        const distanceKm = (route.distance / 1000).toFixed(1);
+                        const durationMinutes = Math.round(route.duration / 60);
+                        updateViewRouteStatus(`Đã tìm thấy lộ trình khoảng ${distanceKm} km, thời gian dự kiến ${durationMinutes} phút.`, "success");
+                    } catch {
+                        updateViewRouteStatus("Không thể tính lộ trình lúc này. Bạn có thể dùng nút Google Maps để tiếp tục.", "error");
+                    }
+                }, () => {
+                    updateViewRouteStatus("Không lấy được vị trí hiện tại. Hãy cấp quyền vị trí hoặc dùng Google Maps.", "warning");
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                });
+            };
+
+            const bindItem = (item) => {
+                const previewButton = item.querySelector("[data-location-map-preview]");
+                const editButton = item.querySelector("[data-location-edit]");
+                const removeButton = item.querySelector("[data-location-remove]");
+
+                ensurePreviewMap(item);
+                debugLocation("Bind item địa điểm.", {
+                    locationId: item.dataset.locationId || "",
+                    hasEditButton: editButton instanceof HTMLButtonElement,
+                    hasRemoveButton: removeButton instanceof HTMLButtonElement
+                });
+
+                if (previewButton instanceof HTMLButtonElement) {
+                    previewButton.addEventListener("click", () => {
+                        setActiveTab("dia-diem-lam-viec");
+                        openMapViewer(item);
+                    });
+                }
+
+                if (editButton instanceof HTMLButtonElement) {
+                    editButton.addEventListener("click", () => {
+                        debugLocation("Click nút cập nhật địa điểm.", {
+                            locationId: item.dataset.locationId || "",
+                            hiddenBeforeOpen: editorShell.hidden
+                        });
+                        setActiveTab("dia-diem-lam-viec");
+                        openEditor(item);
+                    });
+                } else {
+                    debugLocation("Không tìm thấy nút cập nhật trên item địa điểm.", {
+                        locationId: item.dataset.locationId || ""
+                    });
+                }
+
+                if (removeButton instanceof HTMLButtonElement) {
+                    removeButton.addEventListener("click", async () => {
+                        if (!window.confirm("Bạn có chắc muốn xóa địa điểm làm việc này?")) {
+                            return;
+                        }
+
+                        if (locationDeleteInFlight) {
+                            return;
+                        }
+
+                        const idKhachHang = customerId();
+                        const data = readItemData(item);
+
+                        if (idKhachHang && data.id) {
+                            if (!deleteLocationUrl) {
+                                window.alert("Không xác định được API xóa địa điểm làm việc.");
+                                return;
+                            }
+
+                            locationDeleteInFlight = true;
+                            try {
+                                const response = await fetch(deleteLocationUrl, {
+                                    method: "POST",
+                                    headers: getRequestHeaders(),
+                                    body: JSON.stringify({
+                                        id: data.id,
+                                        idKhachHang
+                                    })
+                                });
+
+                                if (!response.ok) {
+                                    throw new Error("Delete request failed.");
+                                }
+
+                                const payload = await response.json();
+                                if (!payload?.succeeded) {
+                                    window.alert(payload?.errorMessage || "Không thể xóa địa điểm làm việc.");
+                                    return;
+                                }
+                            } catch {
+                                window.alert("Không thể xóa địa điểm làm việc lúc này.");
+                                return;
+                            } finally {
+                                locationDeleteInFlight = false;
+                            }
+                        }
+
+                        if (editingItem === item) {
+                            closeEditor();
+                        }
+
+                        item.remove();
+                        updateIndexes();
+                    });
+                }
+            };
+
+            const createItem = () => {
+                const fragment = template.content.cloneNode(true);
+                const item = fragment.querySelector("[data-location-item]");
+                if (!(item instanceof HTMLElement)) {
+                    return null;
+                }
+
+                list.appendChild(fragment);
+                bindItem(item);
+                updateIndexes();
+                return item;
+            };
+
+            const getFormFieldValue = (name) => {
+                const field = root.querySelector(`[name='${name}']`);
+                if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+                    return field.value.trim();
+                }
+
+                return "";
+            };
+
+            const lookupAddressCoordinate = async (address) => {
+                if (!address) {
+                    return null;
+                }
+
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=vi&q=${encodeURIComponent(address)}`, {
+                        headers: {
+                            Accept: "application/json"
+                        }
+                    });
+
+                    if (!response.ok) {
+                        return null;
+                    }
+
+                    const results = await response.json();
+                    const first = Array.isArray(results) ? results[0] : null;
+                    const lat = Number.parseFloat(`${first?.lat || ""}`);
+                    const lng = Number.parseFloat(`${first?.lon || ""}`);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        return null;
+                    }
+
+                    return { lat, lng };
+                } catch (error) {
+                    debugLocation("Không tìm được tọa độ cho địa điểm mặc định.", error);
+                    return null;
+                }
+            };
+
+            const ensureDefaultLocationBeforeCreate = async () => {
+                if (isEditMode || getItems().length > 0) {
+                    return;
+                }
+
+                const diaChi = getFormFieldValue("Form.DiaChi");
+                const nguoiLienHe = getFormFieldValue("Form.NguoiDaiDien");
+                const dienThoai = getFormFieldValue("Form.SoDienThoai");
+
+                if (!diaChi && !nguoiLienHe && !dienThoai) {
+                    return;
+                }
+
+                debugLocation("Tạo địa điểm mặc định từ thông tin khách hàng.", {
+                    hasAddress: !!diaChi,
+                    hasContact: !!nguoiLienHe,
+                    hasPhone: !!dienThoai
+                });
+
+                const item = createItem();
+                if (!(item instanceof HTMLElement)) {
+                    return;
+                }
+
+                setHiddenValue(item, "[data-location-address]", diaChi);
+                setHiddenValue(item, "[data-location-contact]", nguoiLienHe);
+                setHiddenValue(item, "[data-location-phone]", dienThoai);
+
+                const coordinate = await lookupAddressCoordinate(diaChi);
+                if (coordinate) {
+                    setHiddenValue(item, "[data-location-lat]", formatCoordinate(coordinate.lat));
+                    setHiddenValue(item, "[data-location-long]", formatCoordinate(coordinate.lng));
+                    debugLocation("Đã tìm được tọa độ cho địa điểm mặc định.", coordinate);
+                }
+
+                updateIndexes();
+            };
+
+            const openEditor = (item) => {
+                debugLocation("Bắt đầu mở popup cập nhật địa điểm.", {
+                    mode: item ? "update" : "insert",
+                    locationId: item?.dataset?.locationId || "",
+                    leafletLoaded: !!(window.L && typeof window.L.map === "function")
+                });
+                setLocationStatus("", "info");
+                if (!viewShell.hidden) {
+                    closeMapViewer();
+                }
+
+                editingItem = item;
+                const data = item ? readItemData(item) : {
+                    diaChi: "",
+                    nguoiLienHe: "",
+                    dienThoai: "",
+                    longAddress: null,
+                    latAddress: null
+                };
+
+                editorTitle.textContent = item ? "Cập nhật địa điểm làm việc" : "Thêm địa điểm làm việc";
+                editorAddress.value = data.diaChi;
+                editorContact.value = data.nguoiLienHe;
+                editorPhone.value = data.dienThoai;
+                editorSearch.value = data.diaChi;
+                currentLng = data.longAddress;
+                currentLat = data.latAddress;
+
+                clearSuggestionList();
+                editorShell.hidden = false;
+                updateEditorCoordinateDisplay();
+                syncEditorCurrentPointButton();
+
+                if (ensureEditorMap()) {
+                    if (Number.isFinite(currentLat) && Number.isFinite(currentLng)) {
+                        setEditorPoint(currentLat, currentLng, focusZoom);
+                    } else {
+                        clearEditorPoint();
+                        editorMap.setView(defaultCenter, defaultZoom);
+                    }
+                }
+
+                updateEditorHint("Bấm lên bản đồ để đặt ghim hoặc gõ địa chỉ để tìm nhanh.");
+                debugLocation("Đã mở popup cập nhật địa điểm.", {
+                    hiddenAfterOpen: editorShell.hidden,
+                    currentLat,
+                    currentLng
+                });
+                window.setTimeout(() => editorSearch.focus(), 60);
+            };
+
+            const closeEditor = () => {
+                editingItem = null;
+                clearSuggestionList();
+                editorShell.hidden = true;
+                closeEditorFullscreen();
+            };
+
+            const searchOnMap = async () => {
+                const query = editorSearch.value.trim() || editorAddress.value.trim();
+                if (!query) {
+                    updateEditorHint("Nhập địa chỉ trước khi tìm trên bản đồ.");
+                    editorSearch.focus();
+                    return;
+                }
+
+                if (!ensureEditorMap()) {
+                    return;
+                }
+
+                updateEditorHint("Đang tìm địa chỉ trên bản đồ...");
+
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=vi&q=${encodeURIComponent(query)}`, {
+                        headers: {
+                            Accept: "application/json"
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Lookup failed.");
+                    }
+
+                    const results = await response.json();
+                    if (!Array.isArray(results) || results.length === 0) {
+                        updateEditorHint("Không tìm thấy địa chỉ phù hợp.");
+                        return;
+                    }
+
+                    applySuggestion(results[0]);
+                } catch {
+                    updateEditorHint("Không thể tìm địa chỉ lúc này. Hãy thử lại hoặc bấm trực tiếp lên bản đồ.");
+                }
+            };
+
+            const requestCurrentEditorPosition = () => {
+                if (hasEditorPoint()) {
+                    syncEditorCurrentPointButton();
+                    return;
+                }
+
+                if (!navigator.geolocation) {
+                    updateEditorHint("Trình duyệt không hỗ trợ lấy tọa độ hiện tại.");
+                    updateEditorFullscreenStatus("Trình duyệt không hỗ trợ lấy tọa độ hiện tại.");
+                    return;
+                }
+
+                if (!ensureEditorMap()) {
+                    return;
+                }
+
+                editorCurrentPointButton.disabled = true;
+                updateEditorHint("Đang lấy tọa độ hiện tại...");
+                updateEditorFullscreenStatus("Đang lấy tọa độ hiện tại...");
+
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    setEditorPoint(lat, lng, focusZoom);
+                    updateEditorHint("Đã lấy tọa độ hiện tại làm vị trí địa điểm.");
+                    updateEditorFullscreenStatus("Đã lấy tọa độ hiện tại làm vị trí địa điểm.");
+                    editorCurrentPointButton.disabled = false;
+                }, () => {
+                    updateEditorHint("Không lấy được tọa độ hiện tại. Hãy cấp quyền vị trí hoặc thử lại.");
+                    updateEditorFullscreenStatus("Không lấy được tọa độ hiện tại. Hãy cấp quyền vị trí hoặc thử lại.");
+                    editorCurrentPointButton.disabled = false;
+                    syncEditorCurrentPointButton();
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 30000
+                });
+            };
+
+            const saveEditor = async () => {
+                const data = {
+                    diaChi: editorAddress.value.trim(),
+                    nguoiLienHe: editorContact.value.trim(),
+                    dienThoai: editorPhone.value.trim(),
+                    longAddress: currentLng,
+                    latAddress: currentLat
+                };
+
+                const hasValue =
+                    data.diaChi ||
+                    data.nguoiLienHe ||
+                    data.dienThoai ||
+                    Number.isFinite(data.longAddress) ||
+                    Number.isFinite(data.latAddress);
+
+                if (!hasValue) {
+                    updateEditorHint("Vui lòng nhập ít nhất một thông tin cho địa điểm làm việc.");
+                    editorAddress.focus();
+                    return;
+                }
+
+                const idKhachHang = customerId();
+                if (!idKhachHang) {
+                    updateEditorHint("Cần lưu khách hàng trước khi thêm hoặc cập nhật địa điểm làm việc.");
+                    return;
+                }
+
+                if (locationSaveInFlight) {
+                    return;
+                }
+
+                const item = editingItem ?? createItem();
+                if (!(item instanceof HTMLElement)) {
+                    return;
+                }
+
+                if (!saveLocationUrl) {
+                    updateEditorHint("Không xác định được API lưu địa điểm làm việc.");
+                    return;
+                }
+
+                const payload = buildLocationPayload(item, {
+                    ...readItemData(item),
+                    ...data
+                });
+
+                locationSaveInFlight = true;
+                updateEditorHint("Đang lưu địa điểm làm việc...");
+
+                try {
+                    const response = await fetch(saveLocationUrl, {
+                        method: "POST",
+                        headers: getRequestHeaders(),
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Save request failed.");
+                    }
+
+                    const result = await response.json();
+                    if (!result?.succeeded || !result.item) {
+                        updateEditorHint(result?.errorMessage || "Không thể lưu địa điểm làm việc.");
+                        return;
+                    }
+
+                    const longAddress = result.item.longAddress === null || result.item.longAddress === undefined
+                        ? Number.NaN
+                        : Number.parseFloat(`${result.item.longAddress}`);
+                    const latAddress = result.item.latAddress === null || result.item.latAddress === undefined
+                        ? Number.NaN
+                        : Number.parseFloat(`${result.item.latAddress}`);
+
+                    setHiddenValue(item, "[data-location-db-id]", `${result.item.id || ""}`);
+                    setHiddenValue(item, "[data-location-status]", `${result.item.trangThaiSuDung}`.toLowerCase() === "false" ? "false" : "true");
+                    setHiddenValue(item, "[data-location-address]", result.item.diaChi || "");
+                    setHiddenValue(item, "[data-location-contact]", result.item.nguoiLienHe || "");
+                    setHiddenValue(item, "[data-location-phone]", result.item.dienThoai || "");
+                    setHiddenValue(item, "[data-location-long]", formatCoordinate(longAddress));
+                    setHiddenValue(item, "[data-location-lat]", formatCoordinate(latAddress));
+
+                    setActiveTab("dia-diem-lam-viec");
+                    updateIndexes();
+                    closeEditor();
+                } catch {
+                    updateEditorHint("Không thể lưu địa điểm làm việc lúc này.");
+                } finally {
+                    locationSaveInFlight = false;
+                }
+            };
+
+            tabButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    if (!(button instanceof HTMLElement) || !button.dataset.tab) {
+                        return;
+                    }
+
+                    setActiveTab(button.dataset.tab);
+                });
+            });
+
+            getItems().forEach((item) => {
+                bindItem(item);
+                syncItemPresentation(item);
+            });
+
+            updateIndexes();
+            setActiveTab(activeTabInput.value || "thong-tin");
+
+            root.addEventListener("submit", (event) => {
+                if (isEditMode || defaultLocationPreparing || getItems().length > 0) {
+                    return;
+                }
+
+                event.preventDefault();
+                defaultLocationPreparing = true;
+
+                void (async () => {
+                    try {
+                        await ensureDefaultLocationBeforeCreate();
+                        root.submit();
+                    } finally {
+                        defaultLocationPreparing = false;
+                    }
+                })();
+            });
+
+            addButton.addEventListener("click", () => {
+                setActiveTab("dia-diem-lam-viec");
+                openEditor(null);
+            });
+
+            editorSearch.addEventListener("input", () => {
+                queueSuggestionLookup();
+            });
+
+            editorSearch.addEventListener("focus", () => {
+                if (editorSearch.value.trim().length >= suggestionMinLength) {
+                    queueSuggestionLookup();
+                }
+            });
+
+            editorSearch.addEventListener("blur", () => {
+                window.setTimeout(() => {
+                    clearSuggestionList();
+                }, 120);
+            });
+
+            editorSearch.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowDown") {
+                    if (editorSuggestionItems.length === 0) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    const nextIndex = suggestionActiveIndex >= editorSuggestionItems.length - 1 ? 0 : suggestionActiveIndex + 1;
+                    highlightSuggestion(nextIndex);
+                    return;
+                }
+
+                if (event.key === "ArrowUp") {
+                    if (editorSuggestionItems.length === 0) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    const nextIndex = suggestionActiveIndex <= 0 ? editorSuggestionItems.length - 1 : suggestionActiveIndex - 1;
+                    highlightSuggestion(nextIndex);
+                    return;
+                }
+
+                if (event.key === "Enter") {
+                    if (editorSuggestionItems.length > 0 && suggestionActiveIndex >= 0) {
+                        event.preventDefault();
+                        editorSuggestionItems[suggestionActiveIndex].click();
+                        return;
+                    }
+
+                    event.preventDefault();
+                    void searchOnMap();
+                }
+            });
+
+            editorSearchButton.addEventListener("click", () => {
+                void searchOnMap();
+            });
+
+            editorCurrentPointButton.addEventListener("click", () => {
+                requestCurrentEditorPosition();
+            });
+
+            editorFullscreenButton.addEventListener("click", () => {
+                openEditorFullscreen();
+            });
+
+            if (editorClearPointButton instanceof HTMLButtonElement) {
+                editorClearPointButton.addEventListener("click", () => {
+                    debugLocation("Click nút xóa ghim.");
+                    clearEditorPoint();
+                    if (editorMap) {
+                        editorMap.setView(defaultCenter, defaultZoom);
+                    }
+                });
+            } else {
+                debugLocation("Nút xóa ghim không hiển thị, có thể do thiếu quyền KhachHang_XoaMap.");
+            }
+
+            if (editorFullscreenClearButton instanceof HTMLButtonElement) {
+                editorFullscreenClearButton.addEventListener("click", () => {
+                    clearEditorPoint();
+                    if (editorFullscreenMap) {
+                        editorFullscreenMap.setView(defaultCenter, defaultZoom);
+                    }
+                });
+            }
+
+            editorSaveButton.addEventListener("click", () => {
+                void saveEditor();
+            });
+            viewRouteButton.addEventListener("click", () => {
+                void requestDirections();
+            });
+
+            viewExternalLink.addEventListener("click", (event) => {
+                if (viewExternalLink.classList.contains("disabled")) {
+                    event.preventDefault();
+                }
+            });
+
+            closeButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    closeEditor();
+                });
+            });
+
+            editorFullscreenCloseButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    closeEditorFullscreen();
+                });
+            });
+
+            viewCloseButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    closeMapViewer();
+                });
+            });
+
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape" && !viewShell.hidden) {
+                    closeMapViewer();
+                    return;
+                }
+
+                if (event.key === "Escape" && !editorFullscreenShell.hidden) {
+                    closeEditorFullscreen();
+                    return;
+                }
+
+                if (event.key === "Escape" && !editorShell.hidden) {
+                    closeEditor();
+                }
+            });
+        })();
+    </script>
+}
