@@ -76,7 +76,7 @@ public static class YeuCauTrangThaiCatalog
             return string.Empty;
         }
 
-        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var normalized = RepairMojibake(value.Trim()).Normalize(NormalizationForm.FormD);
         var builder = new StringBuilder(normalized.Length);
 
         foreach (var character in normalized)
@@ -87,7 +87,7 @@ public static class YeuCauTrangThaiCatalog
                 continue;
             }
 
-            if (character == 'đ' || character == 'Đ')
+            if (character is '\u0111' or '\u0110')
             {
                 builder.Append('d');
                 continue;
@@ -101,6 +101,28 @@ public static class YeuCauTrangThaiCatalog
 
         return builder.ToString();
     }
+
+    private static string RepairMojibake(string value)
+    {
+        if (!value.Contains('Ã') &&
+            !value.Contains('Â') &&
+            !value.Contains('Ä') &&
+            !value.Contains('Æ'))
+        {
+            return value;
+        }
+
+        try
+        {
+            var bytes = Encoding.GetEncoding(1252).GetBytes(value);
+            var decoded = Encoding.UTF8.GetString(bytes);
+            return decoded.Contains('\uFFFD') ? value : decoded;
+        }
+        catch
+        {
+            return value;
+        }
+    }
 }
 
 public sealed class YeuCauTrangThaiOption
@@ -109,10 +131,106 @@ public sealed class YeuCauTrangThaiOption
     public string Label { get; set; } = string.Empty;
 }
 
+public static class YeuCauCongViecTrangThaiCatalog
+{
+    public const string TaoMoi = "Tạo mới";
+    public const string DangThucHien = "Đang thực hiện";
+    public const string ChoDanhGia = "Chờ đánh giá";
+    public const string HoanThanh = "Hoàn thành";
+    public const string Huy = "Hủy";
+
+    public static IReadOnlyList<YeuCauTrangThaiOption> Options { get; } =
+    [
+        new() { Value = TaoMoi, Label = TaoMoi },
+        new() { Value = DangThucHien, Label = DangThucHien },
+        new() { Value = ChoDanhGia, Label = ChoDanhGia },
+        new() { Value = HoanThanh, Label = HoanThanh },
+        new() { Value = Huy, Label = Huy }
+    ];
+
+    public static string Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return TaoMoi;
+        }
+
+        var normalized = RemoveMarks(RepairMojibake(value));
+        return normalized switch
+        {
+            "taomoi" => TaoMoi,
+            "dangthuchien" => DangThucHien,
+            "chodanhgia" => ChoDanhGia,
+            "hoanthanh" => HoanThanh,
+            "huy" => Huy,
+            _ => TaoMoi
+        };
+    }
+
+    public static bool IsCompleted(string? value) => Normalize(value) == HoanThanh;
+
+    public static string GetCssClass(string? value)
+    {
+        return Normalize(value) switch
+        {
+            TaoMoi => "pending",
+            DangThucHien => "in-progress",
+            ChoDanhGia => "review",
+            HoanThanh => "completed",
+            Huy => "cancelled",
+            _ => "pending"
+        };
+    }
+
+    private static string RemoveMarks(string value)
+    {
+        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        foreach (var character in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category == UnicodeCategory.NonSpacingMark ||
+                char.IsWhiteSpace(character) ||
+                character is '-' or '_')
+            {
+                continue;
+            }
+
+            builder.Append(character is '\u0111' or '\u0110'
+                ? 'd'
+                : char.ToLowerInvariant(character));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RepairMojibake(string value)
+    {
+        if (!value.Contains('Ã') &&
+            !value.Contains('Â') &&
+            !value.Contains('Ä') &&
+            !value.Contains('Æ'))
+        {
+            return value;
+        }
+
+        try
+        {
+            var bytes = Encoding.GetEncoding(1252).GetBytes(value);
+            var decoded = Encoding.UTF8.GetString(bytes);
+            return decoded.Contains('\uFFFD') ? value : decoded;
+        }
+        catch
+        {
+            return value;
+        }
+    }
+}
+
 public static class YeuCauCongViecTrangThaiFilter
 {
     public const string TatCa = "all";
-    public const string HoanThanh = "completed";
+    public const string HoanThanh = "Hoàn thành";
     public const string ChuaHoanThanh = "incomplete";
 
     public static IReadOnlyList<YeuCauTrangThaiOption> Options { get; } =
@@ -279,10 +397,16 @@ public sealed class YeuCauCongViecFormItem
     public int? YeuCauCongViecId { get; set; }
     public int? CongViecId { get; set; }
     public string TenCongViec { get; set; } = string.Empty;
+    public string TrangThaiCongViec { get; set; } = YeuCauCongViecTrangThaiCatalog.TaoMoi;
+    public string? GhiChu { get; set; }
     public DateTime? CheckInTime { get; set; }
     public DateTime? CheckOutTime { get; set; }
     public int SoLuongAnhCheckIn { get; set; }
     public int SoLuongAnhCheckOut { get; set; }
+
+    public string TrangThaiCongViecDisplay => YeuCauCongViecTrangThaiCatalog.Normalize(TrangThaiCongViec);
+
+    public string TrangThaiCongViecCssClass => YeuCauCongViecTrangThaiCatalog.GetCssClass(TrangThaiCongViec);
 
     [ValidateNever]
     public List<YeuCauCongViecImageItem> Images { get; set; } = [];
@@ -309,6 +433,21 @@ public sealed class YeuCauCongViecImageItem
     public int IDCongViec { get; set; }
     public string ImagePath { get; set; } = string.Empty;
     public string ImageType { get; set; } = YeuCauCongViecImageTypes.CheckIn;
+    public DateTime? CreatedDate { get; set; }
+    public string? CreatedBy { get; set; }
+    public Guid? CreatedByAccountId { get; set; }
+    public bool CanDelete { get; set; }
+}
+
+public sealed class YeuCauWorkChecklistCreateModel
+{
+    public int CongViecId { get; set; }
+    public string? TenChecklist { get; set; }
+}
+
+public sealed class YeuCauWorkImageDeleteModel
+{
+    public int ImageId { get; set; }
 }
 
 public static class YeuCauCongViecImageTypes
@@ -335,6 +474,19 @@ public sealed class YeuCauLocationCoordinateUpdateModel
 {
     public int IDYeuCau { get; set; }
     public int IDDiaDiem { get; set; }
+    public decimal? LongAddress { get; set; }
+    public decimal? LatAddress { get; set; }
+}
+
+public sealed class YeuCauLocationCreateModel
+{
+    public int? IDKhachHang { get; set; }
+    public string? TenKhachHang { get; set; }
+    public string? SoDienThoai { get; set; }
+    public string? DiaChiKhachHang { get; set; }
+    public string? DiaChi { get; set; }
+    public string? NguoiLienHe { get; set; }
+    public string? DienThoai { get; set; }
     public decimal? LongAddress { get; set; }
     public decimal? LatAddress { get; set; }
 }
@@ -416,6 +568,9 @@ public sealed class YeuCauFormModel : IValidatableObject
 
         foreach (var work in normalizedWorks)
         {
+            work.TrangThaiCongViec = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec);
+            work.GhiChu = string.IsNullOrWhiteSpace(work.GhiChu) ? null : work.GhiChu.Trim();
+
             if (work.CheckInTime.HasValue &&
                 work.CheckOutTime.HasValue &&
                 work.CheckOutTime.Value <= work.CheckInTime.Value)
@@ -571,6 +726,7 @@ public sealed class YeuCauDetailViewModel
     public IReadOnlyList<YeuCauNhanVienOption> NhanVienOptions { get; set; } = [];
     public IReadOnlyList<YeuCauCongViecOption> WorkOptions { get; set; } = [];
     public IReadOnlyList<YeuCauTrangThaiOption> StatusOptions { get; set; } = YeuCauTrangThaiCatalog.Options;
+    public IReadOnlyList<YeuCauTrangThaiOption> WorkStatusOptions { get; set; } = YeuCauCongViecTrangThaiCatalog.Options;
     public IReadOnlyList<YeuCauCheckinItem> Checkins { get; set; } = [];
     public YeuCauLocationOption? SelectedLocation { get; set; }
     public string GeneratedCode { get; set; } = string.Empty;
@@ -578,6 +734,7 @@ public sealed class YeuCauDetailViewModel
     public string StatusType { get; set; } = "info";
     public int? CurrentEmployeeId { get; set; }
     public bool CurrentUserIsAdmin { get; set; }
+    public bool CanToggleCheckinDistanceConstraint { get; set; }
     public decimal? CheckinDistanceLimitMeters { get; set; }
 
     public bool IsEditMode => Form.Id.HasValue && Form.Id.Value > 0;

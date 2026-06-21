@@ -7,11 +7,172 @@
     var ngayXuatKhoHasError = ViewData.ModelState.TryGetValue("Form.NgayXuatKho", out var ngayXuatKhoState) && ngayXuatKhoState.Errors.Count > 0;
     var noiDungHasError = ViewData.ModelState.TryGetValue("Form.NoiDungXuatKho", out var noiDungState) && noiDungState.Errors.Count > 0;
     var detailHasError = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase));
-    var activeTab = detailHasError || string.Equals(Model.Form.ActiveTab, "vat-tu-xuat", StringComparison.OrdinalIgnoreCase)
+    var imageHasError = ViewData.ModelState.TryGetValue("Form.NewImageFiles", out var imageState) && imageState.Errors.Count > 0;
+    var activeTab = imageHasError || string.Equals(Model.Form.ActiveTab, "hinh-anh", StringComparison.OrdinalIgnoreCase)
+        ? "hinh-anh"
+        : detailHasError || string.Equals(Model.Form.ActiveTab, "vat-tu-xuat", StringComparison.OrdinalIgnoreCase)
         ? "vat-tu-xuat"
         : "thong-tin";
     var currentStatus = XuatKhoPhieuStatus.Normalize(Model.Form.TrangThaiPhieu);
     var isEditable = Model.PopupMode == XuatKhoPopupMode.Create || currentStatus == XuatKhoPhieuStatus.Draft;
+    string FormatMoney(decimal value) => value.ToString("#,##0.##", CultureInfo.GetCultureInfo("vi-VN"));
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const form = document.querySelector("[data-xuat-kho-form]");
+            const uploadInput = document.querySelector("#xuatKhoImageUpload");
+            if (!(form instanceof HTMLFormElement) || !(uploadInput instanceof HTMLInputElement)) {
+                return;
+            }
+
+            const imagePanel = uploadInput.closest(".xuat-kho-detail-panel");
+            const cameraStart = imagePanel?.querySelector("[data-xuat-kho-camera-start]");
+            const cameraPanel = imagePanel?.querySelector("[data-xuat-kho-camera-panel]");
+            const cameraVideo = imagePanel?.querySelector("[data-xuat-kho-camera-video]");
+            const cameraCanvas = imagePanel?.querySelector("[data-xuat-kho-camera-canvas]");
+            const cameraCapture = imagePanel?.querySelector("[data-xuat-kho-camera-capture]");
+            const cameraStop = imagePanel?.querySelector("[data-xuat-kho-camera-stop]");
+
+            let cameraStream = null;
+            let grid = imagePanel?.querySelector(".vat-tu-image-grid");
+            let empty = imagePanel?.querySelector(".master-data-empty");
+
+            const status = document.createElement("div");
+            status.className = "page-alert info xuat-kho-client-validation";
+            status.hidden = true;
+            imagePanel?.insertBefore(status, empty ?? grid ?? null);
+
+            if (!grid && imagePanel) {
+                grid = document.createElement("div");
+                grid.className = "vat-tu-image-grid";
+                imagePanel.insertBefore(grid, empty?.nextSibling ?? null);
+            }
+
+            const setStatus = (message, isError = false) => {
+                status.textContent = message;
+                status.classList.toggle("error", isError);
+                status.classList.toggle("info", !isError);
+                status.hidden = !message;
+            };
+
+            const updateEmpty = () => {
+                if (empty instanceof HTMLElement) {
+                    empty.classList.toggle("is-hidden", Boolean(imagePanel?.querySelector(".vat-tu-image-card")));
+                }
+            };
+
+            const stopCamera = () => {
+                cameraStream?.getTracks().forEach((track) => track.stop());
+                cameraStream = null;
+                if (cameraVideo instanceof HTMLVideoElement) {
+                    cameraVideo.srcObject = null;
+                }
+                if (cameraPanel instanceof HTMLElement) {
+                    cameraPanel.hidden = true;
+                }
+            };
+
+            const startCamera = async () => {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new Error("Trình duyệt không hỗ trợ mở camera.");
+                }
+                if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+                    throw new Error("Camera chỉ hoạt động trên HTTPS hoặc localhost.");
+                }
+
+                stopCamera();
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false
+                });
+                if (cameraVideo instanceof HTMLVideoElement) {
+                    cameraVideo.srcObject = cameraStream;
+                    await cameraVideo.play();
+                }
+                if (cameraPanel instanceof HTMLElement) {
+                    cameraPanel.hidden = false;
+                }
+            };
+
+            const captureCameraImage = async () => {
+                if (!(cameraVideo instanceof HTMLVideoElement) || !(cameraCanvas instanceof HTMLCanvasElement)) {
+                    throw new Error("Không tìm thấy khung camera.");
+                }
+                if (!cameraStream || cameraVideo.videoWidth <= 0 || cameraVideo.videoHeight <= 0) {
+                    throw new Error("Camera chưa sẵn sàng để chụp.");
+                }
+
+                cameraCanvas.width = cameraVideo.videoWidth;
+                cameraCanvas.height = cameraVideo.videoHeight;
+                const context = cameraCanvas.getContext("2d");
+                context?.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+                const blob = await new Promise((resolve) => cameraCanvas.toBlob(resolve, "image/jpeg", 0.9));
+                if (!(blob instanceof Blob)) {
+                    throw new Error("Không thể tạo ảnh từ camera.");
+                }
+
+                return new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+            };
+
+            const appendFileToInput = (file) => {
+                const transfer = new DataTransfer();
+                Array.from(uploadInput.files ?? []).forEach((existingFile) => transfer.items.add(existingFile));
+                transfer.items.add(file);
+                uploadInput.files = transfer.files;
+            };
+
+            const addPreviewCard = (file) => {
+                if (!grid) {
+                    return;
+                }
+
+                const imageUrl = URL.createObjectURL(file);
+                const card = document.createElement("article");
+                card.className = "vat-tu-image-card";
+                card.innerHTML = `
+                    <a href="${imageUrl}" target="_blank" rel="noopener">
+                        <img src="${imageUrl}" alt="Ảnh chứng từ xuất kho vừa chụp" loading="lazy" />
+                    </a>
+                    <div class="vat-tu-image-card-footer">
+                        <span class="vat-tu-image-badge">Chờ lưu</span>
+                    </div>`;
+                grid.appendChild(card);
+                updateEmpty();
+            };
+
+            cameraStart?.addEventListener("click", async () => {
+                setStatus("Đang mở camera...");
+                try {
+                    await startCamera();
+                    setStatus("Camera đã sẵn sàng. Bấm Chụp hình để thêm ảnh vào phiếu.");
+                } catch (error) {
+                    setStatus(error instanceof Error ? error.message : "Không thể mở camera.", true);
+                }
+            });
+
+            cameraCapture?.addEventListener("click", async () => {
+                setStatus("Đang chụp ảnh...");
+                try {
+                    const file = await captureCameraImage();
+                    appendFileToInput(file);
+                    addPreviewCard(file);
+                    setStatus("Đã chụp ảnh. Bấm lưu phiếu để lưu ảnh vào hệ thống.");
+                } catch (error) {
+                    setStatus(error instanceof Error ? error.message : "Không thể chụp ảnh.", true);
+                }
+            });
+
+            cameraStop?.addEventListener("click", () => {
+                stopCamera();
+                setStatus("Đã dừng camera.");
+            });
+
+            window.addEventListener("pagehide", stopCamera);
+            updateEmpty();
+        })();
+    </script>
 }
 
 <section class="master-data-page">
@@ -42,7 +203,7 @@
             </div>
 
             <div class="master-data-header-actions">
-                <a class="master-data-add-button"
+                <a class="master-data-add-button" asp-permission-action="insert"
                    asp-action="Index"
                    asp-route-keyword="@Model.Filter.Keyword"
                    asp-route-statusFilter="@Model.Filter.StatusFilter"
@@ -150,6 +311,7 @@
                     {
                         @foreach (var item in Model.Items)
                         {
+                            var itemStatus = XuatKhoPhieuStatus.Normalize(item.TrangThaiPhieu);
                             <tr>
                                 <td><div class="master-data-name">@item.MaPhieu</div></td>
                                 <td>@(item.NgayXuatKho?.ToString("dd/MM/yyyy") ?? "-")</td>
@@ -163,7 +325,7 @@
                                 <td>@item.DetailCount dòng / @item.TotalQuantity.ToString("0.##")</td>
                                 <td class="actions-col">
                                     <div class="master-data-actions">
-                                        <a class="table-action-button edit"
+                                        <a class="table-action-button edit" asp-permission-action="update"
                                            asp-action="Index"
                                            asp-route-keyword="@Model.Filter.Keyword"
                                            asp-route-statusFilter="@Model.Filter.StatusFilter"
@@ -175,6 +337,18 @@
                                             <span>Mở</span>
                                         </a>
 
+                                        @if (itemStatus == XuatKhoPhieuStatus.Exported)
+                                        {
+                                            <a class="table-action-button"
+                                               asp-action="Export"
+                                               asp-route-id="@item.Id"
+                                               target="_blank"
+                                               rel="noopener">
+                                                <i class="fa-solid fa-print" aria-hidden="true"></i>
+                                                <span>In</span>
+                                            </a>
+                                        }
+
                                         <form method="post" asp-action="Delete" class="inline-action-form">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="Id" value="@item.Id" />
@@ -184,8 +358,8 @@
                                             <input type="hidden" name="ToDate" value="@Model.Filter.ToDate?.ToString("yyyy-MM-dd")" />
                                             <input type="hidden" name="Page" value="@Model.CurrentPage" />
                                             <button type="submit"
-                                                    class="table-action-button delete"
-                                                    disabled="@(XuatKhoPhieuStatus.Normalize(item.TrangThaiPhieu) == XuatKhoPhieuStatus.Exported ? "disabled" : null)"
+                                                    class="table-action-button delete" asp-permission-action="delete"
+                                                    disabled="@(itemStatus == XuatKhoPhieuStatus.Exported ? "disabled" : null)"
                                                     data-delete-confirm="Bạn có chắc muốn xóa phiếu xuất kho này?">
                                                 <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                                                 <span>Xóa</span>
@@ -269,7 +443,7 @@
                 </a>
             </div>
 
-            <form method="post" asp-action="@Model.SubmitAction" class="account-form crud-form" data-xuat-kho-form novalidate>
+            <form method="post" asp-action="@Model.SubmitAction" enctype="multipart/form-data" class="account-form crud-form" data-xuat-kho-form novalidate>
                 @Html.AntiForgeryToken()
 
                 <input asp-for="Form.Id" type="hidden" />
@@ -305,6 +479,15 @@
                                 aria-selected="@(activeTab == "vat-tu-xuat" ? "true" : "false")">
                             Danh sách vật tư xuất
                         </button>
+
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "hinh-anh" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="hinh-anh"
+                                role="tab"
+                                aria-selected="@(activeTab == "hinh-anh" ? "true" : "false")">
+                            Hình ảnh
+                        </button>
                     </div>
 
                     <div class="crud-tab-panel @(activeTab == "thong-tin" ? "is-active" : "")"
@@ -339,6 +522,24 @@
                             </label>
 
                             <label class="login-field">
+                                <span>Người nhận hàng</span>
+                                <span class="login-input-shell">
+                                    <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                    <input asp-for="Form.NguoiNhanHang" maxlength="250" readonly="@(!isEditable ? "readonly" : null)" />
+                                </span>
+                                <span asp-validation-for="Form.NguoiNhanHang" class="login-field-error"></span>
+                            </label>
+
+                            <label class="login-field">
+                                <span>Địa chỉ người nhận hàng</span>
+                                <span class="login-input-shell">
+                                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                    <input asp-for="Form.DiaChiNguoiNhanHang" maxlength="550" readonly="@(!isEditable ? "readonly" : null)" />
+                                </span>
+                                <span asp-validation-for="Form.DiaChiNguoiNhanHang" class="login-field-error"></span>
+                            </label>
+
+                            <label class="login-field">
                                 <span>Trạng thái phiếu</span>
                                 <span class="login-input-shell readonly-shell">
                                     <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
@@ -354,6 +555,24 @@
                                     <textarea asp-for="Form.NoiDungXuatKho" rows="4" readonly="@(!isEditable ? "readonly" : null)" placeholder="Nhập nội dung xuất kho..."></textarea>
                                 </span>
                                 <span asp-validation-for="Form.NoiDungXuatKho" class="login-field-error"></span>
+                            </label>
+                            <label class="login-field">
+                                <span>Mục đích xuất</span>
+                                <span class="login-input-shell select-shell">
+                                    <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+                                    <select asp-for="Form.MucDichXuat" disabled="@(!isEditable ? "disabled" : null)">
+                                        @foreach (var option in XuatKhoMucDich.Options)
+                                        {
+                                            <option value="@option.Value">@option.Text</option>
+                                        }
+                                    </select>
+                                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                </span>
+                                @if (!isEditable)
+                                {
+                                    <input asp-for="Form.MucDichXuat" type="hidden" />
+                                }
+                                <span asp-validation-for="Form.MucDichXuat" class="login-field-error"></span>
                             </label>
                         </div>
                     </div>
@@ -392,6 +611,9 @@
                                                     <div class="qr-scanner-frame" aria-hidden="true"></div>
                                                 </div>
                                             </div>
+                                            <div class="qr-scanner-status xuat-kho-qr-status" data-xuat-kho-qr-status>
+                                                Tìm danh sách vật tư trước, sau đó quét QR bằng camera hoặc ảnh.
+                                            </div>
                                         </div>
 
                                         <div class="qr-scanner-side">
@@ -420,10 +642,6 @@
                                                 </button>
 
                                                 <input type="file" id="xuatKhoQrImageFile" accept="image/*" data-xuat-kho-qr-file hidden />
-                                            </div>
-
-                                            <div class="qr-scanner-status xuat-kho-qr-status" data-xuat-kho-qr-status>
-                                                Tìm danh sách vật tư trước, sau đó quét QR bằng camera hoặc ảnh.
                                             </div>
                                         </div>
                                     </div>
@@ -468,6 +686,9 @@
 	                                            <th>Kho</th>
 	                                            <th>Tồn</th>
 	                                            <th>Số lượng xuất</th>
+                                                <th>Giá bán lẻ</th>
+                                                <th>Đơn giá xuất</th>
+                                                <th>Tổng tiền</th>
                                             @if (isEditable)
                                             {
                                                 <th class="actions-col">Xóa</th>
@@ -491,6 +712,11 @@
                                                     <input type="hidden" name="Form.Details[@index].DonViTinh" value="@detail.DonViTinh" data-detail-don-vi-tinh />
                                                     <input type="hidden" name="Form.Details[@index].QRCode" value="@detail.QRCode" data-detail-qr-code />
                                                     <input type="hidden" name="Form.Details[@index].SoLuongTon" value="@detail.SoLuongTon.ToString(CultureInfo.InvariantCulture)" data-detail-so-luong-ton />
+                                                    <input type="hidden" name="Form.Details[@index].SoLuongNhap" value="@detail.SoLuongNhap.ToString(CultureInfo.InvariantCulture)" data-detail-so-luong-nhap />
+                                                    <input type="hidden" name="Form.Details[@index].DonGiaNhap" value="@detail.DonGiaNhap.ToString(CultureInfo.InvariantCulture)" data-detail-don-gia-nhap />
+                                                    <input type="hidden" name="Form.Details[@index].DonGiaBanLe" value="@detail.DonGiaBanLe.ToString(CultureInfo.InvariantCulture)" data-detail-don-gia-ban-le />
+                                                    <input type="hidden" name="Form.Details[@index].DonGiaXuat" value="@detail.DonGiaXuat.ToString(CultureInfo.InvariantCulture)" data-detail-don-gia-xuat />
+                                                    <input type="hidden" name="Form.Details[@index].TongTienXuat" value="@detail.TongTienXuat.ToString(CultureInfo.InvariantCulture)" data-detail-tong-tien-xuat />
                                                     <div class="vat-tu-cell-stack">
                                                         <a class="master-data-name-link"
                                                            href="@Url.Action("Index", "VatTu", new { editId = detail.VatTuId, page = 1 })"
@@ -513,10 +739,13 @@
                                                            data-detail-quantity
                                                            readonly="@(!isEditable ? "readonly" : null)" />
                                                 </td>
+                                                <td class="right" data-detail-display-retail-price>@FormatMoney(detail.DonGiaBanLe)</td>
+                                                <td class="right" data-detail-display-export-price>@FormatMoney(detail.DonGiaXuat)</td>
+                                                <td class="right" data-detail-display-total>@FormatMoney(detail.TongTienXuat)</td>
                                                 @if (isEditable)
                                                 {
                                                     <td class="actions-col">
-                                                        <button type="button" class="table-action-button delete xuat-kho-remove-detail" data-xuat-kho-remove-detail aria-label="Xóa vật tư khỏi phiếu">
+                                                        <button type="button" class="table-action-button delete xuat-kho-remove-detail" asp-permission-action="delete" data-xuat-kho-remove-detail aria-label="Xóa vật tư khỏi phiếu">
                                                             <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                                                         </button>
                                                     </td>
@@ -532,9 +761,73 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="crud-tab-panel @(activeTab == "hinh-anh" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="hinh-anh"
+                         role="tabpanel"
+                         @(activeTab == "hinh-anh" ? null : "hidden")>
+                        <div class="xuat-kho-detail-panel @(imageHasError ? "has-error" : "")">
+                            @if (isEditable)
+                            {
+                                <div class="master-data-header-actions">
+                                    <label class="secondary-button image-upload-button" for="xuatKhoImageUpload">
+                                        <i class="fa-regular fa-images" aria-hidden="true"></i>
+                                        <span>Upload ảnh</span>
+                                    </label>
+                                    <button type="button" class="secondary-button image-upload-button" data-xuat-kho-camera-start>
+                                        <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                        <span>Mở camera</span>
+                                    </button>
+                                </div>
+                                <input id="xuatKhoImageUpload" class="image-upload-input" type="file" name="Form.NewImageFiles" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple />
+                                <div class="document-camera-panel" data-xuat-kho-camera-panel hidden>
+                                    <video class="document-camera-video" data-xuat-kho-camera-video autoplay playsinline muted></video>
+                                    <canvas data-xuat-kho-camera-canvas hidden></canvas>
+                                    <div class="document-camera-actions">
+                                        <button type="button" class="primary-button" data-xuat-kho-camera-capture>
+                                            <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                            <span>Chụp hình</span>
+                                        </button>
+                                        <button type="button" class="secondary-button" data-xuat-kho-camera-stop>Dừng camera</button>
+                                    </div>
+                                </div>
+                            }
+
+                            <span asp-validation-for="Form.NewImageFiles" class="login-field-error"></span>
+
+                            @if (Model.Form.ExistingImages.Count == 0)
+                            {
+                                <div class="master-data-empty xuat-kho-detail-empty">Chưa có hình ảnh chứng từ.</div>
+                            }
+                            else
+                            {
+                                <div class="vat-tu-image-grid">
+                                    @foreach (var image in Model.Form.ExistingImages)
+                                    {
+                                        <article class="vat-tu-image-card">
+                                            <a href="@image.ImagePath" target="_blank" rel="noopener">
+                                                <img src="@image.ImagePath" alt="Ảnh chứng từ xuất kho" loading="lazy" />
+                                            </a>
+                                            @if (isEditable)
+                                            {
+                                                <div class="vat-tu-image-card-footer">
+                                                    <span class="vat-tu-image-badge">Đã lưu</span>
+                                                    <label class="login-checkbox">
+                                                        <input type="checkbox" name="Form.RemovedImagePaths" value="@image.ImagePath" />
+                                                        <span>Xóa</span>
+                                                    </label>
+                                                </div>
+                                            }
+                                        </article>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
                 </div>
 
-                <div class="crud-modal-actions @(Model.PopupMode == XuatKhoPopupMode.Edit && currentStatus == XuatKhoPhieuStatus.Draft ? "has-export-action" : "")">
+                <div class="crud-modal-actions @(Model.PopupMode == XuatKhoPopupMode.Edit && (currentStatus == XuatKhoPhieuStatus.Draft || currentStatus == XuatKhoPhieuStatus.Exported) ? "has-export-action" : "")">
                     <a class="secondary-button crud-cancel-button"
                        asp-action="Index"
                        asp-route-keyword="@Model.Filter.Keyword"
@@ -566,7 +859,7 @@
                             </button>
                         }
 
-                        <button type="submit" name="command" value="save" class="primary-button" data-processing-button data-processing-text="Đang lưu">
+                        <button type="submit" name="command" value="save" class="primary-button" asp-permission-action="@(Model.PopupMode == XuatKhoPopupMode.Edit ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
                             <span class="button-content">
                                 <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
                                 <span>@(Model.PopupMode == XuatKhoPopupMode.Edit ? "Lưu phiếu" : "Tạo phiếu nháp")</span>
@@ -576,6 +869,17 @@
                                 <span class="button-processing-text">Đang lưu</span>
                             </span>
                         </button>
+                    }
+
+                    @if (Model.PopupMode == XuatKhoPopupMode.Edit && Model.Form.Id.HasValue && currentStatus == XuatKhoPhieuStatus.Exported)
+                    {
+                        <a class="secondary-button xuat-kho-export-button"
+                           asp-action="Export"
+                           asp-route-id="@Model.Form.Id.Value"
+                           target="_blank">
+                            <i class="fa-solid fa-print" aria-hidden="true"></i>
+                            <span>In phiếu</span>
+                        </a>
                     }
                 </div>
             </form>
@@ -593,7 +897,12 @@
                         <input type="hidden" name="Form.Details[__index__].MaKho" data-detail-ma-kho />
                         <input type="hidden" name="Form.Details[__index__].DonViTinh" data-detail-don-vi-tinh />
                         <input type="hidden" name="Form.Details[__index__].QRCode" data-detail-qr-code />
+                        <input type="hidden" name="Form.Details[__index__].SoLuongNhap" data-detail-so-luong-nhap />
                         <input type="hidden" name="Form.Details[__index__].SoLuongTon" data-detail-so-luong-ton />
+                        <input type="hidden" name="Form.Details[__index__].DonGiaNhap" data-detail-don-gia-nhap />
+                        <input type="hidden" name="Form.Details[__index__].DonGiaBanLe" data-detail-don-gia-ban-le />
+                        <input type="hidden" name="Form.Details[__index__].DonGiaXuat" data-detail-don-gia-xuat />
+                        <input type="hidden" name="Form.Details[__index__].TongTienXuat" data-detail-tong-tien-xuat />
                         <div class="vat-tu-cell-stack">
                             <a class="master-data-name-link" href="#" data-detail-link>
                                 <strong data-detail-display-name></strong>
@@ -611,8 +920,11 @@
                                step="0.01"
                                data-detail-quantity />
                     </td>
+                    <td class="right" data-detail-display-retail-price></td>
+                    <td class="right" data-detail-display-export-price></td>
+                    <td class="right" data-detail-display-total></td>
                     <td class="actions-col">
-                        <button type="button" class="table-action-button delete xuat-kho-remove-detail" data-xuat-kho-remove-detail aria-label="Xóa vật tư khỏi phiếu">
+                        <button type="button" class="table-action-button delete xuat-kho-remove-detail" asp-permission-action="delete" data-xuat-kho-remove-detail aria-label="Xóa vật tư khỏi phiếu">
                             <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                         </button>
                     </td>

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace ApptechDashboard.Models;
@@ -167,6 +168,18 @@ public sealed class XuatKhoFormModel
 
     [ValidateNever]
     public List<XuatKhoDetailItem> Details { get; set; } = [];
+
+    [ValidateNever]
+    public List<NhapXuatImageItem> ExistingImages { get; set; } = [];
+
+    [ValidateNever]
+    public List<string> RemovedImagePaths { get; set; } = [];
+
+    [ValidateNever]
+    public List<IFormFile> NewImageFiles { get; set; } = [];
+
+    [ValidateNever]
+    public List<string> UploadedImagePaths { get; set; } = [];
 
     public string? Keyword { get; set; }
     public string? StatusFilter { get; set; }

@@ -13,7 +13,10 @@ namespace ApptechDashboard.Controllers;
 [Authorize]
 public class YeuCauController(
     IYeuCauService yeuCauService,
+    IKhachHangService khachHangService,
+    IZaloMessageService zaloMessageService,
     IUserAccountService userAccountService,
+    IUserPermissionService userPermissionService,
     IWebHostEnvironment webHostEnvironment) : Controller
 {
     private static readonly HashSet<string> AllowedCheckinImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -31,7 +34,10 @@ public class YeuCauController(
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly IYeuCauService _yeuCauService = yeuCauService;
+    private readonly IKhachHangService _khachHangService = khachHangService;
+    private readonly IZaloMessageService _zaloMessageService = zaloMessageService;
     private readonly IUserAccountService _userAccountService = userAccountService;
+    private readonly IUserPermissionService _userPermissionService = userPermissionService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
 
     [HttpGet]
@@ -73,6 +79,7 @@ public class YeuCauController(
         }
 
         var works = await _yeuCauService.GetAssignedWorksAsync(id, HttpContext.RequestAborted);
+        ApplyWorkImageDeletePermissions(works);
 
         var form = new YeuCauFormModel
         {
@@ -106,6 +113,7 @@ public class YeuCauController(
     {
         NormalizeFormState(model);
         await NormalizeDistanceConstraintAsync(model, HttpContext.RequestAborted);
+        await NormalizeUnauthorizedDistanceConstraintChangeAsync(model, HttpContext.RequestAborted);
         NormalizePostedWorkEmployees(model, Request.Form);
 
         if (!ModelState.IsValid)
@@ -138,6 +146,7 @@ public class YeuCauController(
     {
         NormalizeFormState(model);
         await NormalizeDistanceConstraintAsync(model, HttpContext.RequestAborted);
+        await NormalizeUnauthorizedDistanceConstraintChangeAsync(model, HttpContext.RequestAborted);
         NormalizePostedWorkEmployees(model, Request.Form);
 
         if (!ModelState.IsValid)
@@ -176,6 +185,30 @@ public class YeuCauController(
         return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.StatusFilter, model.Page, model.RequestDateFrom, model.RequestDateTo, model.ExecutionDateFrom, model.ExecutionDateTo, model.AssigneeKeyword, model.WorkStatusFilter));
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SendZaloSchedule(int id, string? keyword, string? statusFilter, string? workStatusFilter, int page = 1)
+    {
+        if (id <= 0)
+        {
+            TempData["StatusMessage"] = "Khong xac dinh duoc phieu yeu cau can gui Zalo.";
+            TempData["StatusType"] = "error";
+            return RedirectToAction(nameof(Index), BuildRouteValues(keyword, statusFilter, page, workStatusFilter: workStatusFilter));
+        }
+
+        var result = await _zaloMessageService.SendBookingConfirmationAsync(id, HttpContext.RequestAborted);
+        TempData["StatusMessage"] = result.Message;
+        TempData["StatusType"] = result.Succeeded ? "success" : "error";
+        return RedirectToAction(nameof(Edit), new
+        {
+            id,
+            keyword,
+            statusFilter,
+            workStatusFilter,
+            page = Math.Max(page, 1)
+        });
+    }
+
     [HttpGet]
     public async Task<IActionResult> SearchLocations([FromQuery] string? keyword, CancellationToken cancellationToken)
     {
@@ -193,6 +226,43 @@ public class YeuCauController(
             displayLabel = item.DisplayLabel,
             trangThaiSuDung = item.TrangThaiSuDung
         }));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> SearchCustomers([FromQuery] string? keyword, CancellationToken cancellationToken)
+    {
+        var (items, _, _, _, _) = await _khachHangService.GetPagedAsync(keyword, page: 1, pageSize: 30, cancellationToken);
+        return Json(items.Select(item => new
+        {
+            id = item.Id,
+            tenKhachHang = item.TenKhachHang,
+            soDienThoai = item.SoDienThoai,
+            diaChi = item.DiaChi
+        }));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateLocation([FromBody] YeuCauLocationCreateModel model)
+    {
+        var result = model.IDKhachHang.HasValue && model.IDKhachHang.Value > 0
+            ? await CreateLocationForExistingCustomerAsync(model, HttpContext.RequestAborted)
+            : await CreateLocationWithNewCustomerAsync(model, HttpContext.RequestAborted);
+
+        if (!result.Succeeded || result.Location is null)
+        {
+            return Json(new
+            {
+                succeeded = false,
+                errorMessage = result.ErrorMessage ?? "Không thể tạo địa điểm khách hàng."
+            });
+        }
+
+        return Json(new
+        {
+            succeeded = true,
+            item = ToLocationJson(result.Location)
+        });
     }
 
     [HttpGet]
@@ -254,6 +324,60 @@ public class YeuCauController(
         if (!result.Succeeded)
         {
             return BadRequest(new { message = result.ErrorMessage ?? "Khong the cap nhat toa do dia diem." });
+        }
+
+        return Json(new
+        {
+            succeeded = true,
+            longAddress = model.LongAddress.Value,
+            latAddress = model.LatAddress.Value,
+            coordinateDisplay = $"{model.LatAddress.Value:0.00000}, {model.LongAddress.Value:0.00000}"
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateDraftLocationCoordinates([FromForm] YeuCauLocationCoordinateUpdateModel model)
+    {
+        model.LongAddress ??= ParseInvariantDecimal(Request.Form["LongAddress"].FirstOrDefault());
+        model.LatAddress ??= ParseInvariantDecimal(Request.Form["LatAddress"].FirstOrDefault());
+
+        if (model.IDDiaDiem <= 0)
+        {
+            return BadRequest(new { message = "Không xác định được địa điểm cần cập nhật tọa độ." });
+        }
+
+        if (!model.LongAddress.HasValue || !model.LatAddress.HasValue)
+        {
+            return BadRequest(new { message = "Vui lòng cấp quyền GPS để lấy tọa độ hiện tại." });
+        }
+
+        var location = await _yeuCauService.GetLocationByIdAsync(model.IDDiaDiem, HttpContext.RequestAborted);
+        if (location is null)
+        {
+            return BadRequest(new { message = "Không tìm thấy địa điểm cần cập nhật tọa độ." });
+        }
+
+        if (location.LatAddress.HasValue || location.LongAddress.HasValue)
+        {
+            return BadRequest(new { message = "Địa điểm này đã có tọa độ." });
+        }
+
+        if (!location.IDKhachHang.HasValue ||
+            !await CanCurrentUserModifyCustomerAsync(location.IDKhachHang.Value, HttpContext.RequestAborted))
+        {
+            return BadRequest(new { message = "Bạn không có quyền cập nhật tọa độ địa điểm này." });
+        }
+
+        var result = await _yeuCauService.UpdateLocationCoordinatesAsync(
+            model.IDDiaDiem,
+            model.LongAddress.Value,
+            model.LatAddress.Value,
+            GetCurrentAuditUser(),
+            HttpContext.RequestAborted);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể cập nhật tọa độ địa điểm." });
         }
 
         return Json(new
@@ -456,6 +580,11 @@ public class YeuCauController(
             return BadRequest(new { message = "Vui long chon anh cong viec." });
         }
 
+        if (await _yeuCauService.IsWorkCompletedAsync(model.IDCongViec, HttpContext.RequestAborted))
+        {
+            return BadRequest(new { message = "Cong viec da hoan thanh nen khong the them hinh anh." });
+        }
+
         var imageValidationError = ValidateCheckinImage(imageFile);
         if (imageValidationError is not null)
         {
@@ -472,6 +601,8 @@ public class YeuCauController(
             model.IDCongViec,
             uploadResult.RelativeUrl!,
             imageType,
+            GetCurrentAuditUser(),
+            GetCurrentAccountId(),
             HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
@@ -484,8 +615,56 @@ public class YeuCauController(
             succeeded = true,
             id = result.Id,
             imagePath = uploadResult.RelativeUrl,
-            imageType
+            imageType,
+            canDelete = true
         });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddWorkChecklist([FromForm] YeuCauWorkChecklistCreateModel model)
+    {
+        var result = await _yeuCauService.CreateWorkChecklistAsync(
+            model.CongViecId,
+            model.TenChecklist,
+            GetCurrentAuditUser(),
+            HttpContext.RequestAborted);
+
+        if (!result.Succeeded || result.Checklist is null)
+        {
+            return BadRequest(new { message = result.ErrorMessage ?? "Khong the them checklist cong viec." });
+        }
+
+        return Json(new
+        {
+            succeeded = true,
+            checklist = new
+            {
+                checklistId = result.Checklist.ChecklistId,
+                tenChecklist = result.Checklist.TenChecklist,
+                viTri = result.Checklist.ViTri,
+                isCompleted = false
+            }
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteWorkImage([FromForm] YeuCauWorkImageDeleteModel model)
+    {
+        var result = await _yeuCauService.DeleteWorkImageAsync(
+            model.ImageId,
+            GetCurrentAccountId(),
+            GetCurrentAuditUser(),
+            HttpContext.RequestAborted);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = result.ErrorMessage ?? "Khong the xoa anh cong viec." });
+        }
+
+        DeleteLocalWorkImageIfOwned(result.ImagePath);
+        return Json(new { succeeded = true });
     }
 
     [HttpPost]
@@ -594,6 +773,14 @@ public class YeuCauController(
             form.CheckinTheoKhoangCach = false;
         }
 
+        var currentEmployeeId = await GetCurrentEmployeeIdAsync(cancellationToken);
+        var isAdmin = await IsCurrentUserAdminAsync(cancellationToken);
+        var canToggleCheckinDistanceConstraint = await CanToggleCheckinDistanceConstraintAsync(cancellationToken);
+        if (!form.Id.HasValue && !canToggleCheckinDistanceConstraint)
+        {
+            form.CheckinTheoKhoangCach = false;
+        }
+
         return new YeuCauDetailViewModel
         {
             Filter = new YeuCauFilterState
@@ -612,12 +799,146 @@ public class YeuCauController(
                 : [],
             SelectedLocation = selectedLocation,
             GeneratedCode = generatedCode,
-            CurrentEmployeeId = await GetCurrentEmployeeIdAsync(cancellationToken),
-            CurrentUserIsAdmin = await IsCurrentUserAdminAsync(cancellationToken),
+            CurrentEmployeeId = currentEmployeeId,
+            CurrentUserIsAdmin = isAdmin,
+            CanToggleCheckinDistanceConstraint = canToggleCheckinDistanceConstraint,
             CheckinDistanceLimitMeters = checkinDistanceLimitMeters,
             StatusMessage = TempData["StatusMessage"]?.ToString(),
             StatusType = TempData["StatusType"]?.ToString() ?? "info"
         };
+    }
+
+    private async Task<(bool Succeeded, string? ErrorMessage, YeuCauLocationOption? Location)> CreateLocationForExistingCustomerAsync(
+        YeuCauLocationCreateModel model,
+        CancellationToken cancellationToken)
+    {
+        var customerId = model.IDKhachHang.GetValueOrDefault();
+        if (customerId <= 0)
+        {
+            return (false, "Vui lòng chọn khách hàng hoặc tạo khách mới.", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(model.DiaChi))
+        {
+            return (false, "Vui lòng nhập địa chỉ địa điểm.", null);
+        }
+
+        if (!await CanCurrentUserModifyCustomerAsync(customerId, cancellationToken))
+        {
+            return (false, "Khách hàng có mã bắt đầu bằng Apptech chỉ tài khoản admin mới được thêm địa điểm.", null);
+        }
+
+        var saveResult = await _khachHangService.SaveLocationAsync(new KhachHangDiaDiemSaveModel
+        {
+            IDKhachHang = customerId,
+            DiaChi = model.DiaChi,
+            NguoiLienHe = model.NguoiLienHe,
+            DienThoai = model.DienThoai,
+            LongAddress = model.LongAddress,
+            LatAddress = model.LatAddress,
+            TrangThaiSuDung = true
+        }, GetCurrentAuditUser(), cancellationToken);
+
+        if (!saveResult.Succeeded || saveResult.Item?.Id is not int locationId)
+        {
+            return (false, saveResult.ErrorMessage ?? "Không thể tạo địa điểm khách hàng.", null);
+        }
+
+        var location = await _yeuCauService.GetLocationByIdAsync(locationId, cancellationToken);
+        return location is null
+            ? (false, "Đã tạo địa điểm nhưng không tải lại được thông tin.", null)
+            : (true, null, location);
+    }
+
+    private async Task<(bool Succeeded, string? ErrorMessage, YeuCauLocationOption? Location)> CreateLocationWithNewCustomerAsync(
+        YeuCauLocationCreateModel model,
+        CancellationToken cancellationToken)
+    {
+        var customerName = NormalizeInlineValue(model.TenKhachHang);
+        if (string.IsNullOrWhiteSpace(customerName))
+        {
+            return (false, "Vui lòng nhập tên khách hàng mới.", null);
+        }
+
+        var customerAddress = NormalizeInlineValue(model.DiaChiKhachHang) ?? NormalizeInlineValue(model.DiaChi);
+        var customerPhone = NormalizeInlineValue(model.SoDienThoai) ?? NormalizeInlineValue(model.DienThoai);
+        var locationAddress = NormalizeInlineValue(model.DiaChi) ?? customerAddress;
+        var locationContact = NormalizeInlineValue(model.NguoiLienHe) ?? customerName;
+        var locationPhone = NormalizeInlineValue(model.DienThoai) ?? customerPhone;
+        if (string.IsNullOrWhiteSpace(locationAddress))
+        {
+            return (false, "Vui lòng nhập địa chỉ khách hàng.", null);
+        }
+
+        var createResult = await _khachHangService.CreateAsync(new KhachHangFormModel
+        {
+            TenKhachHang = customerName,
+            DiaChi = customerAddress,
+            SoDienThoai = customerPhone,
+            NguoiDaiDien = locationContact,
+            DiaDiemLamViec =
+            [
+                new KhachHangDiaDiemFormItem
+                {
+                    DiaChi = locationAddress,
+                    NguoiLienHe = locationContact,
+                    DienThoai = locationPhone,
+                    LongAddress = model.LongAddress,
+                    LatAddress = model.LatAddress,
+                    TrangThaiSuDung = true
+                }
+            ]
+        }, GetCurrentAuditUser(), cancellationToken);
+
+        if (!createResult.Succeeded || !createResult.Id.HasValue)
+        {
+            return (false, createResult.ErrorMessage ?? "Không thể tạo khách hàng mới.", null);
+        }
+
+        var createdCustomer = await _khachHangService.GetByIdAsync(createResult.Id.Value, cancellationToken);
+        var locationId = createdCustomer?.DiaDiemLamViec.FirstOrDefault()?.Id;
+        if (!locationId.HasValue || locationId.Value <= 0)
+        {
+            return (false, "Đã tạo khách hàng nhưng không tải lại được địa điểm.", null);
+        }
+
+        var location = await _yeuCauService.GetLocationByIdAsync(locationId.Value, cancellationToken);
+        return location is null
+            ? (false, "Đã tạo địa điểm nhưng không tải lại được thông tin.", null)
+            : (true, null, location);
+    }
+
+    private async Task<bool> CanCurrentUserModifyCustomerAsync(int customerId, CancellationToken cancellationToken)
+    {
+        var customer = await _khachHangService.GetByIdAsync(customerId, cancellationToken);
+        if (customer is null)
+        {
+            return false;
+        }
+
+        return !customer.IsApptechProtected || await IsCurrentUserAdminAsync(cancellationToken);
+    }
+
+    private static object ToLocationJson(YeuCauLocationOption item)
+    {
+        return new
+        {
+            idDiaDiem = item.IDDiaDiem,
+            idKhachHang = item.IDKhachHang,
+            tenKhachHang = item.TenKhachHangDisplay,
+            diaChi = item.DiaChi,
+            nguoiLienHe = item.NguoiLienHe,
+            dienThoai = item.DienThoai,
+            longAddress = item.LongAddress,
+            latAddress = item.LatAddress,
+            displayLabel = item.DisplayLabel,
+            trangThaiSuDung = item.TrangThaiSuDung
+        };
+    }
+
+    private static string? NormalizeInlineValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private object BuildRouteValues(
@@ -677,6 +998,43 @@ public class YeuCauController(
 
         var account = await _userAccountService.GetAccountByIdAsync(accountId, cancellationToken);
         return account?.EmployeeId is > 0 ? account.EmployeeId : null;
+    }
+
+    private Guid? GetCurrentAccountId()
+    {
+        var rawAccountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(rawAccountId, out var accountId) && accountId != Guid.Empty
+            ? accountId
+            : null;
+    }
+
+    private void ApplyWorkImageDeletePermissions(IEnumerable<YeuCauCongViecFormItem> works)
+    {
+        var currentAccountId = GetCurrentAccountId();
+        var currentAuditUser = GetCurrentAuditUser();
+
+        foreach (var image in works.SelectMany(work => work.Images))
+        {
+            image.CanDelete = CanDeleteWorkImage(image.CreatedByAccountId, image.CreatedBy, currentAccountId, currentAuditUser);
+        }
+    }
+
+    private static bool CanDeleteWorkImage(Guid? ownerAccountId, string? createdBy, Guid? currentAccountId, string currentUser)
+    {
+        if (ownerAccountId.HasValue && ownerAccountId.Value != Guid.Empty)
+        {
+            return currentAccountId.HasValue && ownerAccountId.Value == currentAccountId.Value;
+        }
+
+        return string.Equals(
+            NormalizeAuditUser(createdBy),
+            NormalizeAuditUser(currentUser),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeAuditUser(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "system" : value.Trim();
     }
 
     private async Task<bool> IsCurrentUserAdminAsync(CancellationToken cancellationToken)
@@ -934,6 +1292,12 @@ public class YeuCauController(
         form.NhanVienThucHienText = string.IsNullOrWhiteSpace(form.NhanVienThucHienText) ? null : form.NhanVienThucHienText.Trim();
         form.NhanVienLienKet ??= [];
         form.CongViecs ??= [];
+        foreach (var work in form.CongViecs)
+        {
+            work.TrangThaiCongViec = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec);
+            work.GhiChu = string.IsNullOrWhiteSpace(work.GhiChu) ? null : work.GhiChu.Trim();
+        }
+
         form.StatusFilter = string.IsNullOrWhiteSpace(form.StatusFilter) ? null : YeuCauTrangThaiCatalog.Normalize(form.StatusFilter);
         form.WorkStatusFilter = string.IsNullOrWhiteSpace(form.WorkStatusFilter) ? null : YeuCauCongViecTrangThaiFilter.Normalize(form.WorkStatusFilter);
         form.ActiveTab = string.IsNullOrWhiteSpace(form.ActiveTab) ? "thong-tin" : form.ActiveTab.Trim();
@@ -950,6 +1314,44 @@ public class YeuCauController(
         {
             form.CheckinTheoKhoangCach = false;
         }
+    }
+
+    private async Task NormalizeUnauthorizedDistanceConstraintChangeAsync(
+        YeuCauFormModel form,
+        CancellationToken cancellationToken)
+    {
+        if (await CanToggleCheckinDistanceConstraintAsync(cancellationToken))
+        {
+            return;
+        }
+
+        if (form.Id.HasValue && form.Id.Value > 0)
+        {
+            var existingRequest = await _yeuCauService.GetByIdAsync(form.Id.Value, cancellationToken);
+            form.CheckinTheoKhoangCach = existingRequest?.CheckinTheoKhoangCach ?? false;
+            return;
+        }
+
+        form.CheckinTheoKhoangCach = false;
+    }
+
+    private async Task<bool> CanToggleCheckinDistanceConstraintAsync(CancellationToken cancellationToken)
+    {
+        if (await IsCurrentUserAdminAsync(cancellationToken))
+        {
+            return true;
+        }
+
+        var permissions = await UserPermissionSession.GetOrLoadAsync(
+            HttpContext,
+            _userPermissionService,
+            cancellationToken);
+
+        return permissions.Any(permission =>
+            string.Equals(
+                permission.PermissionCode,
+                PermissionCatalogService.ToggleCheckinDistancePermissionCode,
+                StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasPositiveDistanceLimit(decimal? value) => value.HasValue && value.Value > 0;

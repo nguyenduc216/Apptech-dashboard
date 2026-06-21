@@ -311,6 +311,8 @@ public class VatTuController(
             TrangThaiSuDung = item.TrangThaiSuDung,
             KhoId = item.KhoId,
             HangHoaId = item.HangHoaId,
+            PhanLoaiHangHoaId = item.PhanLoaiHangHoaId,
+            TenPhanLoaiHangHoa = item.TenPhanLoaiHangHoa,
             DonViTinhId = item.DonViTinhId,
             DonViNhapId = item.DonViNhapId,
             TenDonViNhap = item.TenDonViNhap,

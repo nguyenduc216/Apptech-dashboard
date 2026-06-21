@@ -42,6 +42,8 @@ public sealed class VatTuListItem
     public int? HangHoaId { get; set; }
     public string? TenHangHoa { get; set; }
     public string? MaHangHoa { get; set; }
+    public int? PhanLoaiHangHoaId { get; set; }
+    public string? TenPhanLoaiHangHoa { get; set; }
     public int? DonViTinhId { get; set; }
     public string? TenDonViTinh { get; set; }
     public string? TenVietTatDonViTinh { get; set; }
@@ -87,6 +89,9 @@ public sealed class VatTuFormModel
     [Required(ErrorMessage = "Vui lòng chọn hàng hóa.")]
     [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn hàng hóa.")]
     public int? HangHoaId { get; set; }
+
+    public int? PhanLoaiHangHoaId { get; set; }
+    public string? TenPhanLoaiHangHoa { get; set; }
 
     [Required(ErrorMessage = "Vui lòng chọn đơn vị tính.")]
     [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn đơn vị tính.")]

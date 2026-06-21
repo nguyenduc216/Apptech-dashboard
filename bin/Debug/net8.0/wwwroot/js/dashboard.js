@@ -230,8 +230,14 @@
             }
 
             const hasValidationErrors = Boolean(document.querySelector(".login-field.has-error, .validation-summary, .login-validation"));
+            const hasStatusAlert = Boolean(document.querySelector("[data-status-alert]"));
             sessionStorage.removeItem(scrollRestoreKey);
             if (hasValidationErrors) {
+                return;
+            }
+
+            if (hasStatusAlert) {
+                window.scrollTo({ top: 0, left: 0, behavior: "auto" });
                 return;
             }
 
@@ -878,23 +884,169 @@
         }
     });
 
-    const avatarInput = document.querySelector("[data-avatar-input]");
+    const avatarInputs = Array.from(document.querySelectorAll("[data-avatar-input]"));
     const avatarPreview = document.querySelector("[data-avatar-preview]");
     const avatarFallback = document.querySelector("[data-avatar-fallback]");
-    if (avatarInput instanceof HTMLInputElement && avatarPreview instanceof HTMLImageElement && avatarFallback) {
-        avatarInput.addEventListener("change", () => {
-            const [file] = avatarInput.files || [];
-            if (!file) {
-                avatarPreview.removeAttribute("src");
-                avatarPreview.classList.add("is-hidden");
-                avatarFallback.classList.remove("is-hidden");
+    const avatarCameraOpen = document.querySelector("[data-avatar-camera-open]");
+    const avatarCameraFallback = document.querySelector("[data-avatar-camera-fallback]");
+    const avatarCameraPanel = document.querySelector("[data-avatar-camera-panel]");
+    const avatarCameraVideo = document.querySelector("[data-avatar-camera-video]");
+    const avatarCameraCanvas = document.querySelector("[data-avatar-camera-canvas]");
+    const avatarCameraCapture = document.querySelector("[data-avatar-camera-capture]");
+    const avatarCameraClose = document.querySelector("[data-avatar-camera-close]");
+    const avatarCameraStatus = document.querySelector("[data-avatar-camera-status]");
+    if (avatarInputs.length > 0 && avatarPreview instanceof HTMLImageElement && avatarFallback) {
+        let avatarPreviewUrl = "";
+        let avatarCameraStream = null;
+
+        const setAvatarCameraStatus = (message, state = "info") => {
+            if (!(avatarCameraStatus instanceof HTMLElement)) {
                 return;
             }
 
-            avatarPreview.src = URL.createObjectURL(file);
-            avatarPreview.classList.remove("is-hidden");
-            avatarFallback.classList.add("is-hidden");
+            avatarCameraStatus.textContent = message;
+            avatarCameraStatus.classList.remove("info", "success", "error");
+            avatarCameraStatus.classList.add(state);
+            avatarCameraStatus.hidden = !message;
+        };
+
+        const stopAvatarCamera = () => {
+            if (avatarCameraStream) {
+                avatarCameraStream.getTracks().forEach((track) => track.stop());
+                avatarCameraStream = null;
+            }
+
+            if (avatarCameraVideo instanceof HTMLVideoElement) {
+                avatarCameraVideo.srcObject = null;
+            }
+
+            if (avatarCameraPanel instanceof HTMLElement) {
+                avatarCameraPanel.hidden = true;
+            }
+        };
+
+        const assignAvatarFile = (file) => {
+            const targetInput = avatarInputs.find((input) =>
+                input instanceof HTMLInputElement && input.id === "profileAvatarFile") || avatarInputs[0];
+            if (!(targetInput instanceof HTMLInputElement)) {
+                return false;
+            }
+
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            targetInput.files = transfer.files;
+            targetInput.dispatchEvent(new Event("change", { bubbles: true }));
+            return true;
+        };
+
+        avatarInputs.forEach((avatarInput) => {
+            if (!(avatarInput instanceof HTMLInputElement)) {
+                return;
+            }
+
+            avatarInput.addEventListener("change", () => {
+                const [file] = avatarInput.files || [];
+                if (!file) {
+                    const hasSelectedFile = avatarInputs.some((otherInput) =>
+                        otherInput instanceof HTMLInputElement && (otherInput.files?.length || 0) > 0);
+                    if (hasSelectedFile) {
+                        return;
+                    }
+
+                    avatarPreview.removeAttribute("src");
+                    avatarPreview.classList.add("is-hidden");
+                    avatarFallback.classList.remove("is-hidden");
+                    return;
+                }
+
+                avatarInputs.forEach((otherInput) => {
+                    if (otherInput instanceof HTMLInputElement && otherInput !== avatarInput) {
+                        otherInput.value = "";
+                    }
+                });
+                if (avatarPreviewUrl) {
+                    URL.revokeObjectURL(avatarPreviewUrl);
+                }
+                avatarPreviewUrl = URL.createObjectURL(file);
+                avatarPreview.src = avatarPreviewUrl;
+                avatarPreview.classList.remove("is-hidden");
+                avatarFallback.classList.add("is-hidden");
+            });
         });
+
+        if (avatarCameraOpen instanceof HTMLButtonElement) {
+            avatarCameraOpen.addEventListener("click", async () => {
+                if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+                    if (avatarCameraFallback instanceof HTMLInputElement) {
+                        avatarCameraFallback.click();
+                    }
+                    return;
+                }
+
+                try {
+                    stopAvatarCamera();
+                    avatarCameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "user" },
+                        audio: false
+                    });
+                    if (avatarCameraVideo instanceof HTMLVideoElement) {
+                        avatarCameraVideo.srcObject = avatarCameraStream;
+                        await avatarCameraVideo.play();
+                    }
+
+                    if (avatarCameraPanel instanceof HTMLElement) {
+                        avatarCameraPanel.hidden = false;
+                    }
+                    setAvatarCameraStatus("Camera đã sẵn sàng.", "success");
+                } catch {
+                    if (avatarCameraFallback instanceof HTMLInputElement) {
+                        avatarCameraFallback.click();
+                    }
+                    setAvatarCameraStatus("Không thể mở camera trực tiếp. Hãy chọn ảnh từ thiết bị.", "error");
+                }
+            });
+        }
+
+        if (avatarCameraCapture instanceof HTMLButtonElement) {
+            avatarCameraCapture.addEventListener("click", async () => {
+                if (!(avatarCameraVideo instanceof HTMLVideoElement) ||
+                    !(avatarCameraCanvas instanceof HTMLCanvasElement)) {
+                    return;
+                }
+
+                const width = avatarCameraVideo.videoWidth || 720;
+                const height = avatarCameraVideo.videoHeight || 720;
+                avatarCameraCanvas.width = width;
+                avatarCameraCanvas.height = height;
+                const context = avatarCameraCanvas.getContext("2d");
+                if (!context) {
+                    setAvatarCameraStatus("Không thể chụp ảnh từ camera.", "error");
+                    return;
+                }
+
+                context.drawImage(avatarCameraVideo, 0, 0, width, height);
+                const blob = await new Promise((resolve) => avatarCameraCanvas.toBlob(resolve, "image/jpeg", 0.9));
+                if (!blob) {
+                    setAvatarCameraStatus("Không thể chụp ảnh từ camera.", "error");
+                    return;
+                }
+
+                const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
+                if (assignAvatarFile(file)) {
+                    setAvatarCameraStatus("Đã chụp avatar. Bấm Lưu để cập nhật.", "success");
+                    stopAvatarCamera();
+                }
+            });
+        }
+
+        if (avatarCameraClose instanceof HTMLButtonElement) {
+            avatarCameraClose.addEventListener("click", () => {
+                stopAvatarCamera();
+                setAvatarCameraStatus("", "info");
+            });
+        }
+
+        window.addEventListener("pagehide", stopAvatarCamera);
     }
 
     document.querySelectorAll("[data-image-upload]").forEach((editor) => {
@@ -5663,7 +5815,7 @@
         });
     }
 
-    if (crudModalShell) {
+    if (crudModalShell && !crudModalShell.hidden) {
         document.body.classList.add("menu-open");
 
         const closeLink = crudModalShell.querySelector("[data-crud-modal-close]");
@@ -6953,6 +7105,7 @@
             soLuongTon: item?.soLuongTon,
             soLuongXuat: item?.soLuongXuat,
             soLuongNhap: item?.soLuongNhap,
+            ngayNhapKho: `${item?.ngayNhapKho || ""}`.trim(),
             donGiaNhap: item?.donGiaNhap,
             donGiaBanLe: item?.donGiaBanLe,
             donGiaXuat: item?.donGiaXuat,
@@ -6990,6 +7143,13 @@
             const segments = [];
             if (item.tenHangHoa) {
                 segments.push(item.tenHangHoa);
+            }
+            if (item.ngayNhapKho) {
+                const date = new Date(`${item.ngayNhapKho}T00:00:00`);
+                const formattedDate = Number.isNaN(date.getTime())
+                    ? item.ngayNhapKho
+                    : date.toLocaleDateString("vi-VN");
+                segments.push(`Nhập: ${formattedDate}`);
             }
             if (item.maSoLo) {
                 segments.push(`Lô: ${item.maSoLo}`);

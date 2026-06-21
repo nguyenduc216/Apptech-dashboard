@@ -9,123 +9,127 @@ build_property.EnforceExtendedAnalyzerRules =
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = ApptechDashboard
 build_property.RootNamespace = ApptechDashboard
-build_property.ProjectDir = D:\Working\T.A\Tech\Projects\apptech-dashboard\
+build_property.ProjectDir = D:\Working\T.A\Tech\Projects\apptech-dashboard\apptech-dashboard\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.RazorLangVersion = 8.0
 build_property.SupportLocalizedComponentNames = 
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
-build_property.MSBuildProjectDirectory = D:\Working\T.A\Tech\Projects\apptech-dashboard
+build_property.MSBuildProjectDirectory = D:\Working\T.A\Tech\Projects\apptech-dashboard\apptech-dashboard
 build_property._RazorSourceGeneratorDebug = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/CongViec/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/CongViec/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQ29uZ1ZpZWNcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/DonViTinh/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/DonViTinh/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcRG9uVmlUaW5oXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/HangHoa/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/HangHoa/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSGFuZ0hvYVxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Home/Error.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Home/Error.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxFcnJvci5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Home/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Home/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Home/Login.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Home/Login.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxMb2dpbi5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Home/UpdateAccount.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Home/UpdateAccount.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxVcGRhdGVBY2NvdW50LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/KhachHang/Detail.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/KhachHang/Detail.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcS2hhY2hIYW5nXERldGFpbC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/KhachHang/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/KhachHang/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcS2hhY2hIYW5nXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Kho/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Kho/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcS2hvXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/NhaCungCap/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/NhaCungCap/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmhhQ3VuZ0NhcFxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/NhanVien/Detail.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/NhanVien/Detail.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmhhblZpZW5cRGV0YWlsLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/NhanVien/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/NhanVien/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmhhblZpZW5cSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/NhapKho/Export.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/NhapKho/Export.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmhhcEtob1xFeHBvcnQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/NhapKho/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/NhapKho/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTmhhcEtob1xJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/PhongBan/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/PhongBan/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGhvbmdCYW5cSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/QrCode/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/QrCode/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUXJDb2RlXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Report/ChamCong.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Report/ChamCong.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUmVwb3J0XENoYW1Db25nLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Setting/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Report/CongViec.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUmVwb3J0XENvbmdWaWVjLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Setting/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2V0dGluZ1xJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/Shared/_Layout.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/Shared/_Layout.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9MYXlvdXQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/VaiTro/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/VaiTro/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVmFpVHJvXEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/VatTu/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/VatTu/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcVmF0VHVcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/XuatKho/Export.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/XuatKho/Export.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcWHVhdEtob1xFeHBvcnQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/XuatKho/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/XuatKho/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcWHVhdEtob1xJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/YeuCau/Detail.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/YeuCau/Detail.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcWWV1Q2F1XERldGFpbC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/YeuCau/Index.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/YeuCau/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcWWV1Q2F1XEluZGV4LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/_ViewImports.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/_ViewImports.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Working/T.A/Tech/Projects/apptech-dashboard/Views/_ViewStart.cshtml]
+[D:/Working/T.A/Tech/Projects/apptech-dashboard/apptech-dashboard/Views/_ViewStart.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdTdGFydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 

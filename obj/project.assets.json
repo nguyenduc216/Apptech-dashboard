@@ -1857,11 +1857,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\ApptechDashboard.csproj",
+      "projectUniqueName": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\Apptech-dashboard\\ApptechDashboard.csproj",
       "projectName": "ApptechDashboard",
-      "projectPath": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\ApptechDashboard.csproj",
+      "projectPath": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\Apptech-dashboard\\ApptechDashboard.csproj",
       "packagesPath": "C:\\Users\\PH Laptop\\.nuget\\packages\\",
-      "outputPath": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\obj\\",
+      "outputPath": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\Apptech-dashboard\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft\\Xamarin\\NuGet\\"
@@ -1927,7 +1927,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.421/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.422/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

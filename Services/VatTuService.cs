@@ -101,6 +101,10 @@ public sealed class VatTuService(
             var donGiaBanLeSelect = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "DonGiaBanLe", cancellationToken)
                 ? "ct.DonGiaBanLe,"
                 : "CAST(0 AS decimal(18,2)) AS DonGiaBanLe,";
+            var hasPhanLoaiColumn = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "IDPhanLoaiHangHoa", cancellationToken);
+            var phanLoaiSelect = hasPhanLoaiColumn ? "ct.IDPhanLoaiHangHoa," : "CAST(NULL AS int) AS IDPhanLoaiHangHoa,";
+            var phanLoaiJoin = hasPhanLoaiColumn ? "LEFT JOIN [TblHangHoaPhanLoai] plhh ON plhh.ID = ct.IDPhanLoaiHangHoa" : string.Empty;
+            var phanLoaiNameSelect = hasPhanLoaiColumn ? "plhh.TenPhanLoai AS TenPhanLoaiHangHoa," : "CAST(NULL AS nvarchar(250)) AS TenPhanLoaiHangHoa,";
 
             await using var countCommand = connection.CreateCommand();
             countCommand.CommandText = $"""
@@ -136,6 +140,7 @@ public sealed class VatTuService(
                     {trangThaiSuDungSelect}
                     ct.IDKho,
                     ct.IDHangHoa,
+                    {phanLoaiSelect}
                     ct.IDDonVinTinh,
                     {donViNhapSelect}
                     ct.TenChiTiet,
@@ -155,6 +160,7 @@ public sealed class VatTuService(
                     kho.MaKho,
                     hh.TenHangHoa,
                     hh.MaHangHoa,
+                    {phanLoaiNameSelect}
                     dvt.TenDonVi,
                     dvt.TenVietTat,
                     dvtNhap.TenDonVi AS TenDonViNhap,
@@ -166,6 +172,7 @@ public sealed class VatTuService(
                 FROM [{TableName}] ct
                 LEFT JOIN [TblKho] kho ON kho.ID = ct.IDKho
                 LEFT JOIN [TblHangHoa] hh ON hh.ID = ct.IDHangHoa
+                {phanLoaiJoin}
                 LEFT JOIN [TblDonViTinh] dvt ON dvt.ID = ct.IDDonVinTinh
                 LEFT JOIN [TblDonViTinh] dvtNhap ON dvtNhap.ID = {donViNhapExpression}
                 LEFT JOIN [TblPhieuNhapKhoChiTiet] pnct ON pnct.ID = ct.IDPhieuNhapChiTiet
@@ -227,6 +234,10 @@ public sealed class VatTuService(
             var donGiaBanLeSelect = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "DonGiaBanLe", cancellationToken)
                 ? "ct.DonGiaBanLe,"
                 : "CAST(0 AS decimal(18,2)) AS DonGiaBanLe,";
+            var hasPhanLoaiColumn = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "IDPhanLoaiHangHoa", cancellationToken);
+            var phanLoaiSelect = hasPhanLoaiColumn ? "ct.IDPhanLoaiHangHoa," : "CAST(NULL AS int) AS IDPhanLoaiHangHoa,";
+            var phanLoaiJoin = hasPhanLoaiColumn ? "LEFT JOIN [TblHangHoaPhanLoai] plhh ON plhh.ID = ct.IDPhanLoaiHangHoa" : string.Empty;
+            var phanLoaiNameSelect = hasPhanLoaiColumn ? "plhh.TenPhanLoai AS TenPhanLoaiHangHoa," : "CAST(NULL AS nvarchar(250)) AS TenPhanLoaiHangHoa,";
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 SELECT TOP (1)
@@ -234,6 +245,7 @@ public sealed class VatTuService(
                     {trangThaiSuDungSelect}
                     ct.IDKho,
                     ct.IDHangHoa,
+                    {phanLoaiSelect}
                     ct.IDDonVinTinh,
                     {donViNhapSelect}
                     ct.TenChiTiet,
@@ -253,6 +265,7 @@ public sealed class VatTuService(
                     kho.MaKho,
                     hh.TenHangHoa,
                     hh.MaHangHoa,
+                    {phanLoaiNameSelect}
                     dvt.TenDonVi,
                     dvt.TenVietTat,
                     dvtNhap.TenDonVi AS TenDonViNhap,
@@ -264,6 +277,7 @@ public sealed class VatTuService(
                 FROM [{TableName}] ct
                 LEFT JOIN [TblKho] kho ON kho.ID = ct.IDKho
                 LEFT JOIN [TblHangHoa] hh ON hh.ID = ct.IDHangHoa
+                {phanLoaiJoin}
                 LEFT JOIN [TblDonViTinh] dvt ON dvt.ID = ct.IDDonVinTinh
                 LEFT JOIN [TblDonViTinh] dvtNhap ON dvtNhap.ID = {donViNhapExpression}
                 LEFT JOIN [TblPhieuNhapKhoChiTiet] pnct ON pnct.ID = ct.IDPhieuNhapChiTiet
@@ -475,6 +489,7 @@ public sealed class VatTuService(
                     UPDATE [{TableName}]
                     SET
                         {updateTrangThaiSuDungClause}
+                        TenChiTiet = @TenChiTiet,
                         QRCode = @QRCode,
                         LuuTaiKho = @LuuTaiKho,
                         GhiChu = @GhiChu,
@@ -490,6 +505,7 @@ public sealed class VatTuService(
                     limitedCommand.Parameters.Add(new SqlParameter("@TrangThaiSuDung", SqlDbType.Bit) { Value = model.TrangThaiSuDung });
                 }
 
+                limitedCommand.Parameters.Add(new SqlParameter("@TenChiTiet", SqlDbType.NVarChar, 250) { Value = model.TenChiTiet.Trim() });
                 limitedCommand.Parameters.Add(new SqlParameter("@QRCode", SqlDbType.NVarChar, 50) { Value = ToDbValue(model.QRCode) });
                 limitedCommand.Parameters.Add(new SqlParameter("@LuuTaiKho", SqlDbType.NVarChar, 250) { Value = ToDbValue(model.ViTriLuuKho) });
                 limitedCommand.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 550) { Value = ToDbValue(model.GhiChu) });
@@ -515,7 +531,7 @@ public sealed class VatTuService(
                         "Cap nhat thong tin cho phep cua vat tu da lien quan phieu.",
                         currentUser,
                         OldData: updateState,
-                        NewData: new { model.QRCode, model.ViTriLuuKho, model.GhiChu, model.TrangThaiSuDung }),
+                        NewData: new { model.TenChiTiet, model.QRCode, model.ViTriLuuKho, model.GhiChu, model.TrangThaiSuDung }),
                     cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
@@ -1030,6 +1046,8 @@ public sealed class VatTuService(
             HangHoaId = GetNullableInt32(reader, "IDHangHoa"),
             TenHangHoa = GetNullableString(reader, "TenHangHoa"),
             MaHangHoa = GetNullableString(reader, "MaHangHoa"),
+            PhanLoaiHangHoaId = GetNullableInt32(reader, "IDPhanLoaiHangHoa"),
+            TenPhanLoaiHangHoa = GetNullableString(reader, "TenPhanLoaiHangHoa"),
             DonViTinhId = GetNullableInt32(reader, "IDDonVinTinh"),
             TenDonViTinh = GetNullableString(reader, "TenDonVi"),
             TenVietTatDonViTinh = GetNullableString(reader, "TenVietTat"),

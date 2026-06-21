@@ -6,7 +6,10 @@
 
     var currentStatus = NhapKhoPhieuStatus.Normalize(Model.Form.TrangThaiPhieu);
     var isEditable = Model.PopupMode == NhapKhoPopupMode.Create || currentStatus == NhapKhoPhieuStatus.Draft;
-    var activeTab = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase)) ||
+    var imageHasError = ViewData.ModelState.TryGetValue("Form.NewImageFiles", out var imageState) && imageState.Errors.Count > 0;
+    var activeTab = imageHasError || string.Equals(Model.Form.ActiveTab, "hinh-anh", StringComparison.OrdinalIgnoreCase)
+        ? "hinh-anh"
+        : ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase)) ||
         string.Equals(Model.Form.ActiveTab, "hang-hoa-nhap", StringComparison.OrdinalIgnoreCase)
             ? "hang-hoa-nhap"
             : "thong-tin";
@@ -20,6 +23,10 @@
     var noiDungHasError = ViewData.ModelState.TryGetValue("Form.NoiDungNhapKho", out var noiDungState) && noiDungState.Errors.Count > 0;
     var khoHasError = ViewData.ModelState.TryGetValue("Form.KhoId", out var khoState) && khoState.Errors.Count > 0;
     var detailHasError = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase));
+    var cachedImagePaths = Model.Form.UploadedImagePaths
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
     string[] GetFieldErrors(string key)
     {
@@ -138,6 +145,7 @@
                     {
                         @foreach (var item in Model.Items)
                         {
+                            var itemStatus = NhapKhoPhieuStatus.Normalize(item.TrangThaiPhieu);
                             <tr>
                                 <td><div class="master-data-name">@item.MaPhieu</div></td>
                                 <td>@(item.NgayNhapKho?.ToString("dd/MM/yyyy") ?? "-")</td>
@@ -158,6 +166,18 @@
                                             <span>Mở</span>
                                         </a>
 
+                                        @if (itemStatus == NhapKhoPhieuStatus.Imported)
+                                        {
+                                            <a class="table-action-button"
+                                               asp-action="Export"
+                                               asp-route-id="@item.Id"
+                                               target="_blank"
+                                               rel="noopener">
+                                                <i class="fa-solid fa-print" aria-hidden="true"></i>
+                                                <span>In</span>
+                                            </a>
+                                        }
+
                                         <form method="post" asp-action="Delete" class="inline-action-form">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="Id" value="@item.Id" />
@@ -166,7 +186,7 @@
                                             <input type="hidden" name="Page" value="@Model.CurrentPage" />
                                             <button type="submit"
                                                     class="table-action-button delete" asp-permission-action="delete"
-                                                    disabled="@(NhapKhoPhieuStatus.Normalize(item.TrangThaiPhieu) == NhapKhoPhieuStatus.Imported ? "disabled" : null)"
+                                                    disabled="@(itemStatus == NhapKhoPhieuStatus.Imported ? "disabled" : null)"
                                                     data-delete-confirm="Bạn có chắc muốn xóa phiếu nhập kho này?">
                                                 <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                                                 <span>Xóa</span>
@@ -242,7 +262,7 @@
                 </a>
             </div>
 
-            <form method="post" asp-action="@Model.SubmitAction" class="account-form crud-form" data-nhap-kho-form novalidate>
+            <form method="post" asp-action="@Model.SubmitAction" enctype="multipart/form-data" class="account-form crud-form" data-nhap-kho-form novalidate>
                 @Html.AntiForgeryToken()
 
                 <input asp-for="Form.Id" type="hidden" />
@@ -284,6 +304,15 @@
                                 role="tab"
                                 aria-selected="@(activeTab == "hang-hoa-nhap" ? "true" : "false")">
                             Hàng hóa nhập
+                        </button>
+
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "hinh-anh" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="hinh-anh"
+                                role="tab"
+                                aria-selected="@(activeTab == "hinh-anh" ? "true" : "false")">
+                            Hình ảnh
                         </button>
                     </div>
 
@@ -402,6 +431,7 @@
                                     <thead>
                                         <tr>
                                             <th>Hàng hóa</th>
+                                            <th>Phân loại</th>
                                             <th>Số lượng nhập</th>
                                             <th>Mã số lô</th>
                                             <th>Đơn vị tính</th>
@@ -421,6 +451,7 @@
                                         {
                                             var detail = Model.Form.Details[index];
                                             var hangHoaErrors = GetFieldErrors($"Form.Details[{index}].HangHoaId");
+                                            var phanLoaiErrors = GetFieldErrors($"Form.Details[{index}].PhanLoaiHangHoaId");
                                             var soLuongErrors = GetFieldErrors($"Form.Details[{index}].SoLuongNhap");
                                             var soLuongQuyDoiErrors = GetFieldErrors($"Form.Details[{index}].SoLuongQuyDoi");
                                             var donViNhapErrors = GetFieldErrors($"Form.Details[{index}].DonViNhapId");
@@ -431,6 +462,7 @@
                                             var donViTinhErrors = GetFieldErrors($"Form.Details[{index}].DonViTinhId");
                                             var loaiHinhErrors = GetFieldErrors($"Form.Details[{index}].LoaiHinhNhap");
                                             var hangHoaHasError = hangHoaErrors.Length > 0;
+                                            var phanLoaiHasError = phanLoaiErrors.Length > 0;
                                             var soLuongHasError = soLuongErrors.Length > 0;
                                             var soLuongQuyDoiHasError = soLuongQuyDoiErrors.Length > 0;
                                             var donViNhapHasError = donViNhapErrors.Length > 0;
@@ -453,12 +485,33 @@
                                                             <option value="">Chọn hàng hóa</option>
                                                             @foreach (var option in Model.HangHoaOptions)
                                                             {
-                                                                <option value="@option.Id" data-don-vi-tinh-id="@option.DonViTinhId" selected="@(detail.HangHoaId == option.Id ? "selected" : null)">@option.Label</option>
+                                                                <option value="@option.Id" data-don-vi-tinh-id="@option.DonViTinhId" data-loai-hinh-nhap="@option.LoaiHinhNhap" selected="@(detail.HangHoaId == option.Id ? "selected" : null)">@option.Label</option>
                                                             }
                                                         </select>
                                                         <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
                                                     </span>
                                                     @foreach (var message in hangHoaErrors)
+                                                    {
+                                                        <span class="login-field-error detail-field-error">@message</span>
+                                                    }
+                                                </td>
+                                                <td class="detail-field-cell @(phanLoaiHasError ? "has-error" : "")">
+                                                    <span class="login-input-shell select-shell">
+                                                        <select name="Form.Details[@index].PhanLoaiHangHoaId"
+                                                                class="@(phanLoaiHasError ? "input-validation-error" : null)"
+                                                                data-detail-phan-loai-hang-hoa-id
+                                                                aria-invalid="@(phanLoaiHasError ? "true" : "false")"
+                                                                required
+                                                                disabled="@(!isEditable ? "disabled" : null)">
+                                                            <option value="">Chọn phân loại</option>
+                                                            @foreach (var option in Model.PhanLoaiHangHoaOptions)
+                                                            {
+                                                                <option value="@option.Id" data-hang-hoa-id="@option.HangHoaId" selected="@(detail.PhanLoaiHangHoaId == option.Id ? "selected" : null)">@option.Label</option>
+                                                            }
+                                                        </select>
+                                                        <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                                    </span>
+                                                    @foreach (var message in phanLoaiErrors)
                                                     {
                                                         <span class="login-field-error detail-field-error">@message</span>
                                                     }
@@ -530,13 +583,13 @@
                                                     }
                                                 </td>
                                                 <td class="detail-field-cell @(loaiHinhHasError ? "has-error" : "")">
+                                                    <input type="hidden" name="Form.Details[@index].LoaiHinhNhap" value="@NhapKhoLoaiHinh.Normalize(detail.LoaiHinhNhap)" data-detail-loai-hinh-nhap-hidden />
                                                     <span class="login-input-shell select-shell">
-                                                        <select name="Form.Details[@index].LoaiHinhNhap"
-                                                                class="@(loaiHinhHasError ? "input-validation-error" : null)"
+                                                        <select class="@(loaiHinhHasError ? "input-validation-error" : null)"
                                                                 data-detail-loai-hinh-nhap
                                                                 aria-invalid="@(loaiHinhHasError ? "true" : "false")"
                                                                 required
-                                                                disabled="@(!isEditable ? "disabled" : null)">
+                                                                disabled="disabled">
                                                             <option value="">Chọn loại hình</option>
                                                             <option value="@NhapKhoLoaiHinh.NhapTungVatTu" selected="@(NhapKhoLoaiHinh.Normalize(detail.LoaiHinhNhap) == NhapKhoLoaiHinh.NhapTungVatTu ? "selected" : null)">Nhập từng vật tư</option>
                                                             <option value="@NhapKhoLoaiHinh.NhapTheoLo" selected="@(NhapKhoLoaiHinh.Normalize(detail.LoaiHinhNhap) == NhapKhoLoaiHinh.NhapTheoLo ? "selected" : null)">Nhập theo lô</option>
@@ -632,9 +685,121 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="crud-tab-panel @(activeTab == "hinh-anh" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="hinh-anh"
+                         role="tabpanel"
+                         @(activeTab == "hinh-anh" ? null : "hidden")>
+                        <div class="xuat-kho-detail-panel @(imageHasError ? "has-error" : "")"
+                             data-nhap-kho-image-manager
+                             data-phieu-id="@(Model.Form.Id?.ToString() ?? string.Empty)"
+                             data-upload-url="@Url.Action("UploadImage", "NhapKho")"
+                             data-delete-url="@Url.Action("DeleteImage", "NhapKho")">
+                            @if (isEditable || Model.PopupMode == NhapKhoPopupMode.Edit)
+                            {
+                                <div class="master-data-header-actions">
+                                    <label class="secondary-button image-upload-button" for="nhapKhoImageUpload">
+                                        <i class="fa-regular fa-images" aria-hidden="true"></i>
+                                        <span>Upload ảnh</span>
+                                    </label>
+                                    <button type="button" class="secondary-button image-upload-button" data-nhap-kho-camera-start>
+                                        <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                        <span>Mở camera</span>
+                                    </button>
+                                </div>
+                                <input id="nhapKhoImageUpload" class="image-upload-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple data-nhap-kho-image-input />
+                                <div class="document-camera-panel" data-nhap-kho-camera-panel hidden>
+                                    <video class="document-camera-video" data-nhap-kho-camera-video autoplay playsinline muted></video>
+                                    <canvas data-nhap-kho-camera-canvas hidden></canvas>
+                                    <div class="document-camera-actions">
+                                        <button type="button" class="primary-button" data-nhap-kho-camera-capture>
+                                            <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                            <span>Chụp hình</span>
+                                        </button>
+                                        <button type="button" class="secondary-button" data-nhap-kho-camera-stop>Dừng camera</button>
+                                    </div>
+                                </div>
+                            }
+
+                            <span asp-validation-for="Form.NewImageFiles" class="login-field-error"></span>
+                            @foreach (var imagePath in cachedImagePaths)
+                            {
+                                <input type="hidden" name="Form.UploadedImagePaths" value="@imagePath" data-cached-image-path="@imagePath" />
+                            }
+
+                            @if (Model.Form.ExistingImages.Count == 0 && cachedImagePaths.Length == 0)
+                            {
+                                <div class="master-data-empty xuat-kho-detail-empty">Chưa có hình ảnh chứng từ.</div>
+                            }
+                            else
+                            {
+                                <div class="vat-tu-image-grid">
+                                    @foreach (var image in Model.Form.ExistingImages)
+                                    {
+                                        <article class="vat-tu-image-card">
+                                            <a href="@image.ImagePath" target="_blank" rel="noopener">
+                                                <img src="@image.ImagePath" alt="Ảnh chứng từ nhập kho" loading="lazy" />
+                                            </a>
+                                            @if (isEditable || Model.PopupMode == NhapKhoPopupMode.Edit)
+                                            {
+                                                <div class="vat-tu-image-card-footer">
+                                                    <span class="vat-tu-image-badge">Đã lưu</span>
+                                                    <label class="login-checkbox">
+                                                        <input type="checkbox" name="Form.RemovedImagePaths" value="@image.ImagePath" />
+                                                        <span>Xóa</span>
+                                                    </label>
+                                                </div>
+                                            }
+                                        </article>
+                                    }
+                                </div>
+                            }
+
+                            @if (cachedImagePaths.Length > 0)
+                            {
+                                <div class="vat-tu-image-grid">
+                                    @foreach (var imagePath in cachedImagePaths)
+                                    {
+                                        <article class="vat-tu-image-card" data-image-path="@imagePath" data-cached="true">
+                                            <a href="@imagePath" target="_blank" rel="noopener">
+                                                <img src="@imagePath" alt="áº¢nh chá»©ng tá»« nháº­p kho" loading="lazy" />
+                                            </a>
+                                            <div class="vat-tu-image-card-footer">
+                                                <span class="vat-tu-image-badge">ÄÃ£ upload</span>
+                                                <button type="button" class="vat-tu-image-remove" data-nhap-kho-image-delete aria-label="XÃ³a hÃ¬nh áº£nh nÃ y">
+                                                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+
+                            @if (Model.PopupMode == NhapKhoPopupMode.Edit)
+                            {
+                                <div class="crud-modal-actions">
+                                    <button type="submit"
+                                            class="primary-button"
+                                            formaction="@Url.Action("UpdateImages", "NhapKho")"
+                                            data-processing-button
+                                            data-processing-text="Đang lưu">
+                                        <span class="button-content">
+                                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                            <span>Lưu hình ảnh</span>
+                                        </span>
+                                        <span class="button-processing" aria-hidden="true">
+                                            <span class="button-processing-dot"></span>
+                                            <span class="button-processing-text">Đang lưu</span>
+                                        </span>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
                 </div>
 
-                <div class="crud-modal-actions @(Model.PopupMode == NhapKhoPopupMode.Edit ? "has-export-action" : "")">
+                <div class="crud-modal-actions @(Model.PopupMode == NhapKhoPopupMode.Edit && currentStatus == NhapKhoPhieuStatus.Imported ? "has-export-action" : "")">
                     <a class="secondary-button crud-cancel-button"
                        asp-action="Index"
                        asp-route-keyword="@Model.Filter.Keyword"
@@ -643,7 +808,7 @@
                         Đóng
                     </a>
 
-                    @if (Model.PopupMode == NhapKhoPopupMode.Edit && Model.Form.Id.HasValue)
+                    @if (Model.PopupMode == NhapKhoPopupMode.Edit && Model.Form.Id.HasValue && currentStatus == NhapKhoPhieuStatus.Imported)
                     {
                         <a class="secondary-button xuat-kho-export-button"
                            asp-action="Export"
@@ -698,7 +863,19 @@
                                 <option value="">Chọn hàng hóa</option>
                                 @foreach (var option in Model.HangHoaOptions)
                                 {
-                                    <option value="@option.Id" data-don-vi-tinh-id="@option.DonViTinhId">@option.Label</option>
+                                    <option value="@option.Id" data-don-vi-tinh-id="@option.DonViTinhId" data-loai-hinh-nhap="@option.LoaiHinhNhap">@option.Label</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </td>
+                    <td class="detail-field-cell">
+                        <span class="login-input-shell select-shell">
+                            <select name="Form.Details[__index__].PhanLoaiHangHoaId" data-detail-phan-loai-hang-hoa-id required>
+                                <option value="">Chọn phân loại</option>
+                                @foreach (var option in Model.PhanLoaiHangHoaOptions)
+                                {
+                                    <option value="@option.Id" data-hang-hoa-id="@option.HangHoaId">@option.Label</option>
                                 }
                             </select>
                             <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
@@ -726,8 +903,9 @@
                         </span>
                     </td>
                     <td class="detail-field-cell">
+                        <input type="hidden" name="Form.Details[__index__].LoaiHinhNhap" data-detail-loai-hinh-nhap-hidden />
                         <span class="login-input-shell select-shell">
-                            <select name="Form.Details[__index__].LoaiHinhNhap" data-detail-loai-hinh-nhap required>
+                            <select data-detail-loai-hinh-nhap required disabled="disabled">
                                 <option value="">Chọn loại hình</option>
                                 <option value="@NhapKhoLoaiHinh.NhapTungVatTu">Nhập từng vật tư</option>
                                 <option value="@NhapKhoLoaiHinh.NhapTheoLo">Nhập theo lô</option>
@@ -800,9 +978,10 @@
                 }
 
                 const labels = [
+                    "Hàng hóa",
+                    "Phân loại",
                     "Loại hình nhập",
                     "Số chứng từ",
-                    "Hàng hóa",
                     "Đơn vị nhập",
                     "Đơn vị tính",
                     "Số lượng nhập",
@@ -849,9 +1028,10 @@
             };
             const syncDetailRowOrder = (row) => {
                 const orderedCells = [
+                    getCellBySelector(row, "[data-detail-hang-hoa-id]"),
+                    getCellBySelector(row, "[data-detail-phan-loai-hang-hoa-id]"),
                     getCellBySelector(row, "[data-detail-loai-hinh-nhap]"),
                     getCellBySelector(row, "[data-detail-document-number]"),
-                    getCellBySelector(row, "[data-detail-hang-hoa-id]"),
                     getCellBySelector(row, "[data-detail-don-vi-nhap-id]"),
                     getCellBySelector(row, "[data-detail-don-vi-tinh-id]"),
                     getCellBySelector(row, "[data-detail-quantity]"),
@@ -1060,7 +1240,35 @@
                 const hangHoaSelect = row.querySelector("[data-detail-hang-hoa-id]");
                 const donViTinhSelect = row.querySelector("[data-detail-don-vi-tinh-id]");
                 const donViNhapSelect = row.querySelector("[data-detail-don-vi-nhap-id]");
+                const phanLoaiSelect = row.querySelector("[data-detail-phan-loai-hang-hoa-id]");
+                const loaiHinhSelect = row.querySelector("[data-detail-loai-hinh-nhap]");
+                const loaiHinhHidden = row.querySelector("[data-detail-loai-hinh-nhap-hidden]");
                 if (hangHoaSelect instanceof HTMLSelectElement && donViTinhSelect instanceof HTMLSelectElement) {
+                    const syncLoaiHinhNhap = () => {
+                        const selected = hangHoaSelect.selectedOptions[0];
+                        const loaiHinhNhap = selected?.dataset.loaiHinhNhap || "";
+                        if (loaiHinhSelect instanceof HTMLSelectElement) {
+                            loaiHinhSelect.value = loaiHinhNhap;
+                            window.ApptechLiveSelect?.refresh(loaiHinhSelect);
+                        }
+                        if (loaiHinhHidden instanceof HTMLInputElement) {
+                            loaiHinhHidden.value = loaiHinhNhap;
+                        }
+                    };
+                    const syncPhanLoai = (resetValue) => {
+                        if (!(phanLoaiSelect instanceof HTMLSelectElement)) {
+                            return;
+                        }
+
+                        const hangHoaId = hangHoaSelect.value;
+                        Array.from(phanLoaiSelect.options).forEach((option) => {
+                            option.hidden = Boolean(option.value) && option.dataset.hangHoaId !== hangHoaId;
+                        });
+                        if (resetValue || (phanLoaiSelect.value && phanLoaiSelect.selectedOptions[0]?.hidden)) {
+                            phanLoaiSelect.value = "";
+                        }
+                        window.ApptechLiveSelect?.refresh(phanLoaiSelect);
+                    };
                     const syncDonViTinh = () => {
                         const selected = hangHoaSelect.selectedOptions[0];
                         const donViTinhId = selected?.dataset.donViTinhId;
@@ -1073,6 +1281,8 @@
                             donViNhapSelect.value = donViTinhId;
                             window.ApptechLiveSelect?.refresh(donViNhapSelect);
                         }
+                        syncLoaiHinhNhap();
+                        syncPhanLoai(false);
                     };
                     hangHoaSelect.addEventListener("change", () => {
                         const selected = hangHoaSelect.selectedOptions[0];
@@ -1084,6 +1294,8 @@
                             donViNhapSelect.value = donViTinhId || "";
                             window.ApptechLiveSelect?.refresh(donViNhapSelect);
                         }
+                        syncLoaiHinhNhap();
+                        syncPhanLoai(true);
                     });
                     syncDonViTinh();
                 }
@@ -1185,6 +1397,287 @@
                     }
                 });
             });
+        })();
+
+        (() => {
+            const form = document.querySelector("[data-nhap-kho-form]");
+            const uploadInputs = Array.from(document.querySelectorAll("#nhapKhoImageUpload"));
+            if (!(form instanceof HTMLFormElement) || uploadInputs.length === 0) {
+                return;
+            }
+
+            const token = form.querySelector('input[name="__RequestVerificationToken"]')?.value || "";
+            const phieuId = form.querySelector('input[name="Form.Id"]')?.value || "";
+            const uploadUrl = "@Url.Action("UploadImage", "NhapKho")";
+            const deleteUrl = "@Url.Action("DeleteImage", "NhapKho")";
+            const imagePanel = uploadInputs[0].closest(".xuat-kho-detail-panel");
+            const cameraStart = imagePanel?.querySelector("[data-nhap-kho-camera-start]");
+            const cameraPanel = imagePanel?.querySelector("[data-nhap-kho-camera-panel]");
+            const cameraVideo = imagePanel?.querySelector("[data-nhap-kho-camera-video]");
+            const cameraCanvas = imagePanel?.querySelector("[data-nhap-kho-camera-canvas]");
+            const cameraCapture = imagePanel?.querySelector("[data-nhap-kho-camera-capture]");
+            const cameraStop = imagePanel?.querySelector("[data-nhap-kho-camera-stop]");
+            const saveImageActions = imagePanel?.querySelector('button[formaction*="UpdateImages"]')?.closest(".crud-modal-actions");
+            saveImageActions?.remove();
+            let cameraStream = null;
+
+            let empty = imagePanel?.querySelector(".master-data-empty");
+            let grid = imagePanel?.querySelector(".vat-tu-image-grid");
+            const hiddenHost = document.createElement("div");
+            hiddenHost.dataset.nhapKhoCachedImageFields = "";
+            form.appendChild(hiddenHost);
+
+            const status = document.createElement("div");
+            status.className = "page-alert info xuat-kho-client-validation";
+            status.hidden = true;
+            imagePanel?.insertBefore(status, empty ?? grid ?? null);
+
+            if (!grid && imagePanel) {
+                grid = document.createElement("div");
+                grid.className = "vat-tu-image-grid";
+                imagePanel.insertBefore(grid, empty?.nextSibling ?? null);
+            }
+
+            const setStatus = (message, isError = false) => {
+                status.textContent = message;
+                status.classList.toggle("error", isError);
+                status.classList.toggle("info", !isError);
+                status.hidden = !message;
+            };
+
+            const updateEmpty = () => {
+                if (empty instanceof HTMLElement) {
+                    empty.classList.toggle("is-hidden", Boolean(imagePanel?.querySelector(".vat-tu-image-card")));
+                }
+            };
+
+            const createHiddenPath = (imagePath) => {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "Form.UploadedImagePaths";
+                input.value = imagePath;
+                input.dataset.cachedImagePath = imagePath;
+                hiddenHost.appendChild(input);
+            };
+
+            const removeHiddenPath = (imagePath) => {
+                form.querySelectorAll(`[data-cached-image-path="${CSS.escape(imagePath)}"]`).forEach((input) => input.remove());
+            };
+
+            const addCard = (imagePath, cached) => {
+                if (!grid) {
+                    return;
+                }
+
+                const card = document.createElement("article");
+                card.className = "vat-tu-image-card";
+                card.dataset.imagePath = imagePath;
+                card.dataset.cached = cached ? "true" : "false";
+                card.innerHTML = `
+                    <a href="${imagePath}" target="_blank" rel="noopener">
+                        <img src="${imagePath}" alt="Ảnh chứng từ nhập kho" loading="lazy" />
+                    </a>
+                    <div class="vat-tu-image-card-footer">
+                        <span class="vat-tu-image-badge">${cached ? "Đã upload" : "Đã lưu"}</span>
+                        <button type="button" class="vat-tu-image-remove" data-nhap-kho-image-delete aria-label="Xóa hình ảnh này">
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        </button>
+                    </div>`;
+                grid.appendChild(card);
+                updateEmpty();
+            };
+
+            const uploadFile = async (file) => {
+                const body = new FormData();
+                body.append("__RequestVerificationToken", token);
+                body.append("file", file);
+                if (phieuId) {
+                    body.append("phieuId", phieuId);
+                }
+
+                const response = await fetch(uploadUrl, {
+                    method: "POST",
+                    body,
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const data = await response.json().catch(() => null);
+                if (!response.ok || !data?.succeeded) {
+                    throw new Error(data?.message || "Không thể upload ảnh.");
+                }
+
+                const imagePath = data.image?.imagePath;
+                if (!imagePath) {
+                    throw new Error("Server không trả về đường dẫn ảnh.");
+                }
+
+                if (data.cached) {
+                    createHiddenPath(imagePath);
+                }
+
+                addCard(imagePath, Boolean(data.cached));
+            };
+
+            const stopCamera = () => {
+                cameraStream?.getTracks().forEach((track) => track.stop());
+                cameraStream = null;
+                if (cameraVideo instanceof HTMLVideoElement) {
+                    cameraVideo.srcObject = null;
+                }
+                if (cameraPanel instanceof HTMLElement) {
+                    cameraPanel.hidden = true;
+                }
+            };
+
+            const startCamera = async () => {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new Error("Trình duyệt không hỗ trợ mở camera.");
+                }
+                if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+                    throw new Error("Camera chỉ hoạt động trên HTTPS hoặc localhost.");
+                }
+
+                stopCamera();
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false
+                });
+                if (cameraVideo instanceof HTMLVideoElement) {
+                    cameraVideo.srcObject = cameraStream;
+                    await cameraVideo.play();
+                }
+                if (cameraPanel instanceof HTMLElement) {
+                    cameraPanel.hidden = false;
+                }
+            };
+
+            const captureCameraImage = async () => {
+                if (!(cameraVideo instanceof HTMLVideoElement) || !(cameraCanvas instanceof HTMLCanvasElement)) {
+                    throw new Error("Không tìm thấy khung camera.");
+                }
+                if (!cameraStream || cameraVideo.videoWidth <= 0 || cameraVideo.videoHeight <= 0) {
+                    throw new Error("Camera chưa sẵn sàng để chụp.");
+                }
+
+                cameraCanvas.width = cameraVideo.videoWidth;
+                cameraCanvas.height = cameraVideo.videoHeight;
+                const context = cameraCanvas.getContext("2d");
+                context?.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+                const blob = await new Promise((resolve) => cameraCanvas.toBlob(resolve, "image/jpeg", 0.9));
+                if (!(blob instanceof Blob)) {
+                    throw new Error("Không thể tạo ảnh từ camera.");
+                }
+
+                return new File([blob], `camera-${Date.now()}.jpg`, { type: "image/jpeg" });
+            };
+
+            uploadInputs.forEach((input) => {
+                input.addEventListener("change", async () => {
+                    const files = Array.from(input.files ?? []);
+                    if (files.length === 0) {
+                        return;
+                    }
+
+                    input.value = "";
+                    setStatus("Đang upload ảnh...");
+                    try {
+                        for (const file of files) {
+                            await uploadFile(file);
+                        }
+                        setStatus("Đã upload ảnh.");
+                    } catch (error) {
+                        setStatus(error instanceof Error ? error.message : "Không thể upload ảnh.", true);
+                    }
+                });
+            });
+
+            cameraStart?.addEventListener("click", async () => {
+                setStatus("Đang mở camera...");
+                try {
+                    await startCamera();
+                    setStatus("Camera đã sẵn sàng. Bấm Chụp hình để lưu ảnh.");
+                } catch (error) {
+                    setStatus(error instanceof Error ? error.message : "Không thể mở camera.", true);
+                }
+            });
+
+            cameraCapture?.addEventListener("click", async () => {
+                setStatus("Đang chụp và upload ảnh...");
+                try {
+                    const file = await captureCameraImage();
+                    await uploadFile(file);
+                    setStatus("Đã chụp và upload ảnh.");
+                } catch (error) {
+                    setStatus(error instanceof Error ? error.message : "Không thể chụp ảnh.", true);
+                }
+            });
+
+            cameraStop?.addEventListener("click", () => {
+                stopCamera();
+                setStatus("Đã dừng camera.");
+            });
+
+            window.addEventListener("pagehide", stopCamera);
+
+            grid?.querySelectorAll('.login-checkbox input[name="Form.RemovedImagePaths"]').forEach((checkbox) => {
+                const card = checkbox.closest(".vat-tu-image-card");
+                const imagePath = checkbox.value;
+                const footer = checkbox.closest(".vat-tu-image-card-footer");
+                if (!(card instanceof HTMLElement) || !(footer instanceof HTMLElement) || !imagePath) {
+                    return;
+                }
+
+                card.dataset.imagePath = imagePath;
+                footer.innerHTML = `
+                    <span class="vat-tu-image-badge">Đã lưu</span>
+                    <button type="button" class="vat-tu-image-remove" data-nhap-kho-image-delete aria-label="Xóa hình ảnh này">
+                        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                    </button>`;
+            });
+
+            imagePanel?.addEventListener("click", async (event) => {
+                const button = event.target instanceof Element ? event.target.closest("[data-nhap-kho-image-delete]") : null;
+                if (!(button instanceof HTMLButtonElement)) {
+                    return;
+                }
+
+                const card = button.closest(".vat-tu-image-card");
+                const imagePath = card instanceof HTMLElement ? card.dataset.imagePath : "";
+                if (!imagePath) {
+                    return;
+                }
+
+                button.disabled = true;
+                setStatus("Đang xóa ảnh...");
+
+                const body = new FormData();
+                body.append("__RequestVerificationToken", token);
+                body.append("imagePath", imagePath);
+                if (phieuId) {
+                    body.append("phieuId", phieuId);
+                }
+
+                try {
+                    const response = await fetch(deleteUrl, {
+                        method: "POST",
+                        body,
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    });
+                    const data = await response.json().catch(() => null);
+                    if (!response.ok || !data?.succeeded) {
+                        throw new Error(data?.message || "Không thể xóa ảnh.");
+                    }
+
+                    removeHiddenPath(imagePath);
+                    card?.remove();
+                    updateEmpty();
+                    setStatus("Đã xóa ảnh.");
+                } catch (error) {
+                    button.disabled = false;
+                    setStatus(error instanceof Error ? error.message : "Không thể xóa ảnh.", true);
+                }
+            });
+
+            updateEmpty();
         })();
     </script>
 }

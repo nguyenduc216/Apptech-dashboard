@@ -458,6 +458,14 @@ public sealed class XuatKhoService(
             }
 
             await ReplaceDetailsAsync(connection, transaction, newId, normalizedDetails, cancellationToken);
+            await SyncImagesAsync(
+                connection,
+                transaction,
+                newId,
+                NhapXuatImageLoaiPhieu.Xuat,
+                model.RemovedImagePaths,
+                model.UploadedImagePaths,
+                cancellationToken);
             await _commonAuditService.WriteAsync(
                 connection,
                 transaction,
@@ -567,6 +575,14 @@ public sealed class XuatKhoService(
             }
 
             await ReplaceDetailsAsync(connection, transaction, model.Id.Value, normalizedDetails, cancellationToken);
+            await SyncImagesAsync(
+                connection,
+                transaction,
+                model.Id.Value,
+                NhapXuatImageLoaiPhieu.Xuat,
+                model.RemovedImagePaths,
+                model.UploadedImagePaths,
+                cancellationToken);
 
             if (targetStatus == XuatKhoPhieuStatus.Exported)
             {
@@ -608,6 +624,7 @@ public sealed class XuatKhoService(
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            await EnsureSchemaAsync(connection, transaction, cancellationToken);
 
             var currentStatus = XuatKhoPhieuStatus.Normalize(await LoadStatusAsync(connection, transaction, id, cancellationToken));
             if (currentStatus == XuatKhoPhieuStatus.Exported)
@@ -622,10 +639,15 @@ public sealed class XuatKhoService(
                 DELETE FROM [{DetailTableName}]
                 WHERE IDPhieuXuatKho = @Id;
 
+                DELETE FROM [{NhapXuatImageService.TableName}]
+                WHERE IDPhieu = @Id
+                  AND LoaiPhieu = @LoaiPhieu;
+
                 DELETE FROM [{HeaderTableName}]
                 WHERE ID = @Id;
                 """;
             command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+            command.Parameters.Add(new SqlParameter("@LoaiPhieu", SqlDbType.NVarChar, 20) { Value = NhapXuatImageLoaiPhieu.Xuat });
 
             var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
             if (affectedRows <= 0)
@@ -1063,6 +1085,7 @@ public sealed class XuatKhoService(
         SqlTransaction? transaction,
         CancellationToken cancellationToken)
     {
+        await NhapXuatImageService.EnsureSchemaAsync(connection, transaction, cancellationToken);
         await EnsureColumnAsync(connection, transaction, HeaderTableName, "NguoiNhanHang", "nvarchar(250) NULL", cancellationToken);
         await EnsureColumnAsync(connection, transaction, HeaderTableName, "DiaChiNguoiNhanHang", "nvarchar(550) NULL", cancellationToken);
         await EnsureColumnAsync(connection, transaction, HeaderTableName, "MucDichXuat", "nvarchar(50) NOT NULL CONSTRAINT DF_TblPhieuXuatKho_MucDichXuat DEFAULT('xuat-ban-hang')", cancellationToken);
@@ -1104,6 +1127,83 @@ public sealed class XuatKhoService(
         command.Transaction = transaction;
         command.CommandText = $"ALTER TABLE [dbo].[{tableName}] ADD [{columnName}] {definition};";
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task SyncImagesAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int phieuId,
+        string loaiPhieu,
+        IEnumerable<string>? removedImagePaths,
+        IEnumerable<string>? uploadedImagePaths,
+        CancellationToken cancellationToken)
+    {
+        var removedPaths = NormalizeImagePaths(removedImagePaths);
+        if (removedPaths.Count > 0)
+        {
+            await using var deleteCommand = connection.CreateCommand();
+            deleteCommand.Transaction = transaction;
+            deleteCommand.Parameters.Add(new SqlParameter("@IDPhieu", SqlDbType.Int) { Value = phieuId });
+            deleteCommand.Parameters.Add(new SqlParameter("@LoaiPhieu", SqlDbType.NVarChar, 20) { Value = loaiPhieu });
+
+            var parameterNames = new List<string>();
+            for (var index = 0; index < removedPaths.Count; index++)
+            {
+                var parameterName = $"@RemoveImage{index}";
+                parameterNames.Add(parameterName);
+                deleteCommand.Parameters.Add(new SqlParameter(parameterName, SqlDbType.NVarChar, 550) { Value = removedPaths[index] });
+            }
+
+            deleteCommand.CommandText = $"""
+                DELETE FROM [{NhapXuatImageService.TableName}]
+                WHERE IDPhieu = @IDPhieu
+                  AND LoaiPhieu = @LoaiPhieu
+                  AND ImagePath IN ({string.Join(", ", parameterNames)})
+                """;
+            await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        foreach (var imagePath in NormalizeImagePaths(uploadedImagePaths))
+        {
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.Transaction = transaction;
+            insertCommand.CommandText = $"""
+                INSERT INTO [{NhapXuatImageService.TableName}] (
+                    IDPhieu,
+                    LoaiPhieu,
+                    ImagePath
+                )
+                VALUES (
+                    @IDPhieu,
+                    @LoaiPhieu,
+                    @ImagePath
+                )
+                """;
+            insertCommand.Parameters.Add(new SqlParameter("@IDPhieu", SqlDbType.Int) { Value = phieuId });
+            insertCommand.Parameters.Add(new SqlParameter("@LoaiPhieu", SqlDbType.NVarChar, 20) { Value = loaiPhieu });
+            insertCommand.Parameters.Add(new SqlParameter("@ImagePath", SqlDbType.NVarChar, 550) { Value = imagePath });
+            await insertCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static List<string> NormalizeImagePaths(IEnumerable<string>? imagePaths)
+    {
+        var result = new List<string>();
+        foreach (var imagePath in imagePaths ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(imagePath))
+            {
+                continue;
+            }
+
+            var normalized = imagePath.Trim();
+            if (!result.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result;
     }
 
     private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)

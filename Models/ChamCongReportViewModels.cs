@@ -46,6 +46,7 @@ public sealed class ChamCongReportEmployeeRow
     public Dictionary<int, decimal> HoursByDay { get; set; } = [];
     public Dictionary<int, int> LateEarlyMinutesByDay { get; set; } = [];
     public Dictionary<int, ChamCongReportCount> CountsByDay { get; set; } = [];
+    public Dictionary<int, List<ChamCongReportCheckinDetail>> DetailsByDay { get; set; } = [];
     public decimal TotalHours => HoursByDay.Values.Sum();
     public int TotalLateEarlyMinutes => LateEarlyMinutesByDay.Values.Sum();
     public int TotalCheckinCount => CountsByDay.Values.Sum(item => item.CheckinCount);
@@ -64,4 +65,14 @@ public sealed class ChamCongReportCount
 {
     public int CheckinCount { get; set; }
     public int CheckoutCount { get; set; }
+}
+
+public sealed class ChamCongReportCheckinDetail
+{
+    public DateTime? CheckinTime { get; set; }
+    public DateTime? CheckoutTime { get; set; }
+    public string? CheckinImage { get; set; }
+    public string? CheckoutImage { get; set; }
+    public string? CheckinNote { get; set; }
+    public string? CheckoutNote { get; set; }
 }

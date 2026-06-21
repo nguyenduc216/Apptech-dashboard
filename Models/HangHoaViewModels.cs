@@ -32,6 +32,7 @@ public sealed class HangHoaListItem
     public int Id { get; set; }
     public string TenHangHoa { get; set; } = string.Empty;
     public string? MaHangHoa { get; set; }
+    public string LoaiHinhNhap { get; set; } = NhapKhoLoaiHinh.NhapTheoLo;
     public int? DonViTinhId { get; set; }
     public string? TenDonViTinh { get; set; }
     public string? TenVietTatDonViTinh { get; set; }
@@ -54,6 +55,9 @@ public sealed class HangHoaFormModel
     [StringLength(50, ErrorMessage = "Mã hàng hóa tối đa 50 ký tự.")]
     public string? MaHangHoa { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng chọn loại hình nhập.")]
+    public string LoaiHinhNhap { get; set; } = NhapKhoLoaiHinh.NhapTheoLo;
+
     [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn đơn vị tính.")]
     public int? DonViTinhId { get; set; }
 
@@ -61,9 +65,21 @@ public sealed class HangHoaFormModel
     public IFormFile? ImageFile { get; set; }
 
     public bool TrangThaiSuDung { get; set; } = true;
+    public string ActiveTab { get; set; } = "thong-tin";
+    public List<HangHoaPhanLoaiModel> PhanLoai { get; set; } = [];
     public string? Keyword { get; set; }
     public bool? StatusFilter { get; set; }
     public int Page { get; set; } = 1;
+}
+
+public sealed class HangHoaPhanLoaiModel
+{
+    public int? Id { get; set; }
+
+    [StringLength(250, ErrorMessage = "TÃªn phÃ¢n loáº¡i tá»‘i Ä‘a 250 kÃ½ tá»±.")]
+    public string? TenPhanLoai { get; set; }
+
+    public bool TrangThaiSuDung { get; set; } = true;
 }
 
 public sealed class HangHoaDeleteModel
@@ -79,6 +95,14 @@ public sealed class HangHoaImportRow
     public string TenHangHoa { get; set; } = string.Empty;
     public string? MaHangHoa { get; set; }
     public string? DonViTinh { get; set; }
+    public string? TenKho { get; set; }
+    public string? TenPhanLoai { get; set; }
+    public string? TenChiTiet { get; set; }
+    public decimal? TonKhoDauKy { get; set; }
+    public string? SheetName { get; set; }
+    public int RowNumber { get; set; }
+    public IReadOnlyList<string> SourceHeaders { get; set; } = [];
+    public IReadOnlyList<string?> SourceValues { get; set; } = [];
 }
 
 public sealed class HangHoaImportResult
@@ -86,6 +110,18 @@ public sealed class HangHoaImportResult
     public int ImportedCount { get; set; }
     public int SkippedCount { get; set; }
     public List<string> FailedCodes { get; set; } = [];
+    public List<HangHoaImportRowResult> Rows { get; set; } = [];
+    public byte[]? ResultFileContent { get; set; }
+    public string? ResultFileName { get; set; }
+}
+
+public sealed class HangHoaImportRowResult
+{
+    public HangHoaImportRow Row { get; set; } = new();
+    public bool Succeeded { get; set; }
+    public bool Skipped { get; set; }
+    public string Result { get; set; } = string.Empty;
+    public string Note { get; set; } = string.Empty;
 }
 
 public sealed class HangHoaLookupOption

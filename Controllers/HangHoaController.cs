@@ -47,10 +47,13 @@ public class HangHoaController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind(Prefix = "Form")] HangHoaFormModel model)
     {
+        model.LoaiHinhNhap = NhapKhoLoaiHinh.Normalize(model.LoaiHinhNhap);
         ValidateImage(model.ImageFile);
+        NormalizePhanLoai(model);
 
         if (!ModelState.IsValid)
         {
+            model.ActiveTab = ResolveActiveTab();
             return View("Index", await BuildPageModelForPostbackAsync(model, HangHoaPopupMode.Create, HttpContext.RequestAborted));
         }
 
@@ -89,6 +92,7 @@ public class HangHoaController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Update([Bind(Prefix = "Form")] HangHoaFormModel model)
     {
+        model.LoaiHinhNhap = NhapKhoLoaiHinh.Normalize(model.LoaiHinhNhap);
         var existingItem = model.Id.HasValue
             ? await _hangHoaService.GetByIdAsync(model.Id.Value, HttpContext.RequestAborted)
             : null;
@@ -99,9 +103,11 @@ public class HangHoaController(
         }
 
         ValidateImage(model.ImageFile);
+        NormalizePhanLoai(model);
 
         if (!ModelState.IsValid)
         {
+            model.ActiveTab = ResolveActiveTab();
             return View("Index", await BuildPageModelForPostbackAsync(model, HangHoaPopupMode.Edit, HttpContext.RequestAborted));
         }
 
@@ -201,9 +207,12 @@ public class HangHoaController(
             }
 
             var result = await _hangHoaService.ImportAsync(rows, GetCurrentAuditUser(), HttpContext.RequestAborted);
-            TempData["StatusMessage"] = BuildImportStatusMessage(result);
-            TempData["StatusType"] = result.ImportedCount > 0 ? "success" : "error";
-            return RedirectToAction(nameof(Index), BuildRouteValues(keyword, statusFilter, page));
+            var resultBytes = _simpleExcelService.BuildHangHoaImportResult(result.Rows);
+            var fileName = $"hang-hoa-import-result-{DateTime.Now:yyyyMMddHHmmss}.xlsx";
+            return File(
+                resultBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
         }
         catch
         {
@@ -235,6 +244,7 @@ public class HangHoaController(
             Form = new HangHoaFormModel
             {
                 TrangThaiSuDung = true,
+                LoaiHinhNhap = NhapKhoLoaiHinh.NhapTheoLo,
                 Keyword = query.Keyword,
                 StatusFilter = query.StatusFilter,
                 Page = currentPage
@@ -265,15 +275,18 @@ public class HangHoaController(
             return model;
         }
 
+        var phanLoai = await _hangHoaService.GetPhanLoaiAsync(item.Id, cancellationToken);
         model.PopupMode = HangHoaPopupMode.Edit;
         model.Form = new HangHoaFormModel
         {
             Id = item.Id,
             TenHangHoa = item.TenHangHoa,
             MaHangHoa = item.MaHangHoa,
+            LoaiHinhNhap = item.LoaiHinhNhap,
             DonViTinhId = item.DonViTinhId,
             ImageUrl = item.ImageUrl,
             TrangThaiSuDung = item.TrangThaiSuDung,
+            PhanLoai = phanLoai.ToList(),
             Keyword = query.Keyword,
             StatusFilter = query.StatusFilter,
             Page = currentPage
@@ -326,6 +339,35 @@ public class HangHoaController(
             statusFilter,
             page = Math.Max(page, 1)
         };
+    }
+
+    private void NormalizePhanLoai(HangHoaFormModel model)
+    {
+        model.PhanLoai = model.PhanLoai
+            .Where(item => !string.IsNullOrWhiteSpace(item.TenPhanLoai))
+            .Select(item => new HangHoaPhanLoaiModel
+            {
+                Id = item.Id,
+                TenPhanLoai = item.TenPhanLoai?.Trim(),
+                TrangThaiSuDung = item.TrangThaiSuDung
+            })
+            .ToList();
+
+        for (var index = 0; index < model.PhanLoai.Count; index++)
+        {
+            if (model.PhanLoai[index].TenPhanLoai?.Length > 250)
+            {
+                ModelState.AddModelError($"Form.PhanLoai[{index}].TenPhanLoai", "TÃªn phÃ¢n loáº¡i tá»‘i Ä‘a 250 kÃ½ tá»±.");
+            }
+        }
+    }
+
+    private string ResolveActiveTab()
+    {
+        var activeTab = Request.Form["Form.ActiveTab"].ToString();
+        return string.Equals(activeTab, "phan-loai", StringComparison.OrdinalIgnoreCase)
+            ? "phan-loai"
+            : "thong-tin";
     }
 
     private string GetCurrentAuditUser()

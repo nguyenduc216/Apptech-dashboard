@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
@@ -18,6 +18,7 @@ public interface ISimpleExcelService
     IReadOnlyList<KhoImportRow> ReadKhoTemplate(Stream stream);
     byte[] BuildHangHoaTemplate();
     IReadOnlyList<HangHoaImportRow> ReadHangHoaTemplate(Stream stream);
+    byte[] BuildHangHoaImportResult(IReadOnlyList<HangHoaImportRowResult> rows);
 }
 
 public sealed class SimpleExcelService : ISimpleExcelService
@@ -29,7 +30,7 @@ public sealed class SimpleExcelService : ISimpleExcelService
 
     public byte[] BuildDonViTinhTemplate()
     {
-        return BuildTemplate("DonViTinh", "Tên đơn vị", "Mã đơn vị");
+        return BuildTemplate("DonViTinh", "TÃªn Ä‘Æ¡n vá»‹", "MÃ£ Ä‘Æ¡n vá»‹");
     }
 
     public IReadOnlyList<DonViTinhImportRow> ReadDonViTinhTemplate(Stream stream)
@@ -47,7 +48,7 @@ public sealed class SimpleExcelService : ISimpleExcelService
 
     public byte[] BuildPhongBanTemplate()
     {
-        return BuildTemplate("PhongBan", "Tên phòng ban", "Mã phòng ban");
+        return BuildTemplate("PhongBan", "TÃªn phÃ²ng ban", "MÃ£ phÃ²ng ban");
     }
 
     public IReadOnlyList<PhongBanImportRow> ReadPhongBanTemplate(Stream stream)
@@ -67,11 +68,11 @@ public sealed class SimpleExcelService : ISimpleExcelService
     {
         return BuildTemplate(
             "CongViec",
-            "Tên công việc",
-            "Mô tả",
-            "Đơn giá",
-            "Số lượng ảnh check-in",
-            "Số lượng ảnh check-out");
+            "TÃªn cÃ´ng viá»‡c",
+            "MÃ´ táº£",
+            "ÄÆ¡n giÃ¡",
+            "Sá»‘ lÆ°á»£ng áº£nh check-in",
+            "Sá»‘ lÆ°á»£ng áº£nh check-out");
     }
 
     public IReadOnlyList<CongViecImportRow> ReadCongViecTemplate(Stream stream)
@@ -99,7 +100,7 @@ public sealed class SimpleExcelService : ISimpleExcelService
 
     public byte[] BuildKhoTemplate()
     {
-        return BuildTemplate("Kho", "Tên kho", "Mã kho");
+        return BuildTemplate("Kho", "TÃªn kho", "MÃ£ kho");
     }
 
     public IReadOnlyList<KhoImportRow> ReadKhoTemplate(Stream stream)
@@ -117,24 +118,93 @@ public sealed class SimpleExcelService : ISimpleExcelService
 
     public byte[] BuildHangHoaTemplate()
     {
-        return BuildTemplate("HangHoa", "Tên hàng hóa", "Mã hàng hóa", "Đơn vị tính");
+        return BuildTemplate(
+            "HangHoa",
+            "STT",
+            "Ngay nhap",
+            "Chi tiet SP",
+            "Ten SP",
+            "Phan loai",
+            "MSP",
+            "Ton kho dau ky",
+            "DVT",
+            "Loai hinh",
+            "Ten Kho");
     }
 
     public IReadOnlyList<HangHoaImportRow> ReadHangHoaTemplate(Stream stream)
     {
-        var rows = ReadTemplate(
-            stream,
-            ["tenhanghoa", "mahanghoa"],
-            ["donvitinh"]);
+        var rows = ReadHangHoaWorkbookRows(stream);
         return rows
             .Select(row => new HangHoaImportRow
             {
-                TenHangHoa = GetValue(row, "tenhanghoa") ?? string.Empty,
-                MaHangHoa = GetValue(row, "mahanghoa"),
-                DonViTinh = GetValue(row, "donvitinh")
+                TenHangHoa = GetValue(row.Values, "tensp") ?? GetValue(row.Values, "tenhanghoa") ?? string.Empty,
+                MaHangHoa = GetValue(row.Values, "msp") ?? GetValue(row.Values, "mahanghoa"),
+                DonViTinh = GetValue(row.Values, "dvt") ?? GetValue(row.Values, "donvitinh"),
+                TenKho = GetValue(row.Values, "tenkho"),
+                TenPhanLoai = GetValue(row.Values, "phanloai"),
+                TenChiTiet = GetValue(row.Values, "chitietsp"),
+                TonKhoDauKy = ParseNullableDecimal(GetValue(row.Values, "tonkhodauky")),
+                SheetName = row.SheetName,
+                RowNumber = row.RowNumber,
+                SourceHeaders = row.SourceHeaders,
+                SourceValues = row.SourceValues
             })
-            .Where(row => !string.IsNullOrWhiteSpace(row.TenHangHoa))
+            .Where(row =>
+                !string.IsNullOrWhiteSpace(row.TenHangHoa) ||
+                !string.IsNullOrWhiteSpace(row.MaHangHoa) ||
+                !string.IsNullOrWhiteSpace(row.TenKho) ||
+                !string.IsNullOrWhiteSpace(row.DonViTinh))
             .ToArray();
+    }
+
+    public byte[] BuildHangHoaImportResult(IReadOnlyList<HangHoaImportRowResult> rows)
+    {
+        var sourceHeaders = rows
+            .SelectMany(row => row.Row.SourceHeaders)
+            .Where(header => !string.IsNullOrWhiteSpace(header))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (sourceHeaders.Length == 0)
+        {
+            sourceHeaders = ["Sheet", "Dong", "Ten SP", "Phan loai", "MSP", "Ton kho dau ky", "DVT", "Ten Kho"];
+        }
+
+        var headers = new[] { "Ket qua", "Ghi chu" }.Concat(sourceHeaders).ToArray();
+        var values = rows.Select(row =>
+        {
+            var sourceMap = row.Row.SourceHeaders
+                .Select((header, index) => new { header, index })
+                .Where(item => !string.IsNullOrWhiteSpace(item.header))
+                .GroupBy(item => item.header, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First().index, StringComparer.OrdinalIgnoreCase);
+            var line = new List<string?> { row.Result, row.Note };
+            foreach (var header in sourceHeaders)
+            {
+                if (sourceMap.TryGetValue(header, out var index) && index < row.Row.SourceValues.Count)
+                {
+                    line.Add(row.Row.SourceValues[index]);
+                    continue;
+                }
+
+                line.Add(header switch
+                {
+                    "Sheet" => row.Row.SheetName,
+                    "Dong" => row.Row.RowNumber > 0 ? row.Row.RowNumber.ToString(CultureInfo.InvariantCulture) : null,
+                    "Ten SP" => row.Row.TenHangHoa,
+                    "Phan loai" => row.Row.TenPhanLoai,
+                    "MSP" => row.Row.MaHangHoa,
+                    "Ton kho dau ky" => row.Row.TonKhoDauKy?.ToString(CultureInfo.InvariantCulture),
+                    "DVT" => row.Row.DonViTinh,
+                    "Ten Kho" => row.Row.TenKho,
+                    _ => null
+                });
+            }
+
+            return line;
+        }).ToArray();
+
+        return BuildWorkbook("KetQuaImportHangHoa", headers, values);
     }
 
     private static byte[] BuildTemplate(string sheetName, params string[] headers)
@@ -153,9 +223,141 @@ public sealed class SimpleExcelService : ISimpleExcelService
         return stream.ToArray();
     }
 
+    private static byte[] BuildWorkbook(
+        string sheetName,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<IReadOnlyList<string?>> rows)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            CreateEntry(archive, "[Content_Types].xml", BuildContentTypesXml());
+            CreateEntry(archive, "_rels/.rels", BuildRootRelationshipsXml());
+            CreateEntry(archive, "xl/workbook.xml", BuildWorkbookXml(sheetName));
+            CreateEntry(archive, "xl/_rels/workbook.xml.rels", BuildWorkbookRelationshipsXml());
+            CreateEntry(archive, "xl/styles.xml", BuildStylesXml());
+            CreateEntry(archive, "xl/worksheets/sheet1.xml", BuildWorksheetXml(headers, rows));
+        }
+
+        return stream.ToArray();
+    }
+
     private static IReadOnlyList<Dictionary<string, string?>> ReadTemplate(Stream stream, params string[] headerKeys)
     {
         return ReadTemplate(stream, headerKeys, null);
+    }
+
+    private static IReadOnlyList<HangHoaWorkbookRow> ReadHangHoaWorkbookRows(Stream stream)
+    {
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        var workbook = LoadXml(archive, "xl/workbook.xml");
+        var workbookRels = LoadXml(archive, "xl/_rels/workbook.xml.rels");
+        var sharedStrings = TryLoadSharedStrings(archive);
+        var items = new List<HangHoaWorkbookRow>();
+
+        var sheets = workbook.Root?
+            .Element(MainNs + "sheets")?
+            .Elements(MainNs + "sheet")
+            .ToArray() ?? [];
+
+        foreach (var sheet in sheets)
+        {
+            var relationshipId = sheet.Attribute(OfficeDocumentRelationshipsNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(relationshipId))
+            {
+                continue;
+            }
+
+            var worksheetPath = workbookRels.Root?
+                .Elements(RelationshipsNs + "Relationship")
+                .FirstOrDefault(element => string.Equals(element.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal))
+                ?.Attribute("Target")?.Value;
+
+            if (string.IsNullOrWhiteSpace(worksheetPath))
+            {
+                continue;
+            }
+
+            var normalizedWorksheetPath = worksheetPath.Replace("\\", "/", StringComparison.Ordinal);
+            if (!normalizedWorksheetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
+            {
+                normalizedWorksheetPath = $"xl/{normalizedWorksheetPath.TrimStart('/')}";
+            }
+
+            var worksheet = LoadXml(archive, normalizedWorksheetPath);
+            var rows = worksheet.Root?
+                .Element(MainNs + "sheetData")?
+                .Elements(MainNs + "row")
+                .ToList() ?? [];
+            if (rows.Count == 0)
+            {
+                continue;
+            }
+
+            var headerRowState = rows
+                .Select(row => new
+                {
+                    Row = row,
+                    Headers = ReadRowValues(row, sharedStrings)
+                })
+                .Select(item => new
+                {
+                    item.Row,
+                    item.Headers,
+                    Map = item.Headers
+                        .Select((value, index) => new { value, index })
+                        .Where(cell => !string.IsNullOrWhiteSpace(cell.value))
+                        .GroupBy(cell => NormalizeHeader(cell.value), StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(group => group.Key, group => group.First().index, StringComparer.OrdinalIgnoreCase)
+                })
+                .FirstOrDefault(item =>
+                    item.Map.ContainsKey("msp") &&
+                    item.Map.ContainsKey("tensp") &&
+                    item.Map.ContainsKey("dvt") &&
+                    item.Map.ContainsKey("tenkho") &&
+                    item.Map.ContainsKey("tonkhodauky"));
+
+            if (headerRowState is null)
+            {
+                continue;
+            }
+
+            var headerRowNumber = ParseRowNumber(headerRowState.Row);
+            var allKeys = new[] { "chitietsp", "tensp", "phanloai", "msp", "tonkhodauky", "dvt", "tenkho" };
+            var sourceHeaders = headerRowState.Headers
+                .Select(header => string.IsNullOrWhiteSpace(header) ? string.Empty : header.Trim())
+                .ToArray();
+
+            foreach (var row in rows.Where(row => ParseRowNumber(row) > headerRowNumber))
+            {
+                var values = ReadRowValues(row, sharedStrings);
+                if (values.All(value => string.IsNullOrWhiteSpace(value)))
+                {
+                    continue;
+                }
+
+                var item = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                foreach (var key in allKeys)
+                {
+                    item[key] = headerRowState.Map.TryGetValue(key, out var columnIndex) && columnIndex < values.Count
+                        ? values[columnIndex]?.Trim()
+                        : null;
+                }
+
+                items.Add(new HangHoaWorkbookRow
+                {
+                    SheetName = sheet.Attribute("name")?.Value,
+                    RowNumber = ParseRowNumber(row),
+                    Values = item,
+                    SourceHeaders = sourceHeaders,
+                    SourceValues = Enumerable.Range(0, sourceHeaders.Length)
+                        .Select(index => index < values.Count ? values[index]?.Trim() : null)
+                        .ToArray()
+                });
+            }
+        }
+
+        return items;
     }
 
     private static IReadOnlyList<Dictionary<string, string?>> ReadTemplate(
@@ -374,7 +576,7 @@ public sealed class SimpleExcelService : ISimpleExcelService
 
     private static string BuildWorksheetXml(params string[] headers)
     {
-        var headerValues = headers.Length == 0 ? ["Tên"] : headers;
+        var headerValues = headers.Length == 0 ? ["TÃªn"] : headers;
         var headerRow = new XElement(
             MainNs + "row",
             new XAttribute("r", "1"),
@@ -400,6 +602,50 @@ public sealed class SimpleExcelService : ISimpleExcelService
         return document.DeclarationAwareString();
     }
 
+    private static string BuildWorksheetXml(
+        IReadOnlyList<string> headers,
+        IReadOnlyList<IReadOnlyList<string?>> rows)
+    {
+        var headerValues = headers.Count == 0 ? ["Ten"] : headers;
+        var rowElements = new List<XElement>
+        {
+            new(
+                MainNs + "row",
+                new XAttribute("r", "1"),
+                headerValues.Select((value, index) => BuildInlineStringCell($"{GetColumnName(index)}1", value)))
+        };
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var rowNumber = rowIndex + 2;
+            rowElements.Add(new XElement(
+                MainNs + "row",
+                new XAttribute("r", rowNumber.ToString(CultureInfo.InvariantCulture)),
+                rows[rowIndex].Select((value, columnIndex) => BuildInlineStringCell(
+                    $"{GetColumnName(columnIndex)}{rowNumber}",
+                    value ?? string.Empty))));
+        }
+
+        var columns = new XElement(
+            MainNs + "cols",
+            headerValues.Select((_, index) => new XElement(
+                MainNs + "col",
+                new XAttribute("min", index + 1),
+                new XAttribute("max", index + 1),
+                new XAttribute("width", index == 0 ? "18" : index == 1 ? "42" : "20"),
+                new XAttribute("customWidth", "1"))));
+
+        var document = new XDocument(
+            new XElement(MainNs + "worksheet",
+                new XElement(MainNs + "sheetViews",
+                    new XElement(MainNs + "sheetView", new XAttribute("workbookViewId", "0"))),
+                new XElement(MainNs + "sheetFormatPr", new XAttribute("defaultRowHeight", "15")),
+                columns,
+                new XElement(MainNs + "sheetData", rowElements)));
+
+        return document.DeclarationAwareString();
+    }
+
     private static XElement BuildInlineStringCell(string reference, string value)
     {
         return new XElement(MainNs + "c",
@@ -411,7 +657,7 @@ public sealed class SimpleExcelService : ISimpleExcelService
     private static XDocument LoadXml(ZipArchive archive, string path)
     {
         var entry = archive.GetEntry(path)
-            ?? throw new InvalidDataException($"Không tìm thấy entry {path} trong file Excel.");
+            ?? throw new InvalidDataException($"KhÃ´ng tÃ¬m tháº¥y entry {path} trong file Excel.");
 
         using var stream = entry.Open();
         return XDocument.Load(stream);
@@ -461,6 +707,13 @@ public sealed class SimpleExcelService : ISimpleExcelService
         }
 
         return items;
+    }
+
+    private static int ParseRowNumber(XElement row)
+    {
+        return int.TryParse(row.Attribute("r")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber)
+            ? rowNumber
+            : 0;
     }
 
     private static string? GetCellValue(XElement cell, string[]? sharedStrings)
@@ -529,6 +782,12 @@ public sealed class SimpleExcelService : ISimpleExcelService
         var builder = new StringBuilder(normalized.Length);
         foreach (var character in normalized)
         {
+            if (character is 'Đ' or 'đ')
+            {
+                builder.Append('d');
+                continue;
+            }
+
             var category = CharUnicodeInfo.GetUnicodeCategory(character);
             if (category != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character))
             {
@@ -597,6 +856,15 @@ public sealed class SimpleExcelService : ISimpleExcelService
         var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
         using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         writer.Write(content);
+    }
+
+    private sealed class HangHoaWorkbookRow
+    {
+        public string? SheetName { get; init; }
+        public int RowNumber { get; init; }
+        public IReadOnlyDictionary<string, string?> Values { get; init; } = new Dictionary<string, string?>();
+        public IReadOnlyList<string> SourceHeaders { get; init; } = [];
+        public IReadOnlyList<string?> SourceValues { get; init; } = [];
     }
 }
 

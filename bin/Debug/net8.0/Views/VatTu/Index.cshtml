@@ -65,6 +65,25 @@
                     ? item.TenVietTatDonViTinh
                     : item.TenDonViTinh)
                 .FirstOrDefault(label => !string.IsNullOrWhiteSpace(label)),
+            WarehouseStocks = group
+                .GroupBy(item => new
+                {
+                    Name = string.IsNullOrWhiteSpace(item.TenKho) ? "Chưa gắn kho" : item.TenKho!,
+                    Code = item.MaKho
+                })
+                .Select(warehouseGroup => new
+                {
+                    warehouseGroup.Key.Name,
+                    warehouseGroup.Key.Code,
+                    TotalStock = warehouseGroup.Sum(item => item.SoLuongTon),
+                    UnitLabel = warehouseGroup
+                        .Select(item => !string.IsNullOrWhiteSpace(item.TenVietTatDonViTinh)
+                            ? item.TenVietTatDonViTinh
+                            : item.TenDonViTinh)
+                        .FirstOrDefault(label => !string.IsNullOrWhiteSpace(label))
+                })
+                .OrderBy(item => item.Name)
+                .ToArray(),
             Items = group.ToArray()
         })
         .ToArray();
@@ -72,6 +91,11 @@
     string FormatMoney(decimal value)
     {
         return value <= 0 ? "-" : value.ToString("#,##0.######", viCulture);
+    }
+
+    string FormatStock(decimal value, string? unitLabel)
+    {
+        return $"{value.ToString("0.##", viCulture)}{(!string.IsNullOrWhiteSpace(unitLabel) ? $" {unitLabel}" : string.Empty)}";
     }
 }
 
@@ -81,8 +105,11 @@
         display: none;
     }
 
-    .login-field:has(.fa-file-export),
-    .login-field:has([name="Form.TenChiTiet"]) {
+    .login-field:has(.fa-file-export) {
+        display: none;
+    }
+
+    .login-field:has(.readonly-shell .fa-cubes) {
         display: none;
     }
 </style>
@@ -208,7 +235,12 @@
                                 groupSummary += $" • {group.Code}";
                             }
 
-                            groupSummary += $" • Tồn {group.TotalStock:0.##}{(!string.IsNullOrWhiteSpace(group.UnitLabel) ? $" {group.UnitLabel}" : string.Empty)}";
+                            var warehouseStockSummary = string.Join("; ", group.WarehouseStocks.Select(warehouse =>
+                                $"{warehouse.Name}{(!string.IsNullOrWhiteSpace(warehouse.Code) ? $" ({warehouse.Code})" : string.Empty)} {FormatStock(warehouse.TotalStock, warehouse.UnitLabel)}"));
+
+                            groupSummary += string.IsNullOrWhiteSpace(warehouseStockSummary)
+                                ? $" • Tồn {FormatStock(group.TotalStock, group.UnitLabel)}"
+                                : $" • Tồn theo kho: {warehouseStockSummary}";
 
                             <tr class="vat-tu-group-row" data-vat-tu-group-row>
                                 <td colspan="@tableColumnCount" class="vat-tu-group-cell">
@@ -382,7 +414,12 @@
                         mobileGroupSummary += $" • {group.Code}";
                     }
 
-                    mobileGroupSummary += $" • Tồn {group.TotalStock:0.##}{(!string.IsNullOrWhiteSpace(group.UnitLabel) ? $" {group.UnitLabel}" : string.Empty)}";
+                    var mobileWarehouseStockSummary = string.Join("; ", group.WarehouseStocks.Select(warehouse =>
+                        $"{warehouse.Name}{(!string.IsNullOrWhiteSpace(warehouse.Code) ? $" ({warehouse.Code})" : string.Empty)} {FormatStock(warehouse.TotalStock, warehouse.UnitLabel)}"));
+
+                    mobileGroupSummary += string.IsNullOrWhiteSpace(mobileWarehouseStockSummary)
+                        ? $" • Tồn {FormatStock(group.TotalStock, group.UnitLabel)}"
+                        : $" • Tồn theo kho: {mobileWarehouseStockSummary}";
 
                     <section class="vat-tu-block-group">
                         <button type="button"
@@ -617,7 +654,6 @@
                     <input asp-for="Form.KhoId" type="hidden" />
                     <input asp-for="Form.HangHoaId" type="hidden" />
                     <input asp-for="Form.DonViTinhId" type="hidden" />
-                    <input asp-for="Form.TenChiTiet" type="hidden" />
                     <input asp-for="Form.SoLuongTon" type="hidden" />
                     <input asp-for="Form.MaSoLo" type="hidden" />
                 }
@@ -803,6 +839,15 @@
                             </label>
 
                             <label class="login-field">
+                                <span>Phân loại hàng hóa</span>
+                                <span class="login-input-shell readonly-shell">
+                                    <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                                    <input asp-for="Form.PhanLoaiHangHoaId" type="hidden" />
+                                    <input value="@(string.IsNullOrWhiteSpace(Model.Form.TenPhanLoaiHangHoa) ? "-" : Model.Form.TenPhanLoaiHangHoa)" readonly tabindex="-1" />
+                                </span>
+                            </label>
+
+                            <label class="login-field">
                                 <span>Phiếu nhập</span>
                                 <span class="login-input-shell readonly-shell">
                                     <i class="fa-solid fa-file-import" aria-hidden="true"></i>
@@ -881,7 +926,7 @@
                                 <span>Tên chi tiết</span>
                                 <span class="login-input-shell">
                                     <i class="fa-solid fa-cubes" aria-hidden="true"></i>
-                                    <input asp-for="Form.TenChiTiet" autocomplete="off" autofocus readonly="@(lockIdentityFields ? "readonly" : null)" />
+                                    <input asp-for="Form.TenChiTiet" autocomplete="off" autofocus readonly="@(isInventoryLocked ? "readonly" : null)" />
                                 </span>
                                 <span asp-validation-for="Form.TenChiTiet" class="login-field-error"></span>
                             </label>

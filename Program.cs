@@ -19,6 +19,8 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Default
 
 builder.Services.Configure<SqlServerOptions>(
     builder.Configuration.GetSection(SqlServerOptions.SectionName));
+builder.Services.Configure<ZaloOptions>(
+    builder.Configuration.GetSection(ZaloOptions.SectionName));
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -38,9 +40,11 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpClient("ZaloOA");
 builder.Services.AddScoped<ISidebarMenuService, SidebarMenuService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
 builder.Services.AddScoped<IUserPermissionService, UserPermissionService>();
+builder.Services.AddScoped<IPermissionCatalogService, PermissionCatalogService>();
 builder.Services.AddScoped<IDonViTinhService, DonViTinhService>();
 builder.Services.AddScoped<IPhongBanService, PhongBanService>();
 builder.Services.AddScoped<INhanVienService, NhanVienService>();
@@ -49,18 +53,34 @@ builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IYeuCauService, YeuCauService>();
 builder.Services.AddScoped<IChamCongService, ChamCongService>();
 builder.Services.AddScoped<IChamCongReportService, ChamCongReportService>();
+builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();
 builder.Services.AddScoped<ICongViecService, CongViecService>();
 builder.Services.AddScoped<IVatTuService, VatTuService>();
 builder.Services.AddScoped<IXuatKhoService, XuatKhoService>();
 builder.Services.AddScoped<INhapKhoService, NhapKhoService>();
+builder.Services.AddScoped<INhapXuatImageService, NhapXuatImageService>();
 builder.Services.AddScoped<INhaCungCapService, NhaCungCapService>();
 builder.Services.AddScoped<ICommonAuditService, CommonAuditService>();
 builder.Services.AddScoped<ISimpleExcelService, SimpleExcelService>();
+builder.Services.AddScoped<ZaloIntegrationService>();
+builder.Services.AddScoped<IZaloAuthService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
+builder.Services.AddScoped<IZaloMessageService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
+builder.Services.AddScoped<ICustomerLinkService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
+builder.Services.AddScoped<IZaloWebhookService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
 builder.Services.AddSingleton<IQrCodeBatchService, QrCodeBatchService>();
+builder.Services.AddHostedService<ZaloTokenRefreshWorker>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var permissionCatalogService = scope.ServiceProvider.GetRequiredService<IPermissionCatalogService>();
+    await permissionCatalogService.EnsureYeuCauWorkEmployeePermissionsAsync();
+    await permissionCatalogService.EnsureYeuCauCheckinDistancePermissionsAsync();
+    await permissionCatalogService.EnsureCongViecReportPermissionsAsync();
+}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -193,6 +213,11 @@ app.MapControllerRoute(
     name: "bao-cao-cham-cong",
     pattern: "bao-cao/cham-cong",
     defaults: new { controller = "Report", action = "ChamCong" });
+
+app.MapControllerRoute(
+    name: "bao-cao-cong-viec",
+    pattern: "bao-cao/cong-viec",
+    defaults: new { controller = "Report", action = "CongViec" });
 
 app.MapControllerRoute(
     name: "qr-gen",

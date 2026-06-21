@@ -77,7 +77,23 @@ public interface IYeuCauService
         int yeuCauCongViecId,
         string imagePath,
         string imageType,
+        string currentUser,
+        Guid? currentAccountId,
         CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, YeuCauCongViecChecklistFormItem? Checklist)> CreateWorkChecklistAsync(
+        int congViecId,
+        string? tenChecklist,
+        string currentUser,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, string? ImagePath)> DeleteWorkImageAsync(
+        int imageId,
+        Guid? currentAccountId,
+        string currentUser,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> IsWorkCompletedAsync(int yeuCauCongViecId, CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, string? ImgPath)> DeleteCheckinAsync(
         int id,
@@ -88,8 +104,11 @@ public interface IYeuCauService
 public sealed class YeuCauService(
     IOptions<SqlServerOptions> sqlOptions,
     IConfiguration configuration,
-    ILogger<YeuCauService> logger) : IYeuCauService
+    ILogger<YeuCauService> logger,
+    ICommonAuditService commonAuditService) : IYeuCauService
 {
+    private const int RequestCodeMaxLength = 10;
+    private const int RequestCodeSequenceDigits = 5;
     private const string TableName = "TblYeuCau";
     private const string AssignmentTableName = "TblYeuCauCongViecNhanVien";
     private const string WorkTableName = "TblYeuCauCongViec";
@@ -106,6 +125,7 @@ public sealed class YeuCauService(
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly ILogger<YeuCauService> _logger = logger;
+    private readonly ICommonAuditService _commonAuditService = commonAuditService;
 
     public async Task<(IReadOnlyList<YeuCauListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
         string? keyword,
@@ -127,6 +147,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
             var normalizedKeyword = NormalizeKeyword(keyword);
             var normalizedAssigneeKeyword = NormalizeKeyword(assigneeKeyword);
             var normalizedStatus = NormalizeStatus(statusFilter);
@@ -192,7 +213,7 @@ public sealed class YeuCauService(
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
-                        SUM(CASE WHEN ycvc.CheckInTime IS NOT NULL AND ycvc.CheckoutTime IS NOT NULL AND ycvc.CheckoutTime > ycvc.CheckInTime THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
+                        SUM(CASE WHEN ycvc.TrangThaiCongViec = @CompletedWorkStatus THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
                     FROM [{WorkTableName}] AS ycvc
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
@@ -201,6 +222,7 @@ public sealed class YeuCauService(
                 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
                 """;
             AddFilterParameters(listCommand, normalizedKeyword, statusValues, requestDateFrom, requestDateTo, executionDateFrom, executionDateTo, normalizedAssigneeKeyword, assignedEmployeeId);
+            listCommand.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
             listCommand.Parameters.Add(new SqlParameter("@Offset", SqlDbType.Int) { Value = offset });
             listCommand.Parameters.Add(new SqlParameter("@PageSize", SqlDbType.Int) { Value = pageSize });
 
@@ -230,6 +252,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 SELECT TOP (1)
@@ -264,13 +287,14 @@ public sealed class YeuCauService(
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
-                        SUM(CASE WHEN ycvc.CheckInTime IS NOT NULL AND ycvc.CheckoutTime IS NOT NULL AND ycvc.CheckoutTime > ycvc.CheckInTime THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
+                        SUM(CASE WHEN ycvc.TrangThaiCongViec = @CompletedWorkStatus THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
                     FROM [{WorkTableName}] AS ycvc
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
                 WHERE yc.ID = @Id
                 """;
             command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+            command.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken))
@@ -551,18 +575,18 @@ public sealed class YeuCauService(
     {
         var targetDate = requestDate?.Date ?? DateTime.Today;
         var yearSuffix = targetDate.ToString("yy");
-        var prefix = $"YC-{yearSuffix}";
+        var prefix = BuildRequestCodePrefix(yearSuffix);
 
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             var nextSequence = await GetNextSequenceAsync(connection, transaction: null, prefix, cancellationToken);
-            return $"{prefix}{nextSequence:00001}";
+            return BuildRequestCode(prefix, nextSequence);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not YeuCauBusinessRuleException)
         {
             _logger.LogError(ex, "Failed to generate next TblYeuCau code for prefix {Prefix}.", prefix);
-            return $"{prefix}00001";
+            return BuildRequestCode(prefix, 1);
         }
     }
 
@@ -574,6 +598,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
             var validationError = await ValidateBusinessRulesAsync(connection, transaction, model, cancellationToken);
@@ -583,9 +608,10 @@ public sealed class YeuCauService(
                 return (false, validationError, null);
             }
 
-            var codePrefix = $"YC-{(model.NgayYeuCau ?? DateTime.Today):yy}";
+            var yearSuffix = (model.NgayYeuCau ?? DateTime.Today).ToString("yy");
+            var codePrefix = BuildRequestCodePrefix(yearSuffix);
             var nextSequence = await GetNextSequenceAsync(connection, transaction, codePrefix, cancellationToken);
-            var generatedCode = $"{codePrefix}{nextSequence:00001}";
+            var generatedCode = BuildRequestCode(codePrefix, nextSequence);
 
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -673,6 +699,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
             var existingCode = await GetExistingCodeAsync(connection, transaction, model.Id.Value, cancellationToken);
@@ -897,6 +924,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
             return await LoadAssignedWorksAsync(connection, transaction: null, yeuCauId, cancellationToken);
         }
         catch (Exception ex)
@@ -1210,6 +1238,8 @@ public sealed class YeuCauService(
         int yeuCauCongViecId,
         string imagePath,
         string imageType,
+        string currentUser,
+        Guid? currentAccountId,
         CancellationToken cancellationToken = default)
     {
         if (yeuCauCongViecId <= 0)
@@ -1222,32 +1252,244 @@ public sealed class YeuCauService(
             return (false, "Khong xac dinh duoc duong dan anh.", null);
         }
 
+        if (await IsWorkCompletedAsync(yeuCauCongViecId, cancellationToken))
+        {
+            return (false, "Cong viec da hoan thanh nen khong the them hinh anh.", null);
+        }
+
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkImageMetadataColumnsAsync(connection, cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 INSERT INTO [{WorkImageTableName}] (
                     IDCongViec,
-                    ImagePath
+                    ImagePath,
+                    ImageType,
+                    Created_Date,
+                    Created_By,
+                    IDTaiKhoanNguoiDung
                 )
                 VALUES (
                     @IDCongViec,
-                    @ImagePath
+                    @ImagePath,
+                    @ImageType,
+                    GETDATE(),
+                    @CreatedBy,
+                    @IDTaiKhoanNguoiDung
                 );
 
                 SELECT CAST(SCOPE_IDENTITY() AS int);
                 """;
             command.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = yeuCauCongViecId });
             command.Parameters.Add(new SqlParameter("@ImagePath", SqlDbType.NVarChar, 500) { Value = imagePath.Trim() });
+            command.Parameters.Add(new SqlParameter("@ImageType", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecImageTypes.Normalize(imageType) });
+            command.Parameters.Add(new SqlParameter("@CreatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
+            command.Parameters.Add(new SqlParameter("@IDTaiKhoanNguoiDung", SqlDbType.UniqueIdentifier) { Value = ToDbValue(currentAccountId) });
 
             var id = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
+            await _commonAuditService.WriteAsync(
+                connection,
+                null,
+                new CommonAuditEntry(
+                    "YEU_CAU",
+                    "WORK_IMAGE_UPLOAD",
+                    "YEU_CAU_CONG_VIEC",
+                    yeuCauCongViecId.ToString(CultureInfo.InvariantCulture),
+                    null,
+                    "Upload anh cong viec yeu cau.",
+                    currentUser,
+                    Data: new { YeuCauCongViecId = yeuCauCongViecId, ImageId = id, ImagePath = imagePath, ImageType = imageType, CurrentAccountId = currentAccountId }),
+                cancellationToken);
             return (true, null, id);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create work image for TblYeuCauCongViec {Id} ({ImageType}).", yeuCauCongViecId, imageType);
             return (false, "Khong the luu anh cong viec.", null);
+        }
+    }
+
+    public async Task<bool> IsWorkCompletedAsync(int yeuCauCongViecId, CancellationToken cancellationToken = default)
+    {
+        if (yeuCauCongViecId <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP 1 TrangThaiCongViec
+                FROM [{WorkTableName}]
+                WHERE ID = @ID;
+                """;
+            command.Parameters.Add(new SqlParameter("@ID", SqlDbType.Int) { Value = yeuCauCongViecId });
+
+            var status = Convert.ToString(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+            return YeuCauCongViecTrangThaiCatalog.IsCompleted(status);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to read work status for TblYeuCauCongViec {Id}.", yeuCauCongViecId);
+            return false;
+        }
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage, YeuCauCongViecChecklistFormItem? Checklist)> CreateWorkChecklistAsync(
+        int congViecId,
+        string? tenChecklist,
+        string currentUser,
+        CancellationToken cancellationToken = default)
+    {
+        if (congViecId <= 0)
+        {
+            return (false, "Khong xac dinh duoc cong viec can them checklist.", null);
+        }
+
+        var normalizedName = TrimNullableToLength(tenChecklist, 250);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return (false, "Vui long nhap ten checklist.", null);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                DECLARE @NextPosition int;
+
+                SELECT @NextPosition = ISNULL(MAX(ISNULL(ViTri, 0)), 0) + 1
+                FROM [{ChecklistTemplateTableName}]
+                WHERE IDCongViec = @IDCongViec;
+
+                INSERT INTO [{ChecklistTemplateTableName}] (
+                    TenCheckList,
+                    ViTri,
+                    IDCongViec,
+                    Created_Date,
+                    Created_By,
+                    TrangThaiSuDung
+                )
+                VALUES (
+                    @TenCheckList,
+                    @NextPosition,
+                    @IDCongViec,
+                    GETDATE(),
+                    @CreatedBy,
+                    1
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS int), @NextPosition;
+                """;
+            command.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = congViecId });
+            command.Parameters.Add(new SqlParameter("@TenCheckList", SqlDbType.NVarChar, 250) { Value = normalizedName });
+            command.Parameters.Add(new SqlParameter("@CreatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return (false, "Khong the them checklist cong viec.", null);
+            }
+
+            var checklist = new YeuCauCongViecChecklistFormItem
+            {
+                ChecklistId = Convert.ToInt32(reader.GetValue(0)),
+                TenChecklist = normalizedName,
+                ViTri = Convert.ToInt32(reader.GetValue(1))
+            };
+
+            return (true, null, checklist);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create checklist for TblCongViec {Id}.", congViecId);
+            return (false, "Khong the them checklist cong viec.", null);
+        }
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage, string? ImagePath)> DeleteWorkImageAsync(
+        int imageId,
+        Guid? currentAccountId,
+        string currentUser,
+        CancellationToken cancellationToken = default)
+    {
+        if (imageId <= 0)
+        {
+            return (false, "Khong xac dinh duoc anh can xoa.", null);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkImageMetadataColumnsAsync(connection, cancellationToken);
+
+            int workId;
+            string? imagePath;
+            Guid? ownerAccountId;
+            string? createdBy;
+            await using (var selectCommand = connection.CreateCommand())
+            {
+                selectCommand.CommandText = $"""
+                    SELECT TOP (1)
+                        IDCongViec,
+                        ImagePath,
+                        IDTaiKhoanNguoiDung,
+                        Created_By
+                    FROM [{WorkImageTableName}]
+                    WHERE ID = @Id
+                    """;
+                selectCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = imageId });
+
+                await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    return (false, "Khong tim thay anh can xoa.", null);
+                }
+
+                workId = GetNullableInt32(reader, "IDCongViec") ?? 0;
+                imagePath = GetNullableString(reader, "ImagePath");
+                ownerAccountId = GetNullableGuid(reader, "IDTaiKhoanNguoiDung");
+                createdBy = GetNullableString(reader, "Created_By");
+            }
+
+            if (!CanDeleteWorkImage(ownerAccountId, createdBy, currentAccountId, currentUser))
+            {
+                return (false, "Chi nguoi da them hinh anh moi duoc xoa hinh anh nay.", null);
+            }
+
+            await using var deleteCommand = connection.CreateCommand();
+            deleteCommand.CommandText = $"""
+                DELETE FROM [{WorkImageTableName}]
+                WHERE ID = @Id
+                """;
+            deleteCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = imageId });
+            await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+
+            await _commonAuditService.WriteAsync(
+                connection,
+                null,
+                new CommonAuditEntry(
+                    "YEU_CAU",
+                    "WORK_IMAGE_DELETE",
+                    "YEU_CAU_CONG_VIEC",
+                    workId.ToString(CultureInfo.InvariantCulture),
+                    null,
+                    "Xoa anh cong viec yeu cau.",
+                    currentUser,
+                    Data: new { ImageId = imageId, ImagePath = imagePath, CurrentAccountId = currentAccountId }),
+                cancellationToken);
+
+            return (true, null, imagePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete work image {Id}.", imageId);
+            return (false, "Khong the xoa anh cong viec.", null);
         }
     }
 
@@ -1376,6 +1618,8 @@ public sealed class YeuCauService(
                 cv.TenCongViec,
                 cv.SoLuongAnhCheckIn,
                 cv.SoLuongAnhCheckOut,
+                ycvc.TrangThaiCongViec,
+                ycvc.GhiChu,
                 ycvc.CheckInTime,
                 ycvc.CheckoutTime
             FROM [{WorkTableName}] AS ycvc
@@ -1396,6 +1640,8 @@ public sealed class YeuCauService(
                 SoLuongAnhCheckIn = Math.Max(0, GetNullableInt32(reader, "SoLuongAnhCheckIn") ?? 0),
                 SoLuongAnhCheckOut = Math.Max(0, GetNullableInt32(reader, "SoLuongAnhCheckOut") ?? 0),
                 TenCongViec = GetNullableString(reader, "TenCongViec") ?? "Công việc",
+                TrangThaiCongViec = YeuCauCongViecTrangThaiCatalog.Normalize(GetNullableString(reader, "TrangThaiCongViec")),
+                GhiChu = GetNullableString(reader, "GhiChu"),
                 CheckInTime = GetNullableDateTime(reader, "CheckInTime"),
                 CheckOutTime = GetNullableDateTime(reader, "CheckoutTime")
             });
@@ -1430,7 +1676,11 @@ public sealed class YeuCauService(
             SELECT
                 ID,
                 IDCongViec,
-                ImagePath
+                ImagePath,
+                ImageType,
+                Created_Date,
+                Created_By,
+                IDTaiKhoanNguoiDung
             FROM [{WorkImageTableName}]
             WHERE IDCongViec = @IDCongViec
             ORDER BY ID
@@ -1447,10 +1697,15 @@ public sealed class YeuCauService(
                 Id = GetNullableInt32(reader, "ID") ?? 0,
                 IDCongViec = GetNullableInt32(reader, "IDCongViec") ?? yeuCauCongViecId,
                 ImagePath = imagePath,
-                ImageType = imagePath.Contains("/CheckOut/", StringComparison.OrdinalIgnoreCase) ||
-                    imagePath.Contains("\\CheckOut\\", StringComparison.OrdinalIgnoreCase)
-                        ? YeuCauCongViecImageTypes.CheckOut
-                        : YeuCauCongViecImageTypes.CheckIn
+                ImageType = !string.IsNullOrWhiteSpace(GetNullableString(reader, "ImageType"))
+                    ? YeuCauCongViecImageTypes.Normalize(GetNullableString(reader, "ImageType"))
+                    : imagePath.Contains("/CheckOut/", StringComparison.OrdinalIgnoreCase) ||
+                        imagePath.Contains("\\CheckOut\\", StringComparison.OrdinalIgnoreCase)
+                            ? YeuCauCongViecImageTypes.CheckOut
+                            : YeuCauCongViecImageTypes.CheckIn,
+                CreatedDate = GetNullableDateTime(reader, "Created_Date"),
+                CreatedBy = GetNullableString(reader, "Created_By"),
+                CreatedByAccountId = GetNullableGuid(reader, "IDTaiKhoanNguoiDung")
             });
         }
 
@@ -1563,6 +1818,35 @@ public sealed class YeuCauService(
             .ToList();
     }
 
+    private static async Task<WorkStateSnapshot?> LoadWorkStateAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int yeuCauCongViecId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            SELECT TrangThaiCongViec, CheckInTime
+            FROM [{WorkTableName}]
+            WHERE ID = @ID
+            """;
+        command.Parameters.Add(new SqlParameter("@ID", SqlDbType.Int) { Value = yeuCauCongViecId });
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        var status = GetNullableString(reader, "TrangThaiCongViec");
+        return new WorkStateSnapshot(
+            YeuCauCongViecTrangThaiCatalog.IsCompleted(status),
+            GetNullableDateTime(reader, "CheckInTime"));
+    }
+
+    private sealed record WorkStateSnapshot(bool IsCompleted, DateTime? CheckInTime);
+
     private static async Task SyncAssignedEmployeesAsync(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -1636,7 +1920,7 @@ public sealed class YeuCauService(
         }
     }
 
-    private static async Task SyncAssignedWorksAsync(
+    private async Task SyncAssignedWorksAsync(
         SqlConnection connection,
         SqlTransaction transaction,
         int yeuCauId,
@@ -1653,6 +1937,46 @@ public sealed class YeuCauService(
             .Select(work => work.YeuCauCongViecId!.Value)
             .Distinct()
             .ToList();
+
+        await using (var removedWorkStatusCommand = connection.CreateCommand())
+        {
+            removedWorkStatusCommand.Transaction = transaction;
+            if (keepIds.Count == 0)
+            {
+                removedWorkStatusCommand.CommandText = $"""
+                    SELECT TrangThaiCongViec
+                    FROM [{WorkTableName}]
+                    WHERE IDYeuCau = @IDYeuCau
+                    """;
+                removedWorkStatusCommand.Parameters.Add(new SqlParameter("@IDYeuCau", SqlDbType.Int) { Value = yeuCauId });
+            }
+            else
+            {
+                var placeholders = new List<string>();
+                for (var index = 0; index < keepIds.Count; index++)
+                {
+                    placeholders.Add($"@KeepId{index}");
+                    removedWorkStatusCommand.Parameters.Add(new SqlParameter($"@KeepId{index}", SqlDbType.Int) { Value = keepIds[index] });
+                }
+
+                removedWorkStatusCommand.CommandText = $"""
+                    SELECT TrangThaiCongViec
+                    FROM [{WorkTableName}]
+                    WHERE IDYeuCau = @IDYeuCau
+                      AND ID NOT IN ({string.Join(", ", placeholders)})
+                    """;
+                removedWorkStatusCommand.Parameters.Add(new SqlParameter("@IDYeuCau", SqlDbType.Int) { Value = yeuCauId });
+            }
+
+            await using var removedWorkStatusReader = await removedWorkStatusCommand.ExecuteReaderAsync(cancellationToken);
+            while (await removedWorkStatusReader.ReadAsync(cancellationToken))
+            {
+                if (YeuCauCongViecTrangThaiCatalog.IsCompleted(GetNullableString(removedWorkStatusReader, "TrangThaiCongViec")))
+                {
+                    throw new YeuCauBusinessRuleException("Cong viec da hoan thanh nen khong the xoa khoi phieu yeu cau.");
+                }
+            }
+        }
 
         await using (var deleteChecklistCommand = connection.CreateCommand())
         {
@@ -1757,6 +2081,41 @@ public sealed class YeuCauService(
 
         foreach (var work in workItems)
         {
+            work.TrangThaiCongViec = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec);
+            work.GhiChu = TrimNullableToLength(work.GhiChu, 500);
+            var isNewWork = !work.YeuCauCongViecId.HasValue || work.YeuCauCongViecId.Value <= 0;
+            var previousState = isNewWork
+                ? null
+                : await LoadWorkStateAsync(connection, transaction, work.YeuCauCongViecId!.Value, cancellationToken);
+            var previousWorkEmployeeIds = isNewWork
+                ? new List<int>()
+                : (await LoadWorkEmployeesAsync(connection, transaction, work.YeuCauCongViecId!.Value, cancellationToken))
+                    .Where(employee => employee.NhanVienId.HasValue && employee.NhanVienId.Value > 0)
+                    .Select(employee => employee.NhanVienId!.Value)
+                    .Distinct()
+                    .ToList();
+            var workEmployeeIds = work.NhanViens
+                .Where(employee => employee.NhanVienId.HasValue && employee.NhanVienId.Value > 0)
+                .Select(employee => employee.NhanVienId!.Value)
+                .Distinct()
+                .ToList();
+
+            if (previousState?.IsCompleted == true)
+            {
+                var employeeChanged = previousWorkEmployeeIds.Count != workEmployeeIds.Count ||
+                    previousWorkEmployeeIds.Except(workEmployeeIds).Any() ||
+                    workEmployeeIds.Except(previousWorkEmployeeIds).Any();
+                if (employeeChanged)
+                {
+                    throw new YeuCauBusinessRuleException("Cong viec da hoan thanh nen khong the thay doi nhan vien thuc hien.");
+                }
+
+                if (previousState.CheckInTime != work.CheckInTime)
+                {
+                    throw new YeuCauBusinessRuleException("Cong viec da hoan thanh nen khong the thay doi thoi gian bat dau.");
+                }
+            }
+
             if (!work.YeuCauCongViecId.HasValue || work.YeuCauCongViecId.Value <= 0)
             {
                 work.CheckInTime ??= DateTime.Now;
@@ -1766,6 +2125,8 @@ public sealed class YeuCauService(
                     INSERT INTO [{WorkTableName}] (
                         IDYeuCau,
                         IDCongViec,
+                        TrangThaiCongViec,
+                        GhiChu,
                         CheckInTime,
                         CheckoutTime,
                         Created_Date,
@@ -1776,6 +2137,8 @@ public sealed class YeuCauService(
                     VALUES (
                         @IDYeuCau,
                         @IDCongViec,
+                        @TrangThaiCongViec,
+                        @GhiChu,
                         @CheckInTime,
                         @CheckoutTime,
                         GETDATE(),
@@ -1788,6 +2151,8 @@ public sealed class YeuCauService(
                     """;
                 insertWorkCommand.Parameters.Add(new SqlParameter("@IDYeuCau", SqlDbType.Int) { Value = yeuCauId });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = work.CongViecId!.Value });
+                insertWorkCommand.Parameters.Add(new SqlParameter("@TrangThaiCongViec", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec) });
+                insertWorkCommand.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 500) { Value = ToDbValue(TrimNullableToLength(work.GhiChu, 500)) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CheckInTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckInTime) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CheckoutTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckOutTime) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CreatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
@@ -1802,6 +2167,8 @@ public sealed class YeuCauService(
                     UPDATE [{WorkTableName}]
                     SET
                         IDCongViec = @IDCongViec,
+                        TrangThaiCongViec = @TrangThaiCongViec,
+                        GhiChu = @GhiChu,
                         CheckInTime = @CheckInTime,
                         CheckoutTime = @CheckoutTime,
                         Updated_Date = GETDATE(),
@@ -1812,17 +2179,36 @@ public sealed class YeuCauService(
                 updateCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = work.YeuCauCongViecId!.Value });
                 updateCommand.Parameters.Add(new SqlParameter("@IDYeuCau", SqlDbType.Int) { Value = yeuCauId });
                 updateCommand.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = work.CongViecId!.Value });
+                updateCommand.Parameters.Add(new SqlParameter("@TrangThaiCongViec", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec) });
+                updateCommand.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 500) { Value = ToDbValue(TrimNullableToLength(work.GhiChu, 500)) });
                 updateCommand.Parameters.Add(new SqlParameter("@CheckInTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckInTime) });
                 updateCommand.Parameters.Add(new SqlParameter("@CheckoutTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckOutTime) });
                 updateCommand.Parameters.Add(new SqlParameter("@UpdatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
                 await updateCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            var workEmployeeIds = work.NhanViens
-                .Where(employee => employee.NhanVienId.HasValue && employee.NhanVienId.Value > 0)
-                .Select(employee => employee.NhanVienId!.Value)
-                .Distinct()
-                .ToList();
+            await _commonAuditService.WriteAsync(
+                connection,
+                transaction,
+                new CommonAuditEntry(
+                    "YEU_CAU",
+                    isNewWork ? "WORK_CREATE" : "WORK_UPDATE",
+                    "YEU_CAU_CONG_VIEC",
+                    work.YeuCauCongViecId!.Value.ToString(CultureInfo.InvariantCulture),
+                    null,
+                    isNewWork ? "Them cong viec vao phieu yeu cau." : "Cap nhat cong viec trong phieu yeu cau.",
+                    currentUser,
+                    Data: new
+                    {
+                        YeuCauId = yeuCauId,
+                        work.YeuCauCongViecId,
+                        work.CongViecId,
+                        work.TrangThaiCongViec,
+                        work.GhiChu,
+                        work.CheckInTime,
+                        work.CheckOutTime
+                    }),
+                cancellationToken);
 
             await using (var deleteWorkEmployeeCommand = connection.CreateCommand())
             {
@@ -1853,6 +2239,43 @@ public sealed class YeuCauService(
                 }
 
                 await deleteWorkEmployeeCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var addedEmployeeIds = workEmployeeIds.Except(previousWorkEmployeeIds).ToList();
+            var removedEmployeeIds = previousWorkEmployeeIds.Except(workEmployeeIds).ToList();
+
+            foreach (var addedEmployeeId in addedEmployeeIds)
+            {
+                await _commonAuditService.WriteAsync(
+                    connection,
+                    transaction,
+                    new CommonAuditEntry(
+                        "YEU_CAU",
+                        "WORK_EMPLOYEE_ADD",
+                        "YEU_CAU_CONG_VIEC",
+                        work.YeuCauCongViecId!.Value.ToString(CultureInfo.InvariantCulture),
+                        null,
+                        "Them nhan vien vao cong viec yeu cau.",
+                        currentUser,
+                        Data: new { YeuCauId = yeuCauId, work.YeuCauCongViecId, EmployeeId = addedEmployeeId }),
+                    cancellationToken);
+            }
+
+            foreach (var removedEmployeeId in removedEmployeeIds)
+            {
+                await _commonAuditService.WriteAsync(
+                    connection,
+                    transaction,
+                    new CommonAuditEntry(
+                        "YEU_CAU",
+                        "WORK_EMPLOYEE_REMOVE",
+                        "YEU_CAU_CONG_VIEC",
+                        work.YeuCauCongViecId!.Value.ToString(CultureInfo.InvariantCulture),
+                        null,
+                        "Xoa nhan vien khoi cong viec yeu cau.",
+                        currentUser,
+                        Data: new { YeuCauId = yeuCauId, work.YeuCauCongViecId, EmployeeId = removedEmployeeId }),
+                    cancellationToken);
             }
 
             foreach (var employeeId in workEmployeeIds)
@@ -2047,15 +2470,47 @@ public sealed class YeuCauService(
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = $"""
-            SELECT MAX(TRY_CONVERT(int, RIGHT(MaYeuCau, 5)))
+            SELECT MAX(TRY_CONVERT(int, SUBSTRING(MaYeuCau, LEN(@Prefix) + 1, @SequenceDigits)))
             FROM [{TableName}]
-            WHERE MaYeuCau LIKE @Prefix
+            WHERE MaYeuCau LIKE @PrefixLike
+              AND LEN(MaYeuCau) = @MaxLength
+              AND SUBSTRING(MaYeuCau, LEN(@Prefix) + 1, @SequenceDigits) NOT LIKE '%[^0-9]%'
             """;
-        command.Parameters.Add(new SqlParameter("@Prefix", SqlDbType.NVarChar, 20) { Value = $"{prefix}%" });
+        command.Parameters.Add(new SqlParameter("@Prefix", SqlDbType.NVarChar, 20) { Value = prefix });
+        command.Parameters.Add(new SqlParameter("@PrefixLike", SqlDbType.NVarChar, 20) { Value = $"{prefix}%" });
+        command.Parameters.Add(new SqlParameter("@SequenceDigits", SqlDbType.Int) { Value = RequestCodeSequenceDigits });
+        command.Parameters.Add(new SqlParameter("@MaxLength", SqlDbType.Int) { Value = RequestCodeMaxLength });
 
         var currentMax = await command.ExecuteScalarAsync(cancellationToken);
         var lastSequence = currentMax is null || currentMax == DBNull.Value ? 0 : Convert.ToInt32(currentMax);
         return Math.Max(lastSequence, 0) + 1;
+    }
+
+    private static string BuildRequestCodePrefix(string yearSuffix)
+    {
+        return $"YC-{yearSuffix}";
+    }
+
+    private static string BuildRequestCode(string prefix, int sequence)
+    {
+        if (sequence <= 0)
+        {
+            sequence = 1;
+        }
+
+        var maxSequence = (int)Math.Pow(10, RequestCodeSequenceDigits) - 1;
+        if (sequence > maxSequence)
+        {
+            throw new YeuCauBusinessRuleException($"Da het dai so ma yeu cau cho nam {prefix[^2..]}. Vui long dieu chinh cau truc ma truoc khi tao them phieu.");
+        }
+
+        var code = $"{prefix}{sequence.ToString($"D{RequestCodeSequenceDigits}", CultureInfo.InvariantCulture)}";
+        if (code.Length > RequestCodeMaxLength)
+        {
+            throw new YeuCauBusinessRuleException($"Ma yeu cau {code} vuot qua {RequestCodeMaxLength} ky tu.");
+        }
+
+        return code;
     }
 
     private static string BuildRequestEmployeeSummary(YeuCauFormModel model)
@@ -2361,11 +2816,7 @@ public sealed class YeuCauService(
                         INNER JOIN [{AssignmentTableName}] AS incompleteAssignedCompletedEmployee ON incompleteAssignedCompletedEmployee.IDYeuCauCongViec = incompleteAssignedCompletedWork.ID
                         WHERE incompleteAssignedCompletedWork.IDYeuCau = yc.ID
                           AND incompleteAssignedCompletedEmployee.IDNhanVien = @AssignedEmployeeId
-                          AND (
-                            incompleteAssignedCompletedWork.CheckInTime IS NULL
-                            OR incompleteAssignedCompletedWork.CheckoutTime IS NULL
-                            OR incompleteAssignedCompletedWork.CheckoutTime <= incompleteAssignedCompletedWork.CheckInTime
-                          )
+                          AND {BuildWorkStatusExpression("incompleteAssignedCompletedWork")} <> @CompletedWorkStatusFilter
                     )
                     """
                 : $"""
@@ -2378,11 +2829,7 @@ public sealed class YeuCauService(
                         SELECT 1
                         FROM [{WorkTableName}] AS incompleteCompletedWork
                         WHERE incompleteCompletedWork.IDYeuCau = yc.ID
-                          AND (
-                            incompleteCompletedWork.CheckInTime IS NULL
-                            OR incompleteCompletedWork.CheckoutTime IS NULL
-                            OR incompleteCompletedWork.CheckoutTime <= incompleteCompletedWork.CheckInTime
-                          )
+                          AND {BuildWorkStatusExpression("incompleteCompletedWork")} <> @CompletedWorkStatusFilter
                     )
                     """);
         }
@@ -2396,11 +2843,7 @@ public sealed class YeuCauService(
                         INNER JOIN [{AssignmentTableName}] AS incompleteAssignedEmployee ON incompleteAssignedEmployee.IDYeuCauCongViec = incompleteAssignedWork.ID
                         WHERE incompleteAssignedWork.IDYeuCau = yc.ID
                           AND incompleteAssignedEmployee.IDNhanVien = @AssignedEmployeeId
-                          AND (
-                            incompleteAssignedWork.CheckInTime IS NULL
-                            OR incompleteAssignedWork.CheckoutTime IS NULL
-                            OR incompleteAssignedWork.CheckoutTime <= incompleteAssignedWork.CheckInTime
-                          )
+                          AND {BuildWorkStatusExpression("incompleteAssignedWork")} <> @CompletedWorkStatusFilter
                     )
                     """
                 : $"""
@@ -2408,16 +2851,17 @@ public sealed class YeuCauService(
                         SELECT 1
                         FROM [{WorkTableName}] AS incompleteWork
                         WHERE incompleteWork.IDYeuCau = yc.ID
-                          AND (
-                            incompleteWork.CheckInTime IS NULL
-                            OR incompleteWork.CheckoutTime IS NULL
-                            OR incompleteWork.CheckoutTime <= incompleteWork.CheckInTime
-                          )
+                          AND {BuildWorkStatusExpression("incompleteWork")} <> @CompletedWorkStatusFilter
                     )
                     """);
         }
 
         return string.Join(" AND ", filters);
+    }
+
+    private static string BuildWorkStatusExpression(string alias)
+    {
+        return $"ISNULL(NULLIF(LTRIM(RTRIM({alias}.TrangThaiCongViec)), N''), @DefaultWorkStatusFilter)";
     }
 
     private static string BuildLocationWhereClause(string? keyword)
@@ -2506,6 +2950,9 @@ public sealed class YeuCauService(
         {
             command.Parameters.Add(new SqlParameter("@AssignedEmployeeId", SqlDbType.Int) { Value = assignedEmployeeId.Value });
         }
+
+        command.Parameters.Add(new SqlParameter("@DefaultWorkStatusFilter", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.TaoMoi });
+        command.Parameters.Add(new SqlParameter("@CompletedWorkStatusFilter", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
     }
 
     private static string BuildSearchExpression(string sqlExpression)
@@ -2529,6 +2976,67 @@ public sealed class YeuCauService(
         return connection;
     }
 
+    private static async Task EnsureWorkMetadataColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var schemaCommand = connection.CreateCommand();
+        schemaCommand.CommandText = $"""
+            IF COL_LENGTH('dbo.{WorkTableName}', 'TrangThaiCongViec') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{WorkTableName}] ADD [TrangThaiCongViec] NVARCHAR(50) NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{WorkTableName}', 'GhiChu') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{WorkTableName}] ADD [GhiChu] NVARCHAR(500) NULL;
+            END;
+            """;
+        await schemaCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var dataCommand = connection.CreateCommand();
+        dataCommand.CommandText = $"""
+            UPDATE [dbo].[{WorkTableName}]
+            SET [TrangThaiCongViec] = CASE
+                WHEN [CheckInTime] IS NOT NULL AND [CheckoutTime] IS NOT NULL AND [CheckoutTime] > [CheckInTime] THEN @CompletedStatus
+                WHEN [CheckInTime] IS NOT NULL THEN @InProgressStatus
+                ELSE @NewStatus
+            END
+            WHERE [TrangThaiCongViec] IS NULL OR LTRIM(RTRIM([TrangThaiCongViec])) = N'';
+            """;
+        dataCommand.Parameters.Add(new SqlParameter("@NewStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.TaoMoi });
+        dataCommand.Parameters.Add(new SqlParameter("@InProgressStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.DangThucHien });
+        dataCommand.Parameters.Add(new SqlParameter("@CompletedStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
+        await dataCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        await EnsureWorkImageMetadataColumnsAsync(connection, cancellationToken);
+    }
+
+    private static async Task EnsureWorkImageMetadataColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            IF COL_LENGTH('dbo.{WorkImageTableName}', 'Created_Date') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{WorkImageTableName}] ADD [Created_Date] DATETIME NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{WorkImageTableName}', 'Created_By') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{WorkImageTableName}] ADD [Created_By] NVARCHAR(50) NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{WorkImageTableName}', 'ImageType') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{WorkImageTableName}] ADD [ImageType] NVARCHAR(50) NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{WorkImageTableName}', 'IDTaiKhoanNguoiDung') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{WorkImageTableName}] ADD [IDTaiKhoanNguoiDung] UNIQUEIDENTIFIER NULL;
+            END;
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static string? NormalizeKeyword(string? keyword)
     {
         return string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
@@ -2549,6 +3057,11 @@ public sealed class YeuCauService(
         return value.HasValue ? value.Value : DBNull.Value;
     }
 
+    private static object ToDbValue(Guid? value)
+    {
+        return value.HasValue && value.Value != Guid.Empty ? value.Value : DBNull.Value;
+    }
+
     private static object ToDbValue(int? value)
     {
         return value.HasValue && value.Value > 0 ? value.Value : DBNull.Value;
@@ -2565,6 +3078,17 @@ public sealed class YeuCauService(
         return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
     }
 
+    private static string? TrimNullableToLength(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
+    }
+
     private static string NormalizeAuditUser(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "system" : value.Trim();
@@ -2573,6 +3097,16 @@ public sealed class YeuCauService(
     private static bool IsSameAuditUser(string? left, string right)
     {
         return string.Equals(NormalizeAuditUser(left), NormalizeAuditUser(right), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CanDeleteWorkImage(Guid? ownerAccountId, string? createdBy, Guid? currentAccountId, string currentUser)
+    {
+        if (ownerAccountId.HasValue && ownerAccountId.Value != Guid.Empty)
+        {
+            return currentAccountId.HasValue && ownerAccountId.Value == currentAccountId.Value;
+        }
+
+        return IsSameAuditUser(createdBy, NormalizeAuditUser(currentUser));
     }
 
     private static string? GetNullableString(SqlDataReader reader, string columnName)
@@ -2595,6 +3129,22 @@ public sealed class YeuCauService(
             long typedLong => Convert.ToInt32(typedLong),
             decimal typedDecimal => Convert.ToInt32(typedDecimal),
             string typedString when int.TryParse(typedString, out var parsed) => parsed,
+            _ => null
+        };
+    }
+
+    private static Guid? GetNullableGuid(SqlDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetValue(ordinal) switch
+        {
+            Guid typedGuid => typedGuid,
+            string typedString when Guid.TryParse(typedString, out var parsed) => parsed,
             _ => null
         };
     }

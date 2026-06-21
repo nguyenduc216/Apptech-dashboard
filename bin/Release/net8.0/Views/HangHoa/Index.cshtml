@@ -8,6 +8,10 @@
     var donViTinhHasError = ViewData.ModelState.TryGetValue("Form.DonViTinhId", out var donViTinhState) && donViTinhState.Errors.Count > 0;
     var imageHasError = ViewData.ModelState.TryGetValue("Form.ImageFile", out var imageState) && imageState.Errors.Count > 0;
     var trangThaiHasError = ViewData.ModelState.TryGetValue("Form.TrangThaiSuDung", out var trangThaiState) && trangThaiState.Errors.Count > 0;
+    var phanLoaiHasError = ViewData.ModelState.Keys.Any(key => key.StartsWith("Form.PhanLoai", StringComparison.OrdinalIgnoreCase));
+    var activeTab = phanLoaiHasError || string.Equals(Model.Form.ActiveTab, "phan-loai", StringComparison.OrdinalIgnoreCase)
+        ? "phan-loai"
+        : "thong-tin";
     var summaryErrors = ViewData.ModelState.TryGetValue(string.Empty, out var summaryState)
         ? summaryState.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToArray()
         : [];
@@ -65,7 +69,7 @@
                     </div>
                 </div>
 
-                <a class="master-data-add-button"
+                <a class="master-data-add-button" asp-permission-action="insert"
                    asp-action="Index"
                    asp-route-keyword="@Model.Filter.Keyword"
                    asp-route-statusFilter="@Model.Filter.StatusFilter"
@@ -170,6 +174,7 @@
                         <th class="hang-hoa-image-col">Ảnh</th>
                         <th>Tên hàng hóa</th>
                         <th>Mã hàng hóa</th>
+                        <th>Loại hình nhập</th>
                         <th>Đơn vị tính</th>
                         <th>Trạng thái</th>
                         <th class="actions-col">Thao tác</th>
@@ -179,7 +184,7 @@
                     @if (Model.Items.Count == 0)
                     {
                         <tr>
-                            <td colspan="6" class="master-data-empty">Không có dữ liệu phù hợp.</td>
+                            <td colspan="7" class="master-data-empty">Không có dữ liệu phù hợp.</td>
                         </tr>
                     }
                     else
@@ -203,6 +208,7 @@
                                 </td>
                                 <td><div class="master-data-name">@item.TenHangHoa</div></td>
                                 <td>@(string.IsNullOrWhiteSpace(item.MaHangHoa) ? "-" : item.MaHangHoa)</td>
+                                <td>@NhapKhoLoaiHinh.GetDisplayName(item.LoaiHinhNhap)</td>
                                 <td>
                                     @if (string.IsNullOrWhiteSpace(item.TenDonViTinh))
                                     {
@@ -220,7 +226,7 @@
                                 </td>
                                 <td class="actions-col">
                                     <div class="master-data-actions">
-                                        <a class="table-action-button edit"
+                                        <a class="table-action-button edit" asp-permission-action="update"
                                            asp-action="Index"
                                            asp-route-keyword="@Model.Filter.Keyword"
                                            asp-route-statusFilter="@Model.Filter.StatusFilter"
@@ -237,7 +243,7 @@
                                             <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
                                             <input type="hidden" name="Page" value="@Model.CurrentPage" />
                                             <button type="submit"
-                                                    class="table-action-button delete"
+                                                    class="table-action-button delete" asp-permission-action="delete"
                                                     data-delete-confirm="Bạn có chắc muốn xóa hàng hóa này?">
                                                 <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                                                 <span>Xóa</span>
@@ -335,7 +341,33 @@
                     </div>
                 }
 
-                <div class="account-form-grid single-column">
+                <div class="crud-tabs hang-hoa-tabs" data-tab-group>
+                    <input asp-for="Form.ActiveTab" type="hidden" data-active-tab-input />
+                    <div class="crud-tab-list" role="tablist" aria-label="Nhóm thông tin hàng hóa">
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "thong-tin" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="thong-tin"
+                                role="tab"
+                                aria-selected="@(activeTab == "thong-tin" ? "true" : "false")">
+                            Thông tin
+                        </button>
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "phan-loai" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="phan-loai"
+                                role="tab"
+                                aria-selected="@(activeTab == "phan-loai" ? "true" : "false")">
+                            Phân loại
+                        </button>
+                    </div>
+
+                    <div class="crud-tab-panel @(activeTab == "thong-tin" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="thong-tin"
+                         role="tabpanel"
+                         @(activeTab == "thong-tin" ? null : "hidden")>
+                        <div class="account-form-grid single-column">
                     <div class="login-field @(imageHasError ? "has-error" : "")">
                         <span>Hình ảnh minh họa</span>
                         <div class="image-upload-editor" data-image-upload>
@@ -382,6 +414,19 @@
                         <span asp-validation-for="Form.MaHangHoa" class="login-field-error"></span>
                     </label>
 
+                    <label class="login-field">
+                        <span>Loại hình nhập</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                            <select asp-for="Form.LoaiHinhNhap">
+                                <option value="@NhapKhoLoaiHinh.NhapTungVatTu">Nhập từng vật tư</option>
+                                <option value="@NhapKhoLoaiHinh.NhapTheoLo">Nhập theo lô</option>
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                        <span asp-validation-for="Form.LoaiHinhNhap" class="login-field-error"></span>
+                    </label>
+
                     <label class="login-field @(donViTinhHasError ? "has-error" : "")">
                         <span>Đơn vị tính</span>
                         <span class="login-input-shell select-shell">
@@ -418,6 +463,72 @@
                     </label>
                 </div>
 
+                    </div>
+
+                    <div class="crud-tab-panel @(activeTab == "phan-loai" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="phan-loai"
+                         role="tabpanel"
+                         @(activeTab == "phan-loai" ? null : "hidden")>
+                        <div class="hang-hoa-phan-loai-panel" data-hang-hoa-phan-loai>
+                            <div class="hang-hoa-phan-loai-toolbar">
+                                <button type="button" class="secondary-button" data-add-phan-loai>
+                                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                    <span>Thêm phân loại</span>
+                                </button>
+                            </div>
+
+                            <div class="table-wrap hang-hoa-phan-loai-grid">
+                                <table class="data-table master-data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tên phân loại</th>
+                                            <th>Trạng thái sử dụng</th>
+                                            <th class="actions-col">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody data-phan-loai-list>
+                                        @for (var index = 0; index < Model.Form.PhanLoai.Count; index++)
+                                        {
+                                            <tr data-phan-loai-row>
+                                                <td>
+                                                    <input type="hidden" name="Form.PhanLoai[@index].Id" value="@Model.Form.PhanLoai[index].Id" data-phan-loai-id />
+                                                    <span class="login-input-shell">
+                                                        <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                                                        <input name="Form.PhanLoai[@index].TenPhanLoai" value="@Model.Form.PhanLoai[index].TenPhanLoai" autocomplete="off" data-phan-loai-name />
+                                                    </span>
+                                                    <span asp-validation-for="Form.PhanLoai[index].TenPhanLoai" class="login-field-error"></span>
+                                                </td>
+                                                <td>
+                                                    <input type="hidden" name="Form.PhanLoai[@index].TrangThaiSuDung" value="false" data-phan-loai-status-hidden />
+                                                    <label class="status-switch compact-status-switch">
+                                                        <input type="checkbox" name="Form.PhanLoai[@index].TrangThaiSuDung" value="true" class="status-switch-input" checked="@(Model.Form.PhanLoai[index].TrangThaiSuDung ? "checked" : null)" data-phan-loai-status />
+                                                        <span class="status-switch-track">
+                                                            <span class="status-switch-thumb"></span>
+                                                        </span>
+                                                        <span class="status-switch-labels" aria-hidden="true">
+                                                            <span>Kích hoạt</span>
+                                                            <span>Khóa</span>
+                                                        </span>
+                                                    </label>
+                                                </td>
+                                                <td class="actions-col">
+                                                    <button type="button" class="table-action-button delete" data-remove-phan-loai aria-label="Xóa phân loại">
+                                                        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                        <tr class="hang-hoa-phan-loai-empty" data-phan-loai-empty @(Model.Form.PhanLoai.Count == 0 ? null : "hidden")>
+                                            <td colspan="3" class="master-data-empty">Chưa có phân loại.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="crud-modal-actions">
                     <a class="secondary-button crud-cancel-button"
                        asp-action="Index"
@@ -427,7 +538,7 @@
                         Hủy
                     </a>
 
-                    <button type="submit" class="primary-button" data-processing-button data-processing-text="Đang lưu">
+                    <button type="submit" class="primary-button" asp-permission-action="@(Model.PopupMode == HangHoaPopupMode.Edit ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
                         <span class="button-content">
                             <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
                             <span>@(Model.PopupMode == HangHoaPopupMode.Edit ? "Lưu cập nhật" : "Thêm mới")</span>
@@ -439,6 +550,99 @@
                     </button>
                 </div>
             </form>
+
+            <template data-phan-loai-template>
+                <tr data-phan-loai-row>
+                    <td>
+                        <input type="hidden" name="Form.PhanLoai[__index__].Id" data-phan-loai-id />
+                        <span class="login-input-shell">
+                            <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                            <input name="Form.PhanLoai[__index__].TenPhanLoai" autocomplete="off" data-phan-loai-name />
+                        </span>
+                    </td>
+                    <td>
+                        <input type="hidden" name="Form.PhanLoai[__index__].TrangThaiSuDung" value="false" data-phan-loai-status-hidden />
+                        <label class="status-switch compact-status-switch">
+                            <input type="checkbox" name="Form.PhanLoai[__index__].TrangThaiSuDung" value="true" class="status-switch-input" checked data-phan-loai-status />
+                            <span class="status-switch-track">
+                                <span class="status-switch-thumb"></span>
+                            </span>
+                            <span class="status-switch-labels" aria-hidden="true">
+                                <span>Kích hoạt</span>
+                                <span>Khóa</span>
+                            </span>
+                        </label>
+                    </td>
+                    <td class="actions-col">
+                        <button type="button" class="table-action-button delete" data-remove-phan-loai aria-label="Xóa phân loại">
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+            </template>
         </section>
     </div>
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const root = document.querySelector("[data-hang-hoa-phan-loai]");
+            const template = document.querySelector("[data-phan-loai-template]");
+            if (!(root instanceof HTMLElement) || !(template instanceof HTMLTemplateElement)) {
+                return;
+            }
+
+            const list = root.querySelector("[data-phan-loai-list]");
+            const empty = root.querySelector("[data-phan-loai-empty]");
+            const addButton = root.querySelector("[data-add-phan-loai]");
+
+            const rows = () => Array.from(root.querySelectorAll("[data-phan-loai-row]"));
+            const updateEmptyState = () => {
+                if (empty instanceof HTMLElement) {
+                    empty.hidden = rows().length > 0;
+                }
+            };
+            const reindexRows = () => {
+                rows().forEach((row, index) => {
+                    row.querySelectorAll("input").forEach((input) => {
+                        if (input instanceof HTMLInputElement && input.name) {
+                            input.name = input.name.replace(/Form\.PhanLoai\[\d+\]/, `Form.PhanLoai[${index}]`);
+                            input.name = input.name.replace(/Form\.PhanLoai\[__index__\]/, `Form.PhanLoai[${index}]`);
+                        }
+                    });
+                });
+            };
+
+            addButton?.addEventListener("click", () => {
+                const fragment = template.content.cloneNode(true);
+                if (!(fragment instanceof DocumentFragment) || !(list instanceof HTMLElement)) {
+                    return;
+                }
+
+                list.appendChild(fragment);
+                reindexRows();
+                updateEmptyState();
+                const latestInput = rows().at(-1)?.querySelector("[data-phan-loai-name]");
+                if (latestInput instanceof HTMLInputElement) {
+                    latestInput.focus();
+                }
+            });
+
+            root.addEventListener("click", (event) => {
+                const target = event.target instanceof Element ? event.target : null;
+                const removeButton = target?.closest("[data-remove-phan-loai]");
+                if (!removeButton) {
+                    return;
+                }
+
+                removeButton.closest("[data-phan-loai-row]")?.remove();
+                reindexRows();
+                updateEmptyState();
+            });
+
+            reindexRows();
+            updateEmptyState();
+        })();
+    </script>
 }

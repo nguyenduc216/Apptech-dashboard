@@ -1,13 +1,16 @@
-const STATIC_CACHE = 'apptech-static-v2';
+const STATIC_CACHE = 'apptech-static-v3';
 const STATIC_ASSETS = [
     '/dang-nhap',
     '/manifest.webmanifest',
-    '/css/site.css',
-    '/js/dashboard.js',
     '/images/login-smart-home-bg.jpg',
     '/images/apptech-logo-192.png',
     '/images/apptech-logo-512.png'
 ];
+
+const NETWORK_FIRST_PATHS = new Set([
+    '/css/site.css',
+    '/js/dashboard.js'
+]);
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -45,6 +48,22 @@ self.addEventListener('fetch', (event) => {
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request).catch(() => caches.match('/dang-nhap'))
+        );
+        return;
+    }
+
+    if (NETWORK_FIRST_PATHS.has(requestUrl.pathname)) {
+        event.respondWith(
+            fetch(request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+                    const responseClone = networkResponse.clone();
+                    caches.open(STATIC_CACHE).then((cache) => {
+                        cache.put(request, responseClone);
+                    });
+                }
+
+                return networkResponse;
+            }).catch(() => caches.match(request))
         );
         return;
     }

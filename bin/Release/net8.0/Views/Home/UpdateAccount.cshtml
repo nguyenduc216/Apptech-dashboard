@@ -18,7 +18,7 @@
 <section class="account-page">
     @if (!string.IsNullOrWhiteSpace(statusMessage))
     {
-        <div class="page-alert @statusType">
+        <div class="page-alert @statusType" data-status-alert>
             <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
             <span>@statusMessage</span>
         </div>
@@ -54,11 +54,47 @@
 
                         <div class="avatar-editor-copy">
                             <label asp-for="Profile.AvatarFile" class="avatar-upload-label"></label>
-                            <input asp-for="Profile.AvatarFile"
+                            <div class="avatar-editor-actions">
+                                <label class="secondary-button image-upload-button" for="profileAvatarFile">
+                                    <i class="fa-solid fa-image" aria-hidden="true"></i>
+                                    <span>Tải từ thiết bị</span>
+                                </label>
+
+                                <button type="button"
+                                        class="secondary-button image-upload-button"
+                                        data-avatar-camera-open>
+                                    <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                    <span>Chụp camera</span>
+                                </button>
+                            </div>
+                            <input id="profileAvatarFile"
+                                   asp-for="Profile.AvatarFile"
                                    type="file"
                                    accept=".jpg,.jpeg,.png,.webp,image/png,image/jpeg,image/webp"
                                    class="avatar-upload-input"
-                                   data-avatar-input />
+                                   data-avatar-input
+                                   hidden />
+                            <input id="profileAvatarCamera"
+                                   name="Profile.AvatarFile"
+                                   type="file"
+                                   accept="image/*"
+                                   capture="user"
+                                   class="avatar-upload-input"
+                                   data-avatar-input
+                                   data-avatar-camera-fallback
+                                   hidden />
+                            <div class="avatar-camera-panel" data-avatar-camera-panel hidden>
+                                <video class="avatar-camera-video" data-avatar-camera-video autoplay playsinline muted></video>
+                                <canvas data-avatar-camera-canvas hidden></canvas>
+                                <div class="avatar-camera-actions">
+                                    <button type="button" class="primary-button" data-avatar-camera-capture>
+                                        <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                        <span>Chụp ảnh</span>
+                                    </button>
+                                    <button type="button" class="secondary-button" data-avatar-camera-close>Dừng camera</button>
+                                </div>
+                                <div class="page-alert info avatar-camera-status" data-avatar-camera-status hidden></div>
+                            </div>
                             <span asp-validation-for="Profile.AvatarFile" class="login-field-error"></span>
                             <p>Hỗ trợ JPG, PNG, WEBP. Dung lượng tối đa 2MB.</p>
                         </div>

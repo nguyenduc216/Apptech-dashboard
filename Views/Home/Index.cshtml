@@ -1462,6 +1462,55 @@
                 return data;
             };
 
+            const getAttendanceEntryCount = (scope) => {
+                if (Array.isArray(scope)) {
+                    return scope.reduce((total, item) => total + 1 + (item.thoiDiemCheckOut ? 1 : 0), 0);
+                }
+                if (scope instanceof HTMLElement) {
+                    return scope.querySelectorAll(".cham-cong-attendance-line").length;
+                }
+                return 0;
+            };
+
+            const groupRenderedHistoryCards = () => {
+                if (!(historyElement instanceof HTMLElement)) {
+                    return;
+                }
+                const cards = Array.from(historyElement.querySelectorAll(".cham-cong-timeline-item"));
+                const employeeCards = new Map();
+                cards.forEach((card) => {
+                    const employeeName = card.querySelector(".cham-cong-employee-name")?.textContent?.trim() || "";
+                    const employeeId = card.dataset.employeeId || "";
+                    const key = employeeId ? `id:${employeeId}` : employeeName.toLocaleLowerCase("vi-VN");
+                    const currentSplit = card.querySelector(".cham-cong-split");
+                    if (!key || !(currentSplit instanceof HTMLElement)) {
+                        return;
+                    }
+                    const existingCard = employeeCards.get(key);
+                    if (!existingCard) {
+                        employeeCards.set(key, card);
+                        return;
+                    }
+
+                    const existingSplit = existingCard.querySelector(".cham-cong-split");
+                    if (!(existingSplit instanceof HTMLElement)) {
+                        return;
+                    }
+                    currentSplit.querySelectorAll(".cham-cong-attendance-line").forEach((line) => {
+                        existingSplit.appendChild(line);
+                    });
+                    if (card.classList.contains("is-pending") || card.classList.contains("is-open")) {
+                        existingCard.classList.remove("is-complete");
+                        existingCard.classList.add("is-pending", "is-open");
+                    }
+                    card.remove();
+                });
+
+                Array.from(historyElement.querySelectorAll(".cham-cong-timeline-item")).forEach((card, index) => {
+                    card.style.order = `${index}`;
+                });
+            };
+
             const renderHistory = (items) => {
                 if (!historyElement) {
                     return;
@@ -1506,7 +1555,7 @@
                     const checkoutClass = item.thoiDiemCheckOut ? "is-checkout-complete" : "is-checkout-pending";
                     const checkoutViolationClass = item.isCheckoutViolation ? " is-attendance-violation" : "";
                     return `
-                        <div class="cham-cong-timeline-item ${item.thoiDiemCheckOut ? "is-complete" : "is-pending"} ${item.isOpen ? "is-open" : ""}" style="order:${index};">
+                        <div class="cham-cong-timeline-item ${item.thoiDiemCheckOut ? "is-complete" : "is-pending"} ${item.isOpen ? "is-open" : ""}" data-employee-id="${escapeHtml(item.idNhanVien || "")}" style="order:${index};">
                             <div class="cham-cong-dot"></div>
                             <div class="cham-cong-split">
                                 <strong class="cham-cong-employee-name">${escapeHtml(employeeName)}</strong>
@@ -1542,6 +1591,7 @@
                             </div>
                         </div>`;
                 }).join("");
+                groupRenderedHistoryCards();
                 historyElement.scrollLeft = 0;
                 updateHistoryCounter();
             };
@@ -1571,6 +1621,10 @@
                 const items = Array.from(historyElement.querySelectorAll(".cham-cong-timeline-item"));
                 if (items.length === 0) {
                     historyCount.textContent = mobileHistoryMedia.matches ? "0 / 0" : "0 lượt";
+                    return;
+                }
+                if (!mobileHistoryMedia.matches) {
+                    historyCount.textContent = `${getAttendanceEntryCount(historyElement)} lượt`;
                     return;
                 }
                 if (!mobileHistoryMedia.matches) {
@@ -1867,6 +1921,7 @@
 
             syncButtons();
             syncEmployeeSummary();
+            groupRenderedHistoryCards();
             updateHistoryCounter();
         })();
     </script>

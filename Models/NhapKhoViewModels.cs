@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace ApptechDashboard.Models;
@@ -109,6 +110,8 @@ public sealed class NhapKhoDetailItem
     public int HangHoaId { get; set; }
     public string? TenHangHoa { get; set; }
     public string? MaHangHoa { get; set; }
+    public int? PhanLoaiHangHoaId { get; set; }
+    public string? TenPhanLoaiHangHoa { get; set; }
     public int? DonViTinhId { get; set; }
     public string? TenDonViTinh { get; set; }
     public string? TenVietTatDonViTinh { get; set; }
@@ -158,6 +161,18 @@ public sealed class NhapKhoFormModel
     [ValidateNever]
     public List<NhapKhoDetailItem> Details { get; set; } = [];
 
+    [ValidateNever]
+    public List<NhapXuatImageItem> ExistingImages { get; set; } = [];
+
+    [ValidateNever]
+    public List<string> RemovedImagePaths { get; set; } = [];
+
+    [ValidateNever]
+    public List<IFormFile> NewImageFiles { get; set; } = [];
+
+    [ValidateNever]
+    public List<string> UploadedImagePaths { get; set; } = [];
+
     public string? Keyword { get; set; }
     public string? StatusFilter { get; set; }
     public int Page { get; set; } = 1;
@@ -183,6 +198,8 @@ public sealed class NhapKhoLookupOption
     public int Id { get; set; }
     public string Label { get; set; } = string.Empty;
     public int? DonViTinhId { get; set; }
+    public int? HangHoaId { get; set; }
+    public string? LoaiHinhNhap { get; set; }
 }
 
 public sealed class NhapKhoManagementViewModel
@@ -192,6 +209,7 @@ public sealed class NhapKhoManagementViewModel
     public IReadOnlyList<NhapKhoListItem> Items { get; set; } = [];
     public IReadOnlyList<NhapKhoLookupOption> KhoOptions { get; set; } = [];
     public IReadOnlyList<NhapKhoLookupOption> HangHoaOptions { get; set; } = [];
+    public IReadOnlyList<NhapKhoLookupOption> PhanLoaiHangHoaOptions { get; set; } = [];
     public IReadOnlyList<NhapKhoLookupOption> DonViTinhOptions { get; set; } = [];
     public IReadOnlyList<NhapKhoLookupOption> NhaCungCapOptions { get; set; } = [];
     public NhapKhoPopupMode PopupMode { get; set; }

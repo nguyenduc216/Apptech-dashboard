@@ -1,3 +1,4 @@
+﻿@using System.Text.Json
 @model ChamCongReportViewModel
 @{
     ViewData["Title"] = "Báo cáo chấm công";
@@ -5,6 +6,7 @@
 
     var monthOptions = Enumerable.Range(1, 12).ToArray();
     var currentYear = DateTime.Today.Year;
+    var today = DateTime.Today;
     var yearOptions = Enumerable.Range(currentYear - 5, 11).Reverse().ToArray();
     var columnCount = 3 + Model.Days.Count + 1;
     var selectedEmployeeIds = Model.SelectedEmployeeIds.ToHashSet();
@@ -133,6 +135,9 @@
             @if (Model.ActiveTab == "gio-cong")
             {
                 <div class="table-wrap cham-cong-report-wrap" role="tabpanel">
+                    <button type="button" class="menu-nav-button cham-cong-report-fullscreen-button" data-report-fullscreen-toggle aria-label="Xem toàn màn hình">
+                        <i class="fa-solid fa-expand" aria-hidden="true" data-report-fullscreen-icon></i>
+                    </button>
                     <table class="data-table master-data-table cham-cong-report-table">
                         <thead>
                             <tr>
@@ -171,11 +176,24 @@
                                         @foreach (var day in Model.Days)
                                         {
                                             var hasValue = employee.HoursByDay.TryGetValue(day.Day, out var hours);
-                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
-                                                @(hasValue ? hours.ToString("0.##") : "")
+                                            var expectedHours = day.IsSunday ? 0m : day.IsSaturday ? 4m : 8m;
+                                            var isPastOrToday = day.Date.Date <= today;
+                                            var isIncomplete = isPastOrToday && expectedHours > 0 && (!hasValue || hours < expectedHours);
+                                            var hasDetails = employee.DetailsByDay.ContainsKey(day.Day);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "") @(isIncomplete ? "is-incomplete" : "")">
+                                                @if (hasValue || hasDetails)
+                                                {
+                                                    <button type="button"
+                                                            class="report-hour-detail-button"
+                                                            data-report-detail-open
+                                                            data-employee-id="@employee.EmployeeId"
+                                                            data-day="@day.Day">
+                                                        @(hasValue ? hours.ToString("0.##") : "0")
+                                                    </button>
+                                                }
                                             </td>
                                         }
-                                        <td class="report-total-col">@employee.TotalHours.ToString("0.##") / @Model.MonthlyStandardHours.ToString("0.##")</td>
+                                        <td class="report-total-col @(employee.TotalHours < Model.MonthlyStandardHours ? "is-incomplete" : "")">@employee.TotalHours.ToString("0.##") / @Model.MonthlyStandardHours.ToString("0.##")</td>
                                     </tr>
                                 }
                             }
@@ -194,7 +212,7 @@
                                             @(hasAnyValue ? total.ToString("0.##") : "")
                                         </td>
                                     }
-                                    <td class="report-total-col">@Model.GrandTotalHours.ToString("0.##") / @Model.GrandStandardHours.ToString("0.##")</td>
+                                    <td class="report-total-col @(Model.GrandTotalHours < Model.GrandStandardHours ? "is-incomplete" : "")">@Model.GrandTotalHours.ToString("0.##") / @Model.GrandStandardHours.ToString("0.##")</td>
                                 </tr>
                             </tfoot>
                         }
@@ -204,6 +222,9 @@
             else if (Model.ActiveTab == "di-tre-ve-som")
             {
                 <div class="table-wrap cham-cong-report-wrap" role="tabpanel">
+                    <button type="button" class="menu-nav-button cham-cong-report-fullscreen-button" data-report-fullscreen-toggle aria-label="Xem toàn màn hình">
+                        <i class="fa-solid fa-expand" aria-hidden="true" data-report-fullscreen-icon></i>
+                    </button>
                     <table class="data-table master-data-table cham-cong-report-table">
                         <thead>
                             <tr>
@@ -241,12 +262,12 @@
                                         <td class="report-role-col">@(string.IsNullOrWhiteSpace(employee.ChucVu) ? "-" : employee.ChucVu)</td>
                                         @foreach (var day in Model.Days)
                                         {
-                                            var hasValue = employee.LateEarlyMinutesByDay.TryGetValue(day.Day, out var minutes);
-                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                        var hasValue = employee.LateEarlyMinutesByDay.TryGetValue(day.Day, out var minutes);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "") @(hasValue && minutes > 0 ? "is-incomplete" : "")">
                                                 @(hasValue ? minutes.ToString("0") : "")
                                             </td>
                                         }
-                                        <td class="report-total-col">@employee.TotalLateEarlyMinutes.ToString("0")</td>
+                                        <td class="report-total-col @(employee.TotalLateEarlyMinutes > 0 ? "is-incomplete" : "")">@employee.TotalLateEarlyMinutes.ToString("0")</td>
                                     </tr>
                                 }
                             }
@@ -265,7 +286,7 @@
                                             @(hasAnyValue ? total.ToString("0") : "")
                                         </td>
                                     }
-                                    <td class="report-total-col">@Model.GrandLateEarlyMinutes.ToString("0")</td>
+                                    <td class="report-total-col @(Model.GrandLateEarlyMinutes > 0 ? "is-incomplete" : "")">@Model.GrandLateEarlyMinutes.ToString("0")</td>
                                 </tr>
                             </tfoot>
                         }
@@ -275,6 +296,9 @@
             else
             {
                 <div class="table-wrap cham-cong-report-wrap" role="tabpanel">
+                    <button type="button" class="menu-nav-button cham-cong-report-fullscreen-button" data-report-fullscreen-toggle aria-label="Xem toàn màn hình">
+                        <i class="fa-solid fa-expand" aria-hidden="true" data-report-fullscreen-icon></i>
+                    </button>
                     <table class="data-table master-data-table cham-cong-report-table">
                         <thead>
                             <tr>
@@ -313,11 +337,13 @@
                                         @foreach (var day in Model.Days)
                                         {
                                             var hasValue = employee.CountsByDay.TryGetValue(day.Day, out var count);
-                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "")">
+                                            var isPastOrToday = day.Date.Date <= today;
+                                            var isIncomplete = isPastOrToday && !day.IsSunday && (!hasValue || count is null || count.CheckinCount != count.CheckoutCount);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "") @(isIncomplete ? "is-incomplete" : "")">
                                                 @(hasValue && count is not null ? $"{count.CheckinCount} / {count.CheckoutCount}" : "")
                                             </td>
                                         }
-                                        <td class="report-total-col">@employee.TotalCheckinCount / @employee.TotalCheckoutCount</td>
+                                        <td class="report-total-col @(employee.TotalCheckinCount != employee.TotalCheckoutCount ? "is-incomplete" : "")">@employee.TotalCheckinCount / @employee.TotalCheckoutCount</td>
                                     </tr>
                                 }
                             }
@@ -338,7 +364,7 @@
                                             @(hasAnyValue ? $"{totalCheckin} / {totalCheckout}" : "")
                                         </td>
                                     }
-                                    <td class="report-total-col">@Model.GrandCheckinCount / @Model.GrandCheckoutCount</td>
+                                    <td class="report-total-col @(Model.GrandCheckinCount != Model.GrandCheckoutCount ? "is-incomplete" : "")">@Model.GrandCheckinCount / @Model.GrandCheckoutCount</td>
                                 </tr>
                             </tfoot>
                         }
@@ -347,10 +373,227 @@
             }
         </div>
     </article>
+
+    <div class="crud-modal-shell cham-cong-report-detail-shell" data-report-detail-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-report-detail-close></div>
+        <section class="crud-modal cham-cong-report-detail-modal" role="dialog" aria-modal="true" aria-labelledby="cham-cong-report-detail-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="cham-cong-report-detail-title" data-report-detail-title>Chi tiết chấm công</h2>
+                    <p class="crud-modal-subtitle" data-report-detail-subtitle></p>
+                </div>
+                <button type="button" class="menu-nav-button" data-report-detail-close aria-label="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </div>
+            <div class="crud-form cham-cong-report-detail-body" data-report-detail-body></div>
+        </section>
+    </div>
+
+    <div class="crud-modal-shell cham-cong-image-viewer-shell" data-report-image-viewer-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-report-image-close></div>
+        <section class="crud-modal cham-cong-image-viewer" role="dialog" aria-modal="true" aria-labelledby="report-image-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="report-image-title" data-report-image-title>Ảnh chấm công</h2>
+                </div>
+                <div class="cham-cong-image-toolbar">
+                    <button type="button" class="menu-nav-button" data-report-image-zoom-out aria-label="Thu nhỏ"><i class="fa-solid fa-magnifying-glass-minus" aria-hidden="true"></i></button>
+                    <button type="button" class="menu-nav-button" data-report-image-zoom-in aria-label="Phóng to"><i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i></button>
+                    <button type="button" class="menu-nav-button" data-report-image-rotate aria-label="Xoay"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i></button>
+                    <a class="menu-nav-button" href="#" download data-report-image-download aria-label="Tải xuống"><i class="fa-solid fa-download" aria-hidden="true"></i></a>
+                    <button type="button" class="menu-nav-button" data-report-image-close aria-label="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </div>
+            </div>
+            <div class="crud-form cham-cong-image-stage">
+                <img data-report-image-img alt="Ảnh chấm công" />
+            </div>
+        </section>
+    </div>
 </section>
 
 @section Scripts {
     <script>
+        window.chamCongReportDetails = @Html.Raw(JsonSerializer.Serialize(Model.Employees.Select(employee => new
+        {
+            employee.EmployeeId,
+            employee.HoTen,
+            employee.ChucVu,
+            Days = employee.DetailsByDay.ToDictionary(
+                item => item.Key.ToString(),
+                item => item.Value.Select(detail => new
+                {
+                    CheckinTime = detail.CheckinTime?.ToString("dd/MM/yyyy HH:mm"),
+                    CheckoutTime = detail.CheckoutTime?.ToString("dd/MM/yyyy HH:mm"),
+                    detail.CheckinImage,
+                    detail.CheckoutImage,
+                    detail.CheckinNote,
+                    detail.CheckoutNote
+                }))
+        })));
+
+        (() => {
+            const page = document.querySelector(".cham-cong-report-page");
+            const fullscreenButton = document.querySelector(".cham-cong-report-wrap [data-report-fullscreen-toggle]");
+            const fullscreenIcon = fullscreenButton?.querySelector("[data-report-fullscreen-icon]");
+            const detailShell = document.querySelector("[data-report-detail-shell]");
+            const detailTitle = document.querySelector("[data-report-detail-title]");
+            const detailSubtitle = document.querySelector("[data-report-detail-subtitle]");
+            const detailBody = document.querySelector("[data-report-detail-body]");
+            const imageShell = document.querySelector("[data-report-image-viewer-shell]");
+            const image = document.querySelector("[data-report-image-img]");
+            const imageTitle = document.querySelector("[data-report-image-title]");
+            const imageDownload = document.querySelector("[data-report-image-download]");
+            let imageScale = 1;
+            let imageRotation = 0;
+
+            const escapeHtml = (value) => String(value || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+
+            const updateImageTransform = () => {
+                if (image instanceof HTMLImageElement) {
+                    image.style.transform = `scale(${imageScale}) rotate(${imageRotation}deg)`;
+                }
+            };
+
+            const openImage = (src, title) => {
+                if (!(imageShell instanceof HTMLElement) || !(image instanceof HTMLImageElement) || !src) {
+                    return;
+                }
+                imageScale = 1;
+                imageRotation = 0;
+                image.src = src;
+                if (imageTitle instanceof HTMLElement) {
+                    imageTitle.textContent = title || "Ảnh chấm công";
+                }
+                if (imageDownload instanceof HTMLAnchorElement) {
+                    imageDownload.href = src;
+                }
+                updateImageTransform();
+                imageShell.hidden = false;
+                document.body.classList.add("modal-open");
+            };
+
+            const closeImage = () => {
+                if (imageShell instanceof HTMLElement) {
+                    imageShell.hidden = true;
+                }
+                if (image instanceof HTMLImageElement) {
+                    image.removeAttribute("src");
+                }
+                if (!(detailShell instanceof HTMLElement) || detailShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            const renderPhoto = (src, title) => src
+                ? `<button type="button" class="cham-cong-entry-image-button" data-report-image-open data-image-src="${escapeHtml(src)}" data-image-title="${escapeHtml(title)}"><img src="${escapeHtml(src)}" alt="${escapeHtml(title)}" /></button>`
+                : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
+
+            const renderNote = (note) => note
+                ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(note)}</span></p>`
+                : "";
+
+            const openDetail = (employeeId, day) => {
+                const employee = (window.chamCongReportDetails || []).find((item) => Number(item.EmployeeId) === Number(employeeId));
+                const details = employee?.Days?.[String(day)] || [];
+                if (!(detailShell instanceof HTMLElement) || !(detailBody instanceof HTMLElement)) {
+                    return;
+                }
+                if (detailTitle instanceof HTMLElement) {
+                    detailTitle.textContent = employee?.HoTen || "Chi tiết chấm công";
+                }
+                if (detailSubtitle instanceof HTMLElement) {
+                    detailSubtitle.textContent = `Ngày ${day}/${@Model.Month.ToString("00")}/@Model.Year`;
+                }
+                detailBody.innerHTML = details.length === 0
+                    ? '<div class="cham-cong-empty">Không có dữ liệu checkin trong ngày.</div>'
+                    : details.map((item) => {
+                        const employeeName = employee?.HoTen || "Nhân viên";
+                        const checkinPhoto = renderPhoto(item.CheckinImage, `Ảnh checkin ${employeeName}`);
+                        const checkoutPhoto = renderPhoto(item.CheckoutImage, `Ảnh checkout ${employeeName}`);
+                        const checkoutClass = item.CheckoutTime ? "is-checkout-complete" : "is-checkout-pending";
+                        return `
+                            <div class="cham-cong-timeline-item is-complete">
+                                <div class="cham-cong-split">
+                                    <strong class="cham-cong-employee-name">${escapeHtml(employeeName)}</strong>
+                                    <section class="cham-cong-attendance-line is-checkin">
+                                        <div class="cham-cong-entry-photo">${checkinPhoto}</div>
+                                        <div class="cham-cong-entry-content">
+                                            <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.CheckinTime || "--:--")}</strong>
+                                            ${renderNote(item.CheckinNote)}
+                                        </div>
+                                    </section>
+                                    <section class="cham-cong-attendance-line ${checkoutClass}">
+                                        <div class="cham-cong-entry-photo">${checkoutPhoto}</div>
+                                        <div class="cham-cong-entry-content">
+                                            <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>${escapeHtml(item.CheckoutTime || "Chưa checkout")}</strong>
+                                            ${renderNote(item.CheckoutNote)}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>`;
+                    }).join("");
+                detailShell.hidden = false;
+                document.body.classList.add("modal-open");
+            };
+
+            const closeDetail = () => {
+                if (detailShell instanceof HTMLElement) {
+                    detailShell.hidden = true;
+                }
+                if (!(imageShell instanceof HTMLElement) || imageShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            fullscreenButton?.addEventListener("click", () => {
+                const wrap = fullscreenButton.closest(".cham-cong-report-wrap");
+                if (!(page instanceof HTMLElement) || !(wrap instanceof HTMLElement)) {
+                    return;
+                }
+                const enabled = wrap.classList.toggle("is-report-fullscreen");
+                page.classList.toggle("is-report-fullscreen", enabled);
+                fullscreenButton.setAttribute("aria-label", enabled ? "Thoát toàn màn hình" : "Xem toàn màn hình");
+                fullscreenIcon?.classList.toggle("fa-expand", !enabled);
+                fullscreenIcon?.classList.toggle("fa-compress", enabled);
+                document.body.classList.toggle("report-fullscreen-open", enabled);
+            });
+
+            document.addEventListener("click", (event) => {
+                const target = event.target instanceof Element ? event.target : null;
+                const detailButton = target?.closest("[data-report-detail-open]");
+                if (detailButton instanceof HTMLElement) {
+                    openDetail(detailButton.dataset.employeeId, detailButton.dataset.day);
+                    return;
+                }
+
+                const imageButton = target?.closest("[data-report-image-open], .cham-cong-report-detail-body .cham-cong-entry-photo img");
+                if (imageButton) {
+                    const button = imageButton.closest("[data-report-image-open]");
+                    const img = imageButton instanceof HTMLImageElement ? imageButton : imageButton.querySelector("img");
+                    openImage(button?.dataset.imageSrc || img?.getAttribute("src"), button?.dataset.imageTitle || img?.getAttribute("alt") || "Ảnh chấm công");
+                }
+            });
+
+            document.querySelectorAll("[data-report-detail-close]").forEach((button) => button.addEventListener("click", closeDetail));
+            document.querySelectorAll("[data-report-image-close]").forEach((button) => button.addEventListener("click", closeImage));
+            document.querySelector("[data-report-image-zoom-in]")?.addEventListener("click", () => { imageScale = Math.min(imageScale + 0.2, 4); updateImageTransform(); });
+            document.querySelector("[data-report-image-zoom-out]")?.addEventListener("click", () => { imageScale = Math.max(imageScale - 0.2, 0.4); updateImageTransform(); });
+            document.querySelector("[data-report-image-rotate]")?.addEventListener("click", () => { imageRotation = (imageRotation + 90) % 360; updateImageTransform(); });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeImage();
+                    closeDetail();
+                    if (page instanceof HTMLElement && page.classList.contains("is-report-fullscreen")) {
+                        fullscreenButton?.click();
+                    }
+                }
+            });
+        })();
+
         (() => {
             const picker = document.querySelector("[data-report-employee-picker]");
             if (!(picker instanceof HTMLElement)) {

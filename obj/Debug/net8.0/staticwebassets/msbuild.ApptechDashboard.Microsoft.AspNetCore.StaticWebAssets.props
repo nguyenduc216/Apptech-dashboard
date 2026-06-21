@@ -256,6 +256,22 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\.gitkeep))</OriginalItemSpec>
     </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\avatars\60cfdb7489454ca19482f871cdc8c829-20260528041614540.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/avatars/60cfdb7489454ca19482f871cdc8c829-20260528041614540.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\avatars\60cfdb7489454ca19482f871cdc8c829-20260528041614540.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\chamcong-01ea4dccf44e400fb540185c6c4ceeff-20260511145439836.jpg))">
       <SourceType>Package</SourceType>
       <SourceId>ApptechDashboard</SourceId>
@@ -672,6 +688,38 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-0cba7e6e882b40888586a90d52e30c3e-20260510011847079.jpg))</OriginalItemSpec>
     </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-1b70306ed2f94f7fa7530496962f5576-20260612123807814.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/checkin/checkin-1b70306ed2f94f7fa7530496962f5576-20260612123807814.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-1b70306ed2f94f7fa7530496962f5576-20260612123807814.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-52931febfd6a414191f7327edc3aa65e-20260612123748632.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/checkin/checkin-52931febfd6a414191f7327edc3aa65e-20260612123748632.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-52931febfd6a414191f7327edc3aa65e-20260612123748632.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-708e120bc936431b85c4abc352e233a1-20260510012107005.jpg))">
       <SourceType>Package</SourceType>
       <SourceId>ApptechDashboard</SourceId>
@@ -719,6 +767,22 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-7ad1113997254813b9318bd9b35cc1f6-20260508173325097.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-a4a86cef3ddd4ed9b1c41aae5f1b5b33-20260612125337654.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/checkin/checkin-a4a86cef3ddd4ed9b1c41aae5f1b5b33-20260612125337654.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\checkin\checkin-a4a86cef3ddd4ed9b1c41aae5f1b5b33-20260612125337654.jpg))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\hang-hoa\.gitkeep))">
       <SourceType>Package</SourceType>
@@ -863,6 +927,118 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\Images\CongViec\CheckOut\checkout-52cce72f596c4412bf532805fc9a6864-20260511004040754.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\.gitkeep))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/.gitkeep</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\.gitkeep))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-0afbcf4ea497459989503d7f4523f1d4-20260525160520900.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/nhap-xuat-0afbcf4ea497459989503d7f4523f1d4-20260525160520900.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-0afbcf4ea497459989503d7f4523f1d4-20260525160520900.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-2576a7447c914a82a66bb81ccd614812-20260525160448582.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/nhap-xuat-2576a7447c914a82a66bb81ccd614812-20260525160448582.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-2576a7447c914a82a66bb81ccd614812-20260525160448582.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-36c630f80d204d15a09696dfdac5501d-20260525112440696.png))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/nhap-xuat-36c630f80d204d15a09696dfdac5501d-20260525112440696.png</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-36c630f80d204d15a09696dfdac5501d-20260525112440696.png))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-9d55a307203b474ca12f19a697a4c2a3-20260525112414708.png))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/nhap-xuat-9d55a307203b474ca12f19a697a4c2a3-20260525112414708.png</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-9d55a307203b474ca12f19a697a4c2a3-20260525112414708.png))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-d1da7e23d0524d418d1151feea73bcdc-20260525160511949.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/nhap-xuat-d1da7e23d0524d418d1151feea73bcdc-20260525160511949.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-d1da7e23d0524d418d1151feea73bcdc-20260525160511949.jpg))</OriginalItemSpec>
+    </StaticWebAsset>
+    <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-f9192e30b3c3479c9551bc9ae3dcf0f3-20260525160519028.jpg))">
+      <SourceType>Package</SourceType>
+      <SourceId>ApptechDashboard</SourceId>
+      <ContentRoot>$(MSBuildThisFileDirectory)..\staticwebassets\</ContentRoot>
+      <BasePath>_content/ApptechDashboard</BasePath>
+      <RelativePath>uploads/nhap-xuat/nhap-xuat-f9192e30b3c3479c9551bc9ae3dcf0f3-20260525160519028.jpg</RelativePath>
+      <AssetKind>All</AssetKind>
+      <AssetMode>All</AssetMode>
+      <AssetRole>Primary</AssetRole>
+      <RelatedAsset></RelatedAsset>
+      <AssetTraitName></AssetTraitName>
+      <AssetTraitValue></AssetTraitValue>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <OriginalItemSpec>$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\nhap-xuat\nhap-xuat-f9192e30b3c3479c9551bc9ae3dcf0f3-20260525160519028.jpg))</OriginalItemSpec>
     </StaticWebAsset>
     <StaticWebAsset Include="$([System.IO.Path]::GetFullPath($(MSBuildThisFileDirectory)..\staticwebassets\uploads\vat-tu\.gitkeep))">
       <SourceType>Package</SourceType>

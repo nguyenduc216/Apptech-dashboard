@@ -579,9 +579,7 @@ public sealed class ChamCongService(
             return null;
         }
 
-        var morningDistance = Math.Abs((checkinTime.Value - schedule.Begin1).TotalMinutes);
-        var afternoonDistance = Math.Abs((checkinTime.Value - schedule.Begin2).TotalMinutes);
-        return morningDistance <= afternoonDistance
+        return checkinTime.Value < schedule.Begin2
             ? new AttendanceShift(schedule.Begin1, schedule.End1)
             : new AttendanceShift(schedule.Begin2, schedule.End2);
     }

@@ -18,10 +18,15 @@ public interface INhapKhoService
     Task<NhapKhoListItem?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NhapKhoDetailItem>> GetDetailsAsync(int phieuId, CancellationToken cancellationToken = default);
     Task<string> GenerateNextMaPhieuAsync(DateTime ngayNhapKho, CancellationToken cancellationToken = default);
-    Task<(IReadOnlyList<NhapKhoLookupOption> KhoOptions, IReadOnlyList<NhapKhoLookupOption> HangHoaOptions, IReadOnlyList<NhapKhoLookupOption> DonViTinhOptions, IReadOnlyList<NhapKhoLookupOption> NhaCungCapOptions)> GetLookupDataAsync(CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<NhapKhoLookupOption> KhoOptions, IReadOnlyList<NhapKhoLookupOption> HangHoaOptions, IReadOnlyList<NhapKhoLookupOption> PhanLoaiHangHoaOptions, IReadOnlyList<NhapKhoLookupOption> DonViTinhOptions, IReadOnlyList<NhapKhoLookupOption> NhaCungCapOptions)> GetLookupDataAsync(CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, int? Id)> CreateAsync(NhapKhoFormModel model, string currentUser, CancellationToken cancellationToken = default);
     Task<(bool Succeeded, string? ErrorMessage)> UpdateAsync(NhapKhoFormModel model, string currentUser, CancellationToken cancellationToken = default);
+    Task<(bool Succeeded, string? ErrorMessage)> UpdateImagesAsync(
+        int id,
+        IEnumerable<string>? removedImagePaths,
+        IEnumerable<string>? uploadedImagePaths,
+        CancellationToken cancellationToken = default);
     Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(int id, CancellationToken cancellationToken = default);
 }
 
@@ -224,21 +229,23 @@ public sealed class NhapKhoService(
         return await GenerateNextMaPhieuAsync(connection, transaction: null, ngayNhapKho, cancellationToken);
     }
 
-    public async Task<(IReadOnlyList<NhapKhoLookupOption> KhoOptions, IReadOnlyList<NhapKhoLookupOption> HangHoaOptions, IReadOnlyList<NhapKhoLookupOption> DonViTinhOptions, IReadOnlyList<NhapKhoLookupOption> NhaCungCapOptions)> GetLookupDataAsync(CancellationToken cancellationToken = default)
+    public async Task<(IReadOnlyList<NhapKhoLookupOption> KhoOptions, IReadOnlyList<NhapKhoLookupOption> HangHoaOptions, IReadOnlyList<NhapKhoLookupOption> PhanLoaiHangHoaOptions, IReadOnlyList<NhapKhoLookupOption> DonViTinhOptions, IReadOnlyList<NhapKhoLookupOption> NhaCungCapOptions)> GetLookupDataAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureColumnAsync(connection, null, "TblHangHoa", "LoaiHinhNhap", $"nvarchar(100) NOT NULL CONSTRAINT DF_TblHangHoa_LoaiHinhNhap DEFAULT('{NhapKhoLoaiHinh.NhapTheoLo}')", cancellationToken);
             var kho = await TryLoadOptionsAsync(() => LoadKhoOptionsAsync(connection, cancellationToken), "Kho");
             var hangHoa = await TryLoadOptionsAsync(() => LoadHangHoaOptionsAsync(connection, cancellationToken), "HangHoa");
+            var phanLoaiHangHoa = await TryLoadOptionsAsync(() => LoadPhanLoaiHangHoaOptionsAsync(connection, cancellationToken), "PhanLoaiHangHoa");
             var donViTinh = await TryLoadOptionsAsync(() => LoadDonViTinhOptionsAsync(connection, cancellationToken), "DonViTinh");
             var nhaCungCap = await TryLoadOptionsAsync(() => LoadNhaCungCapOptionsAsync(connection, cancellationToken), "NhaCungCap");
-            return (kho, hangHoa, donViTinh, nhaCungCap);
+            return (kho, hangHoa, phanLoaiHangHoa, donViTinh, nhaCungCap);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load NhapKho lookup data.");
-            return ([], [], [], []);
+            return ([], [], [], [], []);
         }
     }
 
@@ -255,6 +262,7 @@ public sealed class NhapKhoService(
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
             await EnsureNhapKhoDetailSchemaAsync(connection, transaction, cancellationToken);
+            await NhapXuatImageService.EnsureSchemaAsync(connection, transaction, cancellationToken);
 
             var validationError = ValidateHeaderAndDetails(model, details);
             if (!string.IsNullOrWhiteSpace(validationError))
@@ -300,6 +308,14 @@ public sealed class NhapKhoService(
             }
 
             await ReplaceDetailsAsync(connection, transaction, newId, details, cancellationToken);
+            await SyncImagesAsync(
+                connection,
+                transaction,
+                newId,
+                NhapXuatImageLoaiPhieu.Nhap,
+                model.RemovedImagePaths,
+                model.UploadedImagePaths,
+                cancellationToken);
             await _commonAuditService.WriteAsync(
                 connection,
                 transaction,
@@ -349,6 +365,7 @@ public sealed class NhapKhoService(
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
             await EnsureNhapKhoDetailSchemaAsync(connection, transaction, cancellationToken);
+            await NhapXuatImageService.EnsureSchemaAsync(connection, transaction, cancellationToken);
 
             var currentStatus = await LoadStatusAsync(connection, transaction, model.Id.Value, cancellationToken);
             if (currentStatus is null)
@@ -397,6 +414,14 @@ public sealed class NhapKhoService(
             }
 
             await ReplaceDetailsAsync(connection, transaction, model.Id.Value, details, cancellationToken);
+            await SyncImagesAsync(
+                connection,
+                transaction,
+                model.Id.Value,
+                NhapXuatImageLoaiPhieu.Nhap,
+                model.RemovedImagePaths,
+                model.UploadedImagePaths,
+                cancellationToken);
 
             if (shouldImport)
             {
@@ -444,6 +469,49 @@ public sealed class NhapKhoService(
         }
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage)> UpdateImagesAsync(
+        int id,
+        IEnumerable<string>? removedImagePaths,
+        IEnumerable<string>? uploadedImagePaths,
+        CancellationToken cancellationToken = default)
+    {
+        if (id <= 0)
+        {
+            return (false, "Không xác định được phiếu nhập kho cần cập nhật hình ảnh.");
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            await NhapXuatImageService.EnsureSchemaAsync(connection, transaction, cancellationToken);
+
+            var currentStatus = await LoadStatusAsync(connection, transaction, id, cancellationToken);
+            if (currentStatus is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, "Không tìm thấy phiếu nhập kho cần cập nhật hình ảnh.");
+            }
+
+            await SyncImagesAsync(
+                connection,
+                transaction,
+                id,
+                NhapXuatImageLoaiPhieu.Nhap,
+                removedImagePaths,
+                uploadedImagePaths,
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update NhapKho images for {Id}.", id);
+            return (false, "Không thể cập nhật hình ảnh phiếu nhập kho lúc này.");
+        }
+    }
+
     public async Task<(bool Succeeded, string? ErrorMessage)> DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
         if (id <= 0)
@@ -455,6 +523,7 @@ public sealed class NhapKhoService(
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            await NhapXuatImageService.EnsureSchemaAsync(connection, transaction, cancellationToken);
 
             var currentStatus = NhapKhoPhieuStatus.Normalize(await LoadStatusAsync(connection, transaction, id, cancellationToken));
             if (currentStatus == NhapKhoPhieuStatus.Imported)
@@ -469,10 +538,15 @@ public sealed class NhapKhoService(
                 DELETE FROM [{DetailTableName}]
                 WHERE IDPhieuNhapKho = @Id;
 
+                DELETE FROM [{NhapXuatImageService.TableName}]
+                WHERE IDPhieu = @Id
+                  AND LoaiPhieu = @LoaiPhieu;
+
                 DELETE FROM [{HeaderTableName}]
                 WHERE ID = @Id;
                 """;
             command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+            command.Parameters.Add(new SqlParameter("@LoaiPhieu", SqlDbType.NVarChar, 20) { Value = NhapXuatImageLoaiPhieu.Nhap });
 
             var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
             if (affectedRows <= 0)
@@ -515,6 +589,7 @@ public sealed class NhapKhoService(
         var hasDetailDonViNhapColumn = await HasColumnAsync(connection, transaction, DetailTableName, "IDDonViNhap", cancellationToken);
         var hasDetailSoLuongQuyDoiColumn = await HasColumnAsync(connection, transaction, DetailTableName, "SoLuongQuyDoi", cancellationToken);
         var hasDetailSoChungTuColumn = await HasColumnAsync(connection, transaction, DetailTableName, "SoChungTu", cancellationToken);
+        var hasDetailPhanLoaiColumn = await HasColumnAsync(connection, transaction, DetailTableName, "IDPhanLoaiHangHoa", cancellationToken);
         var detailDonViTinhExpression = hasDetailDonViTinhColumn ? "ct.IDDonViTinh" : "CAST(NULL AS int)";
         var detailDonViTinhSelect = $"{detailDonViTinhExpression} AS IDDonViTinh";
         var detailMaSoLoSelect = hasDetailMaSoLoColumn ? "ct.MaSoLo" : "CAST(NULL AS nvarchar(50)) AS MaSoLo";
@@ -524,12 +599,15 @@ public sealed class NhapKhoService(
         var detailDonViNhapSelect = $"{detailDonViNhapExpression} AS IDDonViNhap";
         var detailSoLuongQuyDoiSelect = hasDetailSoLuongQuyDoiColumn ? "ct.SoLuongQuyDoi" : "CAST(1 AS decimal(18,4)) AS SoLuongQuyDoi";
         var detailSoChungTuSelect = hasDetailSoChungTuColumn ? "ct.SoChungTu" : "CAST(NULL AS nvarchar(50)) AS SoChungTu";
+        var detailPhanLoaiExpression = hasDetailPhanLoaiColumn ? "ct.IDPhanLoaiHangHoa" : "CAST(NULL AS int)";
+        var detailPhanLoaiSelect = $"{detailPhanLoaiExpression} AS IDPhanLoaiHangHoa";
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = $"""
             SELECT
                 ct.ID,
                 ct.IDHangHoa,
+                {detailPhanLoaiSelect},
                 {detailDonViTinhSelect},
                 {detailMaSoLoSelect},
                 {detailSoChungTuSelect},
@@ -541,12 +619,14 @@ public sealed class NhapKhoService(
                 ct.LoaiHinhNhap,
                 hh.TenHangHoa,
                 hh.MaHangHoa,
+                pl.TenPhanLoai AS TenPhanLoaiHangHoa,
                 dvt.TenDonVi,
                 dvt.TenVietTat,
                 dvn.TenDonVi AS TenDonViNhap,
                 dvn.TenVietTat AS TenVietTatDonViNhap
             FROM [{DetailTableName}] ct
             LEFT JOIN [TblHangHoa] hh ON hh.ID = ct.IDHangHoa
+            LEFT JOIN [TblHangHoaPhanLoai] pl ON pl.ID = {detailPhanLoaiExpression}
             LEFT JOIN [TblDonViTinh] dvt ON dvt.ID = {detailDonViTinhExpression}
             LEFT JOIN [TblDonViTinh] dvn ON dvn.ID = {detailDonViNhapExpression}
             WHERE ct.IDPhieuNhapKho = @PhieuId
@@ -573,6 +653,7 @@ public sealed class NhapKhoService(
         var hasDetailDonViNhapColumn = await HasColumnAsync(connection, transaction, DetailTableName, "IDDonViNhap", cancellationToken);
         var hasDetailSoLuongQuyDoiColumn = await HasColumnAsync(connection, transaction, DetailTableName, "SoLuongQuyDoi", cancellationToken);
         var hasDetailSoChungTuColumn = await HasColumnAsync(connection, transaction, DetailTableName, "SoChungTu", cancellationToken);
+        var hasDetailPhanLoaiColumn = await HasColumnAsync(connection, transaction, DetailTableName, "IDPhanLoaiHangHoa", cancellationToken);
         await using var deleteCommand = connection.CreateCommand();
         deleteCommand.Transaction = transaction;
         deleteCommand.CommandText = $"""
@@ -590,6 +671,8 @@ public sealed class NhapKhoService(
             var maSoLoValue = hasDetailMaSoLoColumn ? "@MaSoLo," : string.Empty;
             var soChungTuColumn = hasDetailSoChungTuColumn ? "SoChungTu," : string.Empty;
             var soChungTuValue = hasDetailSoChungTuColumn ? "@SoChungTu," : string.Empty;
+            var phanLoaiColumn = hasDetailPhanLoaiColumn ? "IDPhanLoaiHangHoa," : string.Empty;
+            var phanLoaiValue = hasDetailPhanLoaiColumn ? "@IDPhanLoaiHangHoa," : string.Empty;
             var donGiaNhapColumn = hasDetailDonGiaNhapColumn ? "DonGiaNhap," : string.Empty;
             var donGiaNhapValue = hasDetailDonGiaNhapColumn ? "@DonGiaNhap," : string.Empty;
             var donGiaBanLeColumn = hasDetailDonGiaBanLeColumn ? "DonGiaBanLe," : string.Empty;
@@ -604,6 +687,7 @@ public sealed class NhapKhoService(
                 INSERT INTO [{DetailTableName}] (
                     IDPhieuNhapKho,
                     IDHangHoa,
+                    {phanLoaiColumn}
                     {donViTinhColumn}
                     {maSoLoColumn}
                     {soChungTuColumn}
@@ -617,6 +701,7 @@ public sealed class NhapKhoService(
                 VALUES (
                     @IDPhieuNhapKho,
                     @IDHangHoa,
+                    {phanLoaiValue}
                     {donViTinhValue}
                     {maSoLoValue}
                     {soChungTuValue}
@@ -630,6 +715,10 @@ public sealed class NhapKhoService(
                 """;
             insertCommand.Parameters.Add(new SqlParameter("@IDPhieuNhapKho", SqlDbType.Int) { Value = phieuId });
             insertCommand.Parameters.Add(new SqlParameter("@IDHangHoa", SqlDbType.Int) { Value = detail.HangHoaId });
+            if (hasDetailPhanLoaiColumn)
+            {
+                insertCommand.Parameters.Add(new SqlParameter("@IDPhanLoaiHangHoa", SqlDbType.Int) { Value = detail.PhanLoaiHangHoaId.HasValue && detail.PhanLoaiHangHoaId.Value > 0 ? detail.PhanLoaiHangHoaId.Value : DBNull.Value });
+            }
             if (hasDetailDonViTinhColumn)
             {
                 insertCommand.Parameters.Add(new SqlParameter("@IDDonViTinh", SqlDbType.Int) { Value = detail.DonViTinhId.HasValue && detail.DonViTinhId.Value > 0 ? detail.DonViTinhId.Value : DBNull.Value });
@@ -692,6 +781,11 @@ public sealed class NhapKhoService(
                 return "Danh sách hàng hóa nhập không hợp lệ.";
             }
 
+            if (detail.PhanLoaiHangHoaId is null or <= 0)
+            {
+                return "Vui lòng chọn phân loại hàng hóa.";
+            }
+
             if (detail.SoLuongNhap <= 0)
             {
                 return "Số lượng nhập phải lớn hơn 0.";
@@ -747,6 +841,8 @@ public sealed class NhapKhoService(
             {
                 Id = detail.Id,
                 HangHoaId = detail.HangHoaId,
+                PhanLoaiHangHoaId = detail.PhanLoaiHangHoaId,
+                TenPhanLoaiHangHoa = detail.TenPhanLoaiHangHoa,
                 TenHangHoa = detail.TenHangHoa,
                 MaHangHoa = detail.MaHangHoa,
                 DonViTinhId = detail.DonViTinhId,
@@ -788,6 +884,7 @@ public sealed class NhapKhoService(
         var hasDetailDonViNhapColumn = await HasColumnAsync(connection, transaction, DetailTableName, "IDDonViNhap", cancellationToken);
         var hasDetailSoLuongQuyDoiColumn = await HasColumnAsync(connection, transaction, DetailTableName, "SoLuongQuyDoi", cancellationToken);
         var hasDetailSoChungTuColumn = await HasColumnAsync(connection, transaction, DetailTableName, "SoChungTu", cancellationToken);
+        var hasDetailPhanLoaiColumn = await HasColumnAsync(connection, transaction, DetailTableName, "IDPhanLoaiHangHoa", cancellationToken);
         var detailDonViTinhSelect = hasDetailDonViTinhColumn
             ? "ct.IDDonViTinh"
             : "CAST(NULL AS int) AS IDDonViTinh";
@@ -797,6 +894,7 @@ public sealed class NhapKhoService(
         var detailDonViNhapSelect = hasDetailDonViNhapColumn ? "ct.IDDonViNhap" : "CAST(NULL AS int) AS IDDonViNhap";
         var detailSoLuongQuyDoiSelect = hasDetailSoLuongQuyDoiColumn ? "ct.SoLuongQuyDoi" : "CAST(1 AS decimal(18,4)) AS SoLuongQuyDoi";
         var detailSoChungTuSelect = hasDetailSoChungTuColumn ? "ct.SoChungTu" : "CAST(NULL AS nvarchar(50)) AS SoChungTu";
+        var detailPhanLoaiSelect = hasDetailPhanLoaiColumn ? "ct.IDPhanLoaiHangHoa" : "CAST(NULL AS int) AS IDPhanLoaiHangHoa";
 
         await using var loadCommand = connection.CreateCommand();
         loadCommand.Transaction = transaction;
@@ -804,6 +902,7 @@ public sealed class NhapKhoService(
             SELECT
                 ct.ID,
                 ct.IDHangHoa,
+                {detailPhanLoaiSelect},
                 {detailDonViTinhSelect},
                 {detailMaSoLoSelect},
                 {detailSoChungTuSelect},
@@ -830,6 +929,7 @@ public sealed class NhapKhoService(
                 {
                     Id = reader.GetInt32(reader.GetOrdinal("ID")),
                     HangHoaId = GetNullableInt32(reader, "IDHangHoa") ?? 0,
+                    PhanLoaiHangHoaId = GetNullableInt32(reader, "IDPhanLoaiHangHoa"),
                     DonViTinhId = GetNullableInt32(reader, "IDDonViTinh"),
                     MaSoLo = GetNullableString(reader, "MaSoLo"),
                     SoChungTu = GetNullableString(reader, "SoChungTu"),
@@ -901,6 +1001,9 @@ public sealed class NhapKhoService(
             extraValues.Add("@IDPhieuNhapChiTiet");
         }
 
+        extraColumns.Add("IDPhanLoaiHangHoa");
+        extraValues.Add("@IDPhanLoaiHangHoa");
+
         var extraColumnSql = extraColumns.Count == 0 ? string.Empty : $"{string.Join(",\n                    ", extraColumns)},";
         var extraValueSql = extraValues.Count == 0 ? string.Empty : $"{string.Join(",\n                    ", extraValues)},";
 
@@ -961,6 +1064,7 @@ public sealed class NhapKhoService(
 
         command.Parameters.Add(new SqlParameter("@IDKho", SqlDbType.Int) { Value = khoId });
         command.Parameters.Add(new SqlParameter("@IDHangHoa", SqlDbType.Int) { Value = detail.HangHoaId });
+        command.Parameters.Add(new SqlParameter("@IDPhanLoaiHangHoa", SqlDbType.Int) { Value = detail.PhanLoaiHangHoaId.HasValue && detail.PhanLoaiHangHoaId.Value > 0 ? detail.PhanLoaiHangHoaId.Value : DBNull.Value });
         command.Parameters.Add(new SqlParameter("@IDDonVinTinh", SqlDbType.Int) { Value = detail.DonViTinhId.HasValue && detail.DonViTinhId.Value > 0 ? detail.DonViTinhId.Value : DBNull.Value });
         command.Parameters.Add(new SqlParameter("@TenChiTiet", SqlDbType.NVarChar, 250) { Value = TrimToLength(string.IsNullOrWhiteSpace(detail.TenHangHoa) ? $"Hàng hóa #{detail.HangHoaId}" : detail.TenHangHoa, 250) });
         command.Parameters.Add(new SqlParameter("@IDDonViNhap", SqlDbType.Int) { Value = detail.DonViNhapId.HasValue && detail.DonViNhapId.Value > 0 ? detail.DonViNhapId.Value : DBNull.Value });
@@ -1045,12 +1149,30 @@ public sealed class NhapKhoService(
             : hasDonVinTinhColumn ? "IDDonVinTinh AS IDDonViTinh" : "CAST(NULL AS int) AS IDDonViTinh";
 
         var sql = $"""
-            SELECT ID, TenHangHoa, MaHangHoa, {donViTinhSelect}
+            SELECT ID, TenHangHoa, MaHangHoa, {donViTinhSelect}, LoaiHinhNhap
             FROM [TblHangHoa]
             WHERE ISNULL(TrangThaiSuDung, 1) = 1
             ORDER BY TenHangHoa ASC, ID ASC
             """;
-        return await LoadOptionsAsync(connection, sql, "TenHangHoa", "MaHangHoa", cancellationToken, "IDDonViTinh");
+        return await LoadOptionsAsync(connection, sql, "TenHangHoa", "MaHangHoa", cancellationToken, "IDDonViTinh", loaiHinhNhapColumn: "LoaiHinhNhap");
+    }
+
+    private static async Task<IReadOnlyList<NhapKhoLookupOption>> LoadPhanLoaiHangHoaOptionsAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var existsCommand = connection.CreateCommand();
+        existsCommand.CommandText = "SELECT CASE WHEN OBJECT_ID(N'dbo.TblHangHoaPhanLoai', N'U') IS NULL THEN 0 ELSE 1 END";
+        if (Convert.ToInt32(await existsCommand.ExecuteScalarAsync(cancellationToken) ?? 0) == 0)
+        {
+            return [];
+        }
+
+        const string sql = """
+            SELECT ID, IDHangHoa, TenPhanLoai
+            FROM [TblHangHoaPhanLoai]
+            WHERE ISNULL(TrangThaiSuDung, 1) = 1
+            ORDER BY IDHangHoa ASC, TenPhanLoai ASC, ID ASC
+            """;
+        return await LoadOptionsAsync(connection, sql, "TenPhanLoai", null, cancellationToken, hangHoaIdColumn: "IDHangHoa");
     }
 
     private static async Task<IReadOnlyList<NhapKhoLookupOption>> LoadDonViTinhOptionsAsync(SqlConnection connection, CancellationToken cancellationToken)
@@ -1090,7 +1212,7 @@ public sealed class NhapKhoService(
         }
     }
 
-    private static async Task<IReadOnlyList<NhapKhoLookupOption>> LoadOptionsAsync(SqlConnection connection, string sql, string nameColumn, string? codeColumn, CancellationToken cancellationToken, string? donViTinhColumn = null)
+    private static async Task<IReadOnlyList<NhapKhoLookupOption>> LoadOptionsAsync(SqlConnection connection, string sql, string nameColumn, string? codeColumn, CancellationToken cancellationToken, string? donViTinhColumn = null, string? hangHoaIdColumn = null, string? loaiHinhNhapColumn = null)
     {
         var items = new List<NhapKhoLookupOption>();
         await using var command = connection.CreateCommand();
@@ -1104,7 +1226,11 @@ public sealed class NhapKhoService(
             {
                 Id = reader.GetInt32(reader.GetOrdinal("ID")),
                 Label = string.IsNullOrWhiteSpace(code) ? name : $"{name} ({code})",
-                DonViTinhId = string.IsNullOrWhiteSpace(donViTinhColumn) ? null : GetNullableInt32(reader, donViTinhColumn)
+                DonViTinhId = string.IsNullOrWhiteSpace(donViTinhColumn) ? null : GetNullableInt32(reader, donViTinhColumn),
+                HangHoaId = string.IsNullOrWhiteSpace(hangHoaIdColumn) ? null : GetNullableInt32(reader, hangHoaIdColumn),
+                LoaiHinhNhap = string.IsNullOrWhiteSpace(loaiHinhNhapColumn)
+                    ? null
+                    : NhapKhoLoaiHinh.Normalize(GetNullableString(reader, loaiHinhNhapColumn))
             });
         }
 
@@ -1147,6 +1273,7 @@ public sealed class NhapKhoService(
         {
             Id = GetNullableInt32(reader, "ID"),
             HangHoaId = GetNullableInt32(reader, "IDHangHoa") ?? 0,
+            PhanLoaiHangHoaId = GetNullableInt32(reader, "IDPhanLoaiHangHoa"),
             DonViTinhId = GetNullableInt32(reader, "IDDonViTinh"),
             DonViNhapId = GetNullableInt32(reader, "IDDonViNhap"),
             MaSoLo = GetNullableString(reader, "MaSoLo"),
@@ -1158,6 +1285,7 @@ public sealed class NhapKhoService(
             LoaiHinhNhap = GetNullableString(reader, "LoaiHinhNhap"),
             TenHangHoa = GetNullableString(reader, "TenHangHoa"),
             MaHangHoa = GetNullableString(reader, "MaHangHoa"),
+            TenPhanLoaiHangHoa = GetNullableString(reader, "TenPhanLoaiHangHoa"),
             TenDonViTinh = GetNullableString(reader, "TenDonVi"),
             TenVietTatDonViTinh = GetNullableString(reader, "TenVietTat"),
             TenDonViNhap = GetNullableString(reader, "TenDonViNhap"),
@@ -1258,6 +1386,7 @@ public sealed class NhapKhoService(
         await EnsureColumnAsync(connection, transaction, DetailTableName, "IDDonViNhap", "int NULL", cancellationToken);
         await EnsureColumnAsync(connection, transaction, DetailTableName, "SoLuongQuyDoi", "decimal(18,4) NOT NULL CONSTRAINT DF_TblPhieuNhapKhoChiTiet_SoLuongQuyDoi DEFAULT(1)", cancellationToken);
         await EnsureColumnAsync(connection, transaction, DetailTableName, "SoChungTu", "nvarchar(50) NULL", cancellationToken);
+        await EnsureColumnAsync(connection, transaction, DetailTableName, "IDPhanLoaiHangHoa", "int NULL", cancellationToken);
     }
 
     private static async Task EnsureChiTietHangHoaImportSchemaAsync(SqlConnection connection, SqlTransaction? transaction, CancellationToken cancellationToken)
@@ -1267,6 +1396,7 @@ public sealed class NhapKhoService(
         await EnsureColumnAsync(connection, transaction, "TblChiTietHangHoa", "IDDonViNhap", "int NULL", cancellationToken);
         await EnsureColumnAsync(connection, transaction, "TblChiTietHangHoa", "SoLuongQuyDoi", "decimal(18,4) NOT NULL CONSTRAINT DF_TblChiTietHangHoa_SoLuongQuyDoi DEFAULT(1)", cancellationToken);
         await EnsureColumnAsync(connection, transaction, "TblChiTietHangHoa", "SoChungTu", "nvarchar(50) NULL", cancellationToken);
+        await EnsureColumnAsync(connection, transaction, "TblChiTietHangHoa", "IDPhanLoaiHangHoa", "int NULL", cancellationToken);
     }
 
     private static async Task EnsureColumnAsync(
@@ -1288,10 +1418,88 @@ public sealed class NhapKhoService(
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static async Task SyncImagesAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int phieuId,
+        string loaiPhieu,
+        IEnumerable<string>? removedImagePaths,
+        IEnumerable<string>? uploadedImagePaths,
+        CancellationToken cancellationToken)
+    {
+        var removedPaths = NormalizeImagePaths(removedImagePaths);
+        if (removedPaths.Count > 0)
+        {
+            await using var deleteCommand = connection.CreateCommand();
+            deleteCommand.Transaction = transaction;
+            deleteCommand.Parameters.Add(new SqlParameter("@IDPhieu", SqlDbType.Int) { Value = phieuId });
+            deleteCommand.Parameters.Add(new SqlParameter("@LoaiPhieu", SqlDbType.NVarChar, 20) { Value = loaiPhieu });
+
+            var parameterNames = new List<string>();
+            for (var index = 0; index < removedPaths.Count; index++)
+            {
+                var parameterName = $"@RemoveImage{index}";
+                parameterNames.Add(parameterName);
+                deleteCommand.Parameters.Add(new SqlParameter(parameterName, SqlDbType.NVarChar, 550) { Value = removedPaths[index] });
+            }
+
+            deleteCommand.CommandText = $"""
+                DELETE FROM [{NhapXuatImageService.TableName}]
+                WHERE IDPhieu = @IDPhieu
+                  AND LoaiPhieu = @LoaiPhieu
+                  AND ImagePath IN ({string.Join(", ", parameterNames)})
+                """;
+            await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        foreach (var imagePath in NormalizeImagePaths(uploadedImagePaths))
+        {
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.Transaction = transaction;
+            insertCommand.CommandText = $"""
+                INSERT INTO [{NhapXuatImageService.TableName}] (
+                    IDPhieu,
+                    LoaiPhieu,
+                    ImagePath
+                )
+                VALUES (
+                    @IDPhieu,
+                    @LoaiPhieu,
+                    @ImagePath
+                )
+                """;
+            insertCommand.Parameters.Add(new SqlParameter("@IDPhieu", SqlDbType.Int) { Value = phieuId });
+            insertCommand.Parameters.Add(new SqlParameter("@LoaiPhieu", SqlDbType.NVarChar, 20) { Value = loaiPhieu });
+            insertCommand.Parameters.Add(new SqlParameter("@ImagePath", SqlDbType.NVarChar, 550) { Value = imagePath });
+            await insertCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static List<string> NormalizeImagePaths(IEnumerable<string>? imagePaths)
+    {
+        var result = new List<string>();
+        foreach (var imagePath in imagePaths ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(imagePath))
+            {
+                continue;
+            }
+
+            var normalized = imagePath.Trim();
+            if (!result.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result;
+    }
+
     private sealed class NhapKhoImportMaterialSource
     {
         public int Id { get; set; }
         public int HangHoaId { get; set; }
+        public int? PhanLoaiHangHoaId { get; set; }
         public int? DonViTinhId { get; set; }
         public int? DonViNhapId { get; set; }
         public string? TenHangHoa { get; set; }

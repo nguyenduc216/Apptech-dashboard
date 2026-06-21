@@ -1,4 +1,195 @@
 (function () {
+    (() => {
+        const backLockKey = "apptechNoBack";
+        const allowedUrlKey = "apptech:lastAllowedUrl";
+        let isHandlingBack = false;
+        let historySeedCount = 0;
+        let edgeSwipeStart = null;
+
+        const getCurrentUrl = () => window.location.href;
+
+        const makeBackLockState = () => ({
+            [backLockKey]: true,
+            path: getCurrentUrl(),
+            seed: historySeedCount
+        });
+
+        const rememberAllowedUrl = (url = getCurrentUrl()) => {
+            try {
+                sessionStorage.setItem(allowedUrlKey, url);
+            } catch {
+            }
+        };
+
+        const getAllowedUrl = () => {
+            try {
+                return sessionStorage.getItem(allowedUrlKey) || "";
+            } catch {
+                return "";
+            }
+        };
+
+        const seedBackLock = () => {
+            historySeedCount += 1;
+            const state = makeBackLockState();
+            try {
+                window.history.replaceState(state, document.title, getCurrentUrl());
+                window.history.pushState({ ...state, guard: 1 }, document.title, getCurrentUrl());
+                window.history.pushState({ ...state, guard: 2 }, document.title, getCurrentUrl());
+            } catch {
+            }
+        };
+
+        const restoreAllowedUrlIfNeeded = () => {
+            const allowedUrl = getAllowedUrl();
+            if (!allowedUrl || allowedUrl === getCurrentUrl()) {
+                return false;
+            }
+
+            try {
+                window.location.replace(allowedUrl);
+                return true;
+            } catch {
+                return false;
+            }
+        };
+
+        rememberAllowedUrl();
+        seedBackLock();
+
+        window.addEventListener("pageshow", (event) => {
+            const navigationEntry = performance.getEntriesByType?.("navigation")?.[0];
+            const isBackForwardRestore = event.persisted || navigationEntry?.type === "back_forward";
+            if (isBackForwardRestore && restoreAllowedUrlIfNeeded()) {
+                return;
+            }
+
+            if (!window.history.state?.[backLockKey]) {
+                seedBackLock();
+            }
+        });
+
+        window.addEventListener("popstate", () => {
+            if (isHandlingBack) {
+                return;
+            }
+
+            isHandlingBack = true;
+            try {
+                window.history.go(1);
+                window.setTimeout(seedBackLock, 30);
+            } catch {
+                seedBackLock();
+            } finally {
+                window.setTimeout(() => {
+                    isHandlingBack = false;
+                }, 180);
+            }
+        });
+
+        window.navigation?.addEventListener?.("navigate", (event) => {
+            if (event.navigationType === "traverse" && typeof event.preventDefault === "function") {
+                event.preventDefault();
+                seedBackLock();
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            const link = event.target instanceof Element
+                ? event.target.closest("a[href]")
+                : null;
+            if (!(link instanceof HTMLAnchorElement)) {
+                return;
+            }
+
+            const target = link.getAttribute("target");
+            if (target && target !== "_self") {
+                return;
+            }
+
+            try {
+                const targetUrl = new URL(link.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    rememberAllowedUrl(targetUrl.href);
+                }
+            } catch {
+            }
+        }, true);
+
+        document.addEventListener("submit", (event) => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+
+            try {
+                const targetUrl = new URL(form.action || window.location.href, window.location.href);
+                if (targetUrl.origin === window.location.origin) {
+                    rememberAllowedUrl(targetUrl.href);
+                }
+            } catch {
+            }
+        }, true);
+
+        document.addEventListener("touchstart", (event) => {
+            const touch = event.touches?.[0];
+            if (!touch) {
+                edgeSwipeStart = null;
+                return;
+            }
+
+            edgeSwipeStart = touch.clientX <= 28
+                ? { x: touch.clientX, y: touch.clientY }
+                : null;
+        }, { passive: true, capture: true });
+
+        document.addEventListener("touchmove", (event) => {
+            if (!edgeSwipeStart) {
+                return;
+            }
+
+            const touch = event.touches?.[0];
+            if (!touch) {
+                return;
+            }
+
+            const deltaX = touch.clientX - edgeSwipeStart.x;
+            const deltaY = Math.abs(touch.clientY - edgeSwipeStart.y);
+            if (deltaX > 12 && deltaX > deltaY * 1.2) {
+                event.preventDefault();
+            }
+        }, { passive: false, capture: true });
+
+        document.addEventListener("touchend", () => {
+            edgeSwipeStart = null;
+        }, { passive: true, capture: true });
+
+        document.addEventListener("touchcancel", () => {
+            edgeSwipeStart = null;
+        }, { passive: true, capture: true });
+
+        const blockPageZoom = (event) => {
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+            }
+        };
+
+        document.addEventListener("wheel", blockPageZoom, { passive: false });
+        document.addEventListener("keydown", (event) => {
+            if (!(event.ctrlKey || event.metaKey)) {
+                return;
+            }
+
+            if (["+", "-", "=", "0", "NumpadAdd", "NumpadSubtract", "Numpad0"].includes(event.key) ||
+                ["Equal", "Minus", "Digit0", "NumpadAdd", "NumpadSubtract", "Numpad0"].includes(event.code)) {
+                event.preventDefault();
+            }
+        });
+        document.addEventListener("gesturestart", (event) => event.preventDefault(), { passive: false });
+        document.addEventListener("gesturechange", (event) => event.preventDefault(), { passive: false });
+        document.addEventListener("gestureend", (event) => event.preventDefault(), { passive: false });
+    })();
+
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
             navigator.serviceWorker.register("/service-worker.js").catch(() => {
@@ -39,8 +230,14 @@
             }
 
             const hasValidationErrors = Boolean(document.querySelector(".login-field.has-error, .validation-summary, .login-validation"));
+            const hasStatusAlert = Boolean(document.querySelector("[data-status-alert]"));
             sessionStorage.removeItem(scrollRestoreKey);
             if (hasValidationErrors) {
+                return;
+            }
+
+            if (hasStatusAlert) {
+                window.scrollTo({ top: 0, left: 0, behavior: "auto" });
                 return;
             }
 
@@ -687,23 +884,169 @@
         }
     });
 
-    const avatarInput = document.querySelector("[data-avatar-input]");
+    const avatarInputs = Array.from(document.querySelectorAll("[data-avatar-input]"));
     const avatarPreview = document.querySelector("[data-avatar-preview]");
     const avatarFallback = document.querySelector("[data-avatar-fallback]");
-    if (avatarInput instanceof HTMLInputElement && avatarPreview instanceof HTMLImageElement && avatarFallback) {
-        avatarInput.addEventListener("change", () => {
-            const [file] = avatarInput.files || [];
-            if (!file) {
-                avatarPreview.removeAttribute("src");
-                avatarPreview.classList.add("is-hidden");
-                avatarFallback.classList.remove("is-hidden");
+    const avatarCameraOpen = document.querySelector("[data-avatar-camera-open]");
+    const avatarCameraFallback = document.querySelector("[data-avatar-camera-fallback]");
+    const avatarCameraPanel = document.querySelector("[data-avatar-camera-panel]");
+    const avatarCameraVideo = document.querySelector("[data-avatar-camera-video]");
+    const avatarCameraCanvas = document.querySelector("[data-avatar-camera-canvas]");
+    const avatarCameraCapture = document.querySelector("[data-avatar-camera-capture]");
+    const avatarCameraClose = document.querySelector("[data-avatar-camera-close]");
+    const avatarCameraStatus = document.querySelector("[data-avatar-camera-status]");
+    if (avatarInputs.length > 0 && avatarPreview instanceof HTMLImageElement && avatarFallback) {
+        let avatarPreviewUrl = "";
+        let avatarCameraStream = null;
+
+        const setAvatarCameraStatus = (message, state = "info") => {
+            if (!(avatarCameraStatus instanceof HTMLElement)) {
                 return;
             }
 
-            avatarPreview.src = URL.createObjectURL(file);
-            avatarPreview.classList.remove("is-hidden");
-            avatarFallback.classList.add("is-hidden");
+            avatarCameraStatus.textContent = message;
+            avatarCameraStatus.classList.remove("info", "success", "error");
+            avatarCameraStatus.classList.add(state);
+            avatarCameraStatus.hidden = !message;
+        };
+
+        const stopAvatarCamera = () => {
+            if (avatarCameraStream) {
+                avatarCameraStream.getTracks().forEach((track) => track.stop());
+                avatarCameraStream = null;
+            }
+
+            if (avatarCameraVideo instanceof HTMLVideoElement) {
+                avatarCameraVideo.srcObject = null;
+            }
+
+            if (avatarCameraPanel instanceof HTMLElement) {
+                avatarCameraPanel.hidden = true;
+            }
+        };
+
+        const assignAvatarFile = (file) => {
+            const targetInput = avatarInputs.find((input) =>
+                input instanceof HTMLInputElement && input.id === "profileAvatarFile") || avatarInputs[0];
+            if (!(targetInput instanceof HTMLInputElement)) {
+                return false;
+            }
+
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            targetInput.files = transfer.files;
+            targetInput.dispatchEvent(new Event("change", { bubbles: true }));
+            return true;
+        };
+
+        avatarInputs.forEach((avatarInput) => {
+            if (!(avatarInput instanceof HTMLInputElement)) {
+                return;
+            }
+
+            avatarInput.addEventListener("change", () => {
+                const [file] = avatarInput.files || [];
+                if (!file) {
+                    const hasSelectedFile = avatarInputs.some((otherInput) =>
+                        otherInput instanceof HTMLInputElement && (otherInput.files?.length || 0) > 0);
+                    if (hasSelectedFile) {
+                        return;
+                    }
+
+                    avatarPreview.removeAttribute("src");
+                    avatarPreview.classList.add("is-hidden");
+                    avatarFallback.classList.remove("is-hidden");
+                    return;
+                }
+
+                avatarInputs.forEach((otherInput) => {
+                    if (otherInput instanceof HTMLInputElement && otherInput !== avatarInput) {
+                        otherInput.value = "";
+                    }
+                });
+                if (avatarPreviewUrl) {
+                    URL.revokeObjectURL(avatarPreviewUrl);
+                }
+                avatarPreviewUrl = URL.createObjectURL(file);
+                avatarPreview.src = avatarPreviewUrl;
+                avatarPreview.classList.remove("is-hidden");
+                avatarFallback.classList.add("is-hidden");
+            });
         });
+
+        if (avatarCameraOpen instanceof HTMLButtonElement) {
+            avatarCameraOpen.addEventListener("click", async () => {
+                if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+                    if (avatarCameraFallback instanceof HTMLInputElement) {
+                        avatarCameraFallback.click();
+                    }
+                    return;
+                }
+
+                try {
+                    stopAvatarCamera();
+                    avatarCameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "user" },
+                        audio: false
+                    });
+                    if (avatarCameraVideo instanceof HTMLVideoElement) {
+                        avatarCameraVideo.srcObject = avatarCameraStream;
+                        await avatarCameraVideo.play();
+                    }
+
+                    if (avatarCameraPanel instanceof HTMLElement) {
+                        avatarCameraPanel.hidden = false;
+                    }
+                    setAvatarCameraStatus("Camera đã sẵn sàng.", "success");
+                } catch {
+                    if (avatarCameraFallback instanceof HTMLInputElement) {
+                        avatarCameraFallback.click();
+                    }
+                    setAvatarCameraStatus("Không thể mở camera trực tiếp. Hãy chọn ảnh từ thiết bị.", "error");
+                }
+            });
+        }
+
+        if (avatarCameraCapture instanceof HTMLButtonElement) {
+            avatarCameraCapture.addEventListener("click", async () => {
+                if (!(avatarCameraVideo instanceof HTMLVideoElement) ||
+                    !(avatarCameraCanvas instanceof HTMLCanvasElement)) {
+                    return;
+                }
+
+                const width = avatarCameraVideo.videoWidth || 720;
+                const height = avatarCameraVideo.videoHeight || 720;
+                avatarCameraCanvas.width = width;
+                avatarCameraCanvas.height = height;
+                const context = avatarCameraCanvas.getContext("2d");
+                if (!context) {
+                    setAvatarCameraStatus("Không thể chụp ảnh từ camera.", "error");
+                    return;
+                }
+
+                context.drawImage(avatarCameraVideo, 0, 0, width, height);
+                const blob = await new Promise((resolve) => avatarCameraCanvas.toBlob(resolve, "image/jpeg", 0.9));
+                if (!blob) {
+                    setAvatarCameraStatus("Không thể chụp ảnh từ camera.", "error");
+                    return;
+                }
+
+                const file = new File([blob], `avatar-${Date.now()}.jpg`, { type: "image/jpeg" });
+                if (assignAvatarFile(file)) {
+                    setAvatarCameraStatus("Đã chụp avatar. Bấm Lưu để cập nhật.", "success");
+                    stopAvatarCamera();
+                }
+            });
+        }
+
+        if (avatarCameraClose instanceof HTMLButtonElement) {
+            avatarCameraClose.addEventListener("click", () => {
+                stopAvatarCamera();
+                setAvatarCameraStatus("", "info");
+            });
+        }
+
+        window.addEventListener("pagehide", stopAvatarCamera);
     }
 
     document.querySelectorAll("[data-image-upload]").forEach((editor) => {
@@ -2418,7 +2761,7 @@
                         const points = getQrResultPoints(result);
                         showQrDetectedOutline(getReader(), points, width, height);
                         const now = Date.now();
-                        const isStable = pendingQr?.data === result.data && now - pendingQr.firstSeenAt >= 280;
+                        const isStable = pendingQr?.data === result.data && now - pendingQr.firstSeenAt >= 450;
                         pendingQr = pendingQr?.data === result.data
                             ? pendingQr
                             : { data: result.data, firstSeenAt: now };
@@ -2434,7 +2777,13 @@
                                 height,
                                 dataLength: result.data.length
                             });
-                            onScanSuccess(result.data, result);
+                            pendingQr = null;
+                            await Promise.resolve(onScanSuccess(result.data, result));
+                            if (!isStopped) {
+                                scanTimer = window.setTimeout(() => {
+                                    void scanFrame(jsQR, onScanSuccess, onScanFailure);
+                                }, 220);
+                            }
                             return;
                         }
                     }
@@ -2451,7 +2800,7 @@
 
             scanTimer = window.setTimeout(() => {
                 void scanFrame(jsQR, onScanSuccess, onScanFailure);
-            }, 55);
+            }, 90);
         };
 
         return {
@@ -2592,30 +2941,114 @@
                 return true;
             },
             async scanFile(file) {
-                const jsQR = await loadJsQr();
-                const bitmap = await createImageBitmap(file);
-                const localCanvas = document.createElement("canvas");
-                localCanvas.width = bitmap.width;
-                localCanvas.height = bitmap.height;
-                const localContext = localCanvas.getContext("2d", { willReadFrequently: true });
-                if (!localContext) {
-                    throw new Error("Cannot read selected QR image.");
-                }
-                localContext.drawImage(bitmap, 0, 0);
-                const imageData = localContext.getImageData(0, 0, bitmap.width, bitmap.height);
-                const result = jsQR(imageData.data, bitmap.width, bitmap.height, {
-                    inversionAttempts: "attemptBoth"
-                });
-                if (!result?.data) {
-                    throw new Error("No QR code found in selected image.");
-                }
-                return result.data;
+                return scanQrImageFileWithJsQr(file);
             },
             async scanFileV2(file) {
                 const data = await this.scanFile(file);
                 return { decodedText: data };
             }
         };
+    };
+
+    const loadImageFileElement = (file) => new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("Cannot load selected QR image."));
+        };
+        image.src = objectUrl;
+    });
+
+    const drawQrImageSource = (source, sourceWidth, sourceHeight, maxSide = 1800, paddingRatio = 0) => {
+        const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+        const drawWidth = Math.max(1, Math.round(sourceWidth * scale));
+        const drawHeight = Math.max(1, Math.round(sourceHeight * scale));
+        const padding = Math.round(Math.max(drawWidth, drawHeight) * paddingRatio);
+        const localCanvas = document.createElement("canvas");
+        localCanvas.width = drawWidth + padding * 2;
+        localCanvas.height = drawHeight + padding * 2;
+        const localContext = localCanvas.getContext("2d", { willReadFrequently: true });
+        if (!localContext) {
+            throw new Error("Cannot read selected QR image.");
+        }
+
+        localContext.fillStyle = "#fff";
+        localContext.fillRect(0, 0, localCanvas.width, localCanvas.height);
+        localContext.imageSmoothingEnabled = false;
+        localContext.drawImage(source, padding, padding, drawWidth, drawHeight);
+        return { localCanvas, localContext };
+    };
+
+    const scanQrImageFileWithJsQr = async (file) => {
+        const jsQR = await loadJsQr();
+        const decodeAttempts = [];
+
+        try {
+            if (typeof createImageBitmap === "function") {
+                const bitmap = await createImageBitmap(file);
+                decodeAttempts.push({
+                    source: bitmap,
+                    width: bitmap.width,
+                    height: bitmap.height,
+                    close: () => bitmap.close?.()
+                });
+            }
+        } catch (error) {
+            appendQrDebugLog("qr_file_create_image_bitmap_error", {
+                name: error?.name || "",
+                message: error?.message || `${error || ""}`
+            });
+        }
+
+        if (decodeAttempts.length === 0) {
+            const image = await loadImageFileElement(file);
+            decodeAttempts.push({
+                source: image,
+                width: image.naturalWidth || image.width,
+                height: image.naturalHeight || image.height,
+                close: null
+            });
+        }
+
+        let lastError = null;
+        for (const attempt of decodeAttempts) {
+            try {
+                const canvasAttempts = [
+                    drawQrImageSource(attempt.source, attempt.width, attempt.height, 1800, 0),
+                    drawQrImageSource(attempt.source, attempt.width, attempt.height, 2200, 0.12)
+                ];
+
+                for (const { localCanvas, localContext } of canvasAttempts) {
+                    const imageData = localContext.getImageData(0, 0, localCanvas.width, localCanvas.height);
+                    const result = jsQR(imageData.data, localCanvas.width, localCanvas.height, {
+                        inversionAttempts: "attemptBoth"
+                    });
+                    if (result?.data) {
+                        appendQrDebugLog("qr_file_jsqr_success", {
+                            width: localCanvas.width,
+                            height: localCanvas.height,
+                            dataLength: result.data.length
+                        });
+                        return result.data;
+                    }
+                }
+            } catch (error) {
+                lastError = error;
+            } finally {
+                attempt.close?.();
+            }
+        }
+
+        if (lastError) {
+            throw lastError;
+        }
+
+        throw new Error("No QR code found in selected image.");
     };
 
     const createHtml5QrCodeInstance = (readerId) => {
@@ -2637,7 +3070,7 @@
     };
 
     const clampNumber = (value, min, max) => Math.min(Math.max(value, min), max);
-    const qrScannerTuningVersion = "QR iOS jsQR v20260513.26";
+    const qrScannerTuningVersion = "QR iOS jsQR v20260513.30";
     const qrDebugLogs = [];
 
     const appendQrDebugLog = (eventName, data = null) => {
@@ -2872,9 +3305,10 @@
             panel.appendChild(frame);
         }
 
-        const logHost = panel.closest(".qr-scanner-shell") || panel.parentElement || panel;
         panel.querySelector(".qr-scanner-version")?.remove();
-        logHost.querySelector(".qr-scanner-log-panel")?.remove();
+        (panel.closest(".qr-scanner-shell") || panel.parentElement || panel)
+            .querySelector(".qr-scanner-log-panel")
+            ?.remove();
     };
 
     const getQrResultPoints = (result) => {
@@ -2989,7 +3423,13 @@
             void applyQrFocusHints(html5QrCode);
         }, 1600);
         appendQrDebugLog("qr_running_settings", runningSettings);
-        reader?.closest?.(".qr-scanner-panel")?.querySelector(".qr-scanner-version")?.remove();
+        const version = reader instanceof HTMLElement
+            ? reader.closest(".qr-scanner-panel")?.querySelector(".qr-scanner-version")
+            : null;
+        if (version instanceof HTMLElement) {
+            const profile = getQrScannerProfile();
+            version.textContent = `${qrScannerTuningVersion} | target ${profile.zoom}x | actual ${runningSettings?.zoom ?? "n/a"}x`;
+        }
     };
 
     const getQrScannerStateName = (html5QrCode) => {
@@ -3150,13 +3590,36 @@
 
     const scanQrFromImageFile = async (html5QrCode, file) => {
         if (html5QrCode && typeof html5QrCode.scanFileV2 === "function") {
-            const result = await html5QrCode.scanFileV2(file, true);
-            if (result && typeof result.decodedText === "string" && result.decodedText.trim().length > 0) {
-                return result.decodedText;
+            try {
+                const result = await html5QrCode.scanFileV2(file, true);
+                if (result && typeof result.decodedText === "string" && result.decodedText.trim().length > 0) {
+                    appendQrDebugLog("qr_file_scanfilev2_success", { dataLength: result.decodedText.length });
+                    return result.decodedText;
+                }
+            } catch (error) {
+                appendQrDebugLog("qr_file_scanfilev2_error", {
+                    name: error?.name || "",
+                    message: error?.message || `${error || ""}`
+                });
             }
         }
 
-        return html5QrCode.scanFile(file, true);
+        if (html5QrCode && typeof html5QrCode.scanFile === "function") {
+            try {
+                const decodedText = await html5QrCode.scanFile(file, true);
+                if (typeof decodedText === "string" && decodedText.trim().length > 0) {
+                    appendQrDebugLog("qr_file_scanfile_success", { dataLength: decodedText.length });
+                    return decodedText;
+                }
+            } catch (error) {
+                appendQrDebugLog("qr_file_scanfile_error", {
+                    name: error?.name || "",
+                    message: error?.message || `${error || ""}`
+                });
+            }
+        }
+
+        return scanQrImageFileWithJsQr(file);
     };
 
     document.querySelectorAll("[data-qr-scanner]").forEach((scanner, index) => {
@@ -5352,7 +5815,7 @@
         });
     }
 
-    if (crudModalShell) {
+    if (crudModalShell && !crudModalShell.hidden) {
         document.body.classList.add("menu-open");
 
         const closeLink = crudModalShell.querySelector("[data-crud-modal-close]");
@@ -5544,6 +6007,95 @@
                 event.preventDefault();
             }
         });
+    });
+
+    const vatTuTable = document.querySelector(".vat-tu-table");
+    if (false && vatTuTable instanceof HTMLTableElement) {
+        const formatVnd = (value) => {
+            const parsed = Number.parseFloat(String(value || "").replace(",", "."));
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                return "";
+            }
+
+            return parsed.toLocaleString("vi-VN", {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 6
+            });
+        };
+        const buildStackCell = (primary, secondary) => {
+            const cell = document.createElement("td");
+            const stack = document.createElement("div");
+            stack.className = "vat-tu-cell-stack";
+            const strong = document.createElement("strong");
+            strong.textContent = primary || "-";
+            stack.appendChild(strong);
+            if (secondary) {
+                const span = document.createElement("span");
+                span.textContent = secondary;
+                stack.appendChild(span);
+            }
+            cell.appendChild(stack);
+            return cell;
+        };
+
+        const headerRow = vatTuTable.querySelector("thead tr");
+        if (headerRow instanceof HTMLTableRowElement) {
+            const headers = [
+                { className: "selection-col", text: "" },
+                { className: "hang-hoa-image-col", text: "Ảnh" },
+                { className: "vat-tu-qr-col", text: "QR" },
+                { text: "Hàng hóa" },
+                { text: "Tồn kho / giá bán lẻ" },
+                { text: "Đơn vị" },
+                { text: "Kho" },
+                { text: "Mã số lô / chi tiết" },
+                { text: "Phiếu nhập" },
+                { className: "actions-col", text: "Thao tác" }
+            ];
+            headerRow.replaceChildren();
+            headers.forEach((header) => {
+                const cell = document.createElement("th");
+                if (header.className) {
+                    cell.className = header.className;
+                }
+                cell.textContent = header.text;
+                headerRow.appendChild(cell);
+            });
+        }
+
+        vatTuTable.querySelectorAll(".vat-tu-table-row").forEach((row) => {
+            if (!(row instanceof HTMLTableRowElement)) {
+                return;
+            }
+
+            const cells = Array.from(row.children).filter((cell) => cell instanceof HTMLTableCellElement);
+            if (cells.length < 11) {
+                return;
+            }
+
+            const stockCell = cells[5].cloneNode(true);
+            if (stockCell instanceof HTMLTableCellElement) {
+                const price = formatVnd(row.dataset.donGiaBanLe);
+                if (price) {
+                    const stack = stockCell.querySelector(".vat-tu-cell-stack") || stockCell;
+                    const span = document.createElement("span");
+                    span.textContent = `Giá bán lẻ ${price}`;
+                    stack.appendChild(span);
+                }
+            }
+
+            const unitCell = buildStackCell(row.dataset.donViTinh || "-", `Nhập: ${row.dataset.donViNhap || "-"}`);
+            const lotCell = buildStackCell(row.dataset.maSoLo || "-", row.dataset.tenChiTiet || "");
+
+            row.replaceChildren(cells[0], cells[1], cells[2], cells[4], stockCell, unitCell, cells[6], lotCell, cells[8], cells[10]);
+        });
+    }
+
+    document.querySelectorAll(".fa-file-export").forEach((icon) => {
+        const label = icon.closest(".login-field");
+        if (label instanceof HTMLElement) {
+            label.hidden = true;
+        }
     });
 
     document.querySelectorAll("[data-vat-tu-group-toggle]").forEach((button) => {
@@ -6215,6 +6767,36 @@
             return parsed.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
         };
 
+        const calculateExportPrice = (item) => {
+            const quantity = parseNumber(item.soLuongXuat);
+            const stock = parseNumber(item.soLuongTon);
+            const originalQuantity = parseNumber(item.soLuongNhap);
+            const importPrice = parseNumber(item.donGiaNhap);
+            const retailPrice = parseNumber(item.donGiaBanLe);
+            const usesImportPrice = quantity === stock && stock === originalQuantity && importPrice > 0;
+            const exportPrice = usesImportPrice ? importPrice : retailPrice;
+            return {
+                donGiaXuat: exportPrice,
+                tongTienXuat: usesImportPrice ? importPrice : exportPrice * quantity
+            };
+        };
+
+        const updateRowAmounts = (row) => {
+            const quantityInput = row.querySelector("[data-detail-quantity]");
+            const item = {
+                soLuongXuat: quantityInput instanceof HTMLInputElement ? quantityInput.value : 0,
+                soLuongTon: row.querySelector("[data-detail-so-luong-ton]")?.value,
+                soLuongNhap: row.querySelector("[data-detail-so-luong-nhap]")?.value,
+                donGiaNhap: row.querySelector("[data-detail-don-gia-nhap]")?.value,
+                donGiaBanLe: row.querySelector("[data-detail-don-gia-ban-le]")?.value
+            };
+            const amounts = calculateExportPrice(item);
+            setInputValue(row, "[data-detail-don-gia-xuat]", amounts.donGiaXuat);
+            setInputValue(row, "[data-detail-tong-tien-xuat]", amounts.tongTienXuat);
+            setText(row, "[data-detail-display-export-price]", formatNumber(amounts.donGiaXuat), "0");
+            setText(row, "[data-detail-display-total]", formatNumber(amounts.tongTienXuat), "0");
+        };
+
         const getRows = () => Array.from(list.querySelectorAll("[data-xuat-kho-detail-row]"));
 
         const setProcessingState = (button, isProcessing) => {
@@ -6235,12 +6817,17 @@
                 return;
             }
 
-            clientErrorList.innerHTML = messages
+            const normalizedMessages = messages
+                .map((message) => `${message || ""}`.trim())
+                .filter(Boolean);
+
+            clientErrorList.innerHTML = normalizedMessages
                 .map((message) => `<div>${escapeHtml(message)}</div>`)
                 .join("");
-            clientErrorBox.hidden = messages.length === 0;
-            clientErrorBox.classList.toggle("validation-summary", messages.length > 0);
-            if (messages.length > 0) {
+            clientErrorBox.hidden = normalizedMessages.length === 0;
+            clientErrorBox.classList.toggle("is-empty", normalizedMessages.length === 0);
+            clientErrorBox.classList.toggle("validation-summary", normalizedMessages.length > 0);
+            if (normalizedMessages.length > 0) {
                 clientErrorBox.scrollIntoView({ block: "nearest", behavior: "smooth" });
             }
         };
@@ -6290,13 +6877,17 @@
             setInputValue(row, "[data-detail-ma-kho]", item.maKho || "");
             setInputValue(row, "[data-detail-don-vi-tinh]", item.donViTinh || "");
             setInputValue(row, "[data-detail-qr-code]", item.qrCode || "");
+            setInputValue(row, "[data-detail-so-luong-nhap]", parseNumber(item.soLuongNhap));
             setInputValue(row, "[data-detail-so-luong-ton]", stock);
+            setInputValue(row, "[data-detail-don-gia-nhap]", parseNumber(item.donGiaNhap));
+            setInputValue(row, "[data-detail-don-gia-ban-le]", parseNumber(item.donGiaBanLe));
 
             setText(row, "[data-detail-display-name]", item.tenChiTiet);
             setText(row, "[data-detail-display-product]", item.tenHangHoa);
             setText(row, "[data-detail-display-kho]", item.tenKho);
             setText(row, "[data-detail-display-stock]", formatNumber(stock), "0");
             setText(row, "[data-detail-display-unit]", item.donViTinh, "");
+            setText(row, "[data-detail-display-retail-price]", formatNumber(item.donGiaBanLe), "0");
 
             const detailLink = row.querySelector("[data-detail-link]");
             if (detailLink instanceof HTMLAnchorElement) {
@@ -6309,6 +6900,8 @@
                 quantityInput.max = `${stock}`;
                 quantityInput.readOnly = isReadonly;
             }
+
+            updateRowAmounts(row);
         };
 
         const reindexRows = () => {
@@ -6412,8 +7005,15 @@
 
             const quantityInput = row.querySelector("[data-detail-quantity]");
             if (quantityInput instanceof HTMLInputElement) {
-                quantityInput.addEventListener("change", () => clampQuantity(quantityInput));
-                quantityInput.addEventListener("blur", () => clampQuantity(quantityInput));
+                quantityInput.addEventListener("input", () => updateRowAmounts(row));
+                quantityInput.addEventListener("change", () => {
+                    clampQuantity(quantityInput);
+                    updateRowAmounts(row);
+                });
+                quantityInput.addEventListener("blur", () => {
+                    clampQuantity(quantityInput);
+                    updateRowAmounts(row);
+                });
             }
         };
 
@@ -6443,6 +7043,7 @@
             attachRowEvents(row);
             reindexRows();
             updateEmptyState();
+            showClientErrors([]);
             updateStatus(`Đã thêm ${item.tenChiTiet || "vật tư"} vào phiếu xuất.`);
             return true;
         };
@@ -6503,6 +7104,12 @@
             qrCode: `${item?.qRCode ?? item?.qrCode ?? ""}`.trim(),
             soLuongTon: item?.soLuongTon,
             soLuongXuat: item?.soLuongXuat,
+            soLuongNhap: item?.soLuongNhap,
+            ngayNhapKho: `${item?.ngayNhapKho || ""}`.trim(),
+            donGiaNhap: item?.donGiaNhap,
+            donGiaBanLe: item?.donGiaBanLe,
+            donGiaXuat: item?.donGiaXuat,
+            tongTienXuat: item?.tongTienXuat,
             maSoLo: `${item?.maSoLo || ""}`.trim(),
             viTriLuuKho: `${item?.viTriLuuKho || ""}`.trim(),
             imageUrl: `${item?.imageUrl || ""}`.trim()
@@ -6536,6 +7143,13 @@
             const segments = [];
             if (item.tenHangHoa) {
                 segments.push(item.tenHangHoa);
+            }
+            if (item.ngayNhapKho) {
+                const date = new Date(`${item.ngayNhapKho}T00:00:00`);
+                const formattedDate = Number.isNaN(date.getTime())
+                    ? item.ngayNhapKho
+                    : date.toLocaleDateString("vi-VN");
+                segments.push(`Nhập: ${formattedDate}`);
             }
             if (item.maSoLo) {
                 segments.push(`Lô: ${item.maSoLo}`);
@@ -6725,6 +7339,7 @@
         getRows().forEach((row) => attachRowEvents(row));
         reindexRows();
         updateEmptyState();
+        showClientErrors([]);
 
         if (manualInput instanceof HTMLInputElement && addManualButton instanceof HTMLButtonElement) {
             addManualButton.addEventListener("click", async () => {

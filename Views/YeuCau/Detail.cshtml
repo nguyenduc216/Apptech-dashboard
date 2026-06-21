@@ -27,10 +27,8 @@
         ? string.Empty
         : new string(selectedLocation.DienThoai.Where(character => char.IsDigit(character) || character == '+').ToArray());
     var works = Model.Form.CongViecs.ToList();
-    var completedWorkCount = works.Count(work =>
-        work.CheckInTime.HasValue &&
-        work.CheckOutTime.HasValue &&
-        work.CheckOutTime.Value > work.CheckInTime.Value);
+    var completedWorkCount = works.Count(work => YeuCauCongViecTrangThaiCatalog.IsCompleted(work.TrangThaiCongViec));
+    var hasIncompleteWork = works.Any(work => !YeuCauCongViecTrangThaiCatalog.IsCompleted(work.TrangThaiCongViec));
     var workCompletionPercent = works.Count == 0 ? 0 : (int)Math.Round(completedWorkCount * 100m / works.Count);
     var assignedCheckinEmployees = works
         .SelectMany(work => work.NhanViens)
@@ -48,6 +46,7 @@
     var currentAuditUser = (User.FindFirst("display_name")?.Value ?? User.Identity?.Name ?? User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value ?? "system").Trim();
     var checkinDistanceLimitValue = Model.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? string.Empty;
     var hasCheckinDistanceLimit = Model.CheckinDistanceLimitMeters.HasValue && Model.CheckinDistanceLimitMeters.Value > 0;
+    var canToggleCheckinDistanceConstraint = Model.CanToggleCheckinDistanceConstraint;
     var checkinByDistanceValue = (hasCheckinDistanceLimit && Model.Form.CheckinTheoKhoangCach).ToString().ToLowerInvariant();
     var defaultCheckinEmployeeId = Model.CurrentEmployeeId.HasValue && assignedCheckinEmployees.Any(employee => employee.NhanVienId == Model.CurrentEmployeeId)
         ? Model.CurrentEmployeeId
@@ -101,11 +100,16 @@
           class="account-form yeu-cau-detail-form"
           data-yeu-cau-form
           data-search-url="@Url.Action("SearchLocations", "YeuCau")"
+          data-customer-search-url="@Url.Action("SearchCustomers", "YeuCau")"
+          data-location-create-url="@Url.Action("CreateLocation", "YeuCau")"
           data-code-url="@Url.Action("PreviewCode", "YeuCau")"
           data-checkin-url="@Url.Action("CreateCheckin", "YeuCau")"
           data-checkout-url="@Url.Action("CreateCheckout", "YeuCau")"
           data-work-image-url="@Url.Action("UploadWorkImage", "YeuCau")"
+          data-work-image-delete-url="@Url.Action("DeleteWorkImage", "YeuCau")"
+          data-work-checklist-add-url="@Url.Action("AddWorkChecklist", "YeuCau")"
           data-location-coordinate-url="@Url.Action("UpdateLocationCoordinates", "YeuCau")"
+          data-location-coordinate-draft-url="@Url.Action("UpdateDraftLocationCoordinates", "YeuCau")"
           data-checkin-delete-url="@Url.Action("DeleteCheckin", "YeuCau")"
           data-current-employee-id="@currentEmployeeIdValue"
           data-current-user="@currentAuditUser"
@@ -123,6 +127,8 @@
         <input asp-for="Form.IDDiaDiem" type="hidden" data-selected-location-id />
         <input asp-for="Form.NhanVienThucHienText" type="hidden" />
         <input type="hidden" name="Form.WorkEmployeesJson" data-work-employees-json />
+        <span data-can-add-work-employee asp-permission-code="YeuCau_WorkEmployee_Insert" hidden></span>
+        <span data-can-delete-work-employee asp-permission-code="YeuCau_WorkEmployee_Delete" hidden></span>
         <select asp-for="Form.NhanVienThucHienId" data-employee-select hidden>
             <option value=""></option>
             @foreach (var nhanVien in Model.NhanVienOptions)
@@ -154,6 +160,21 @@
                     <span class="yeu-cau-back-desktop">Quay lại danh sách</span>
                     <span class="yeu-cau-back-mobile">Về danh sách</span>
                 </a>
+
+                @if (Model.IsEditMode)
+                {
+                    <button type="submit"
+                            class="secondary-button"
+                            asp-action="SendZaloSchedule"
+                            asp-route-id="@Model.Form.Id"
+                            asp-route-keyword="@Model.Filter.Keyword"
+                            asp-route-statusFilter="@Model.Filter.StatusFilter"
+                            asp-route-workStatusFilter="@Model.Filter.WorkStatusFilter"
+                            asp-route-page="@Model.Filter.Page">
+                        <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                        <span>Gui lich Zalo</span>
+                    </button>
+                }
 
                 <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
                     <span class="button-content">
@@ -244,8 +265,8 @@
                                                    autocomplete="off"
                                                    placeholder="Tìm địa điểm khách hàng trong hệ thống..."
                                                    data-location-search-input />
-                                            <button type="button" class="login-input-action" data-location-clear aria-label="Xóa địa điểm đã chọn">
-                                                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                            <button type="button" class="login-input-action yeu-cau-location-create-button" data-location-create-open aria-label="Thêm địa điểm khách hàng">
+                                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
                                             </button>
                                         </span>
                                         <small class="yeu-cau-location-picker-hint">Chỉ được chọn từ danh sách địa điểm khách hàng đang có trong hệ thống.</small>
@@ -265,15 +286,13 @@
                                     <div class="khach-hang-location-map-preview-copy">
                                         <span data-request-location-preview-title>@(selectedLocation?.LatAddress.HasValue == true && selectedLocation?.LongAddress.HasValue == true ? "Xem bản đồ" : "Chưa có ghim")</span>
                                         <small>Nhấn để mở bản đồ</small>
-                                        @if (canUpdateLocationCoordinates && !selectedLocationHasCoordinates)
-                                        {
-                                            <button type="button"
-                                                    class="secondary-button yeu-cau-location-coordinate-button"
-                                                    data-location-coordinate-capture>
-                                                <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
-                                                <span>Lấy tọa độ điểm khách hàng</span>
-                                            </button>
-                                        }
+                                        <button type="button"
+                                                class="secondary-button yeu-cau-location-coordinate-button @(selectedLocation is null || selectedLocationHasCoordinates ? "is-hidden" : null)"
+                                                data-location-coordinate-capture
+                                                data-can-update-location-coordinate="@canUpdateLocationCoordinates.ToString().ToLowerInvariant()">
+                                            <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
+                                            <span>Lấy tọa độ điểm khách hàng</span>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -382,7 +401,7 @@
                                                    class="status-switch-input"
                                                    type="checkbox"
                                                    checked="@(hasCheckinDistanceLimit && Model.Form.CheckinTheoKhoangCach ? "checked" : null)"
-                                                   disabled="@(!hasCheckinDistanceLimit)" />
+                                                   disabled="@(!hasCheckinDistanceLimit || !canToggleCheckinDistanceConstraint)" />
                                             <span class="status-switch-track" aria-hidden="true">
                                                 <span class="status-switch-thumb"></span>
                                             </span>
@@ -391,6 +410,10 @@
                                     @if (!hasCheckinDistanceLimit)
                                     {
                                         <span class="login-field-error">Chưa có giá trị KM_limit nên không thể bật ràng buộc khoảng cách.</span>
+                                    }
+                                    else if (!canToggleCheckinDistanceConstraint)
+                                    {
+                                        <span class="login-field-error">Ban chua co quyen bat/tat rang buoc khoang cach.</span>
                                     }
                                 </label>
 
@@ -485,13 +508,11 @@
                             @for (var workIndex = 0; workIndex < works.Count; workIndex++)
                             {
                                 var work = works[workIndex];
-                                var isWorkCompleted = work.CheckInTime.HasValue &&
-                                    work.CheckOutTime.HasValue &&
-                                    work.CheckOutTime.Value > work.CheckInTime.Value;
+                                var isWorkCompleted = YeuCauCongViecTrangThaiCatalog.IsCompleted(work.TrangThaiCongViec);
                                 var checkInImages = work.Images.Where(image => image.ImageType == YeuCauCongViecImageTypes.CheckIn).ToList();
                                 var checkOutImages = work.Images.Where(image => image.ImageType == YeuCauCongViecImageTypes.CheckOut).ToList();
 
-                                <section class="yeu-cau-work-card is-collapsed @(isWorkCompleted ? "is-completed" : null)" data-work-item>
+                                <section class="yeu-cau-work-card is-collapsed @work.TrangThaiCongViecCssClass @(isWorkCompleted ? "is-completed" : null)" data-work-item>
                                     <input type="hidden" name="Form.CongViecs[@workIndex].YeuCauCongViecId" value="@work.YeuCauCongViecId" data-work-id />
                                     <input type="hidden" name="Form.CongViecs[@workIndex].TenCongViec" value="@work.TenCongViec" data-work-name />
                                     <div class="yeu-cau-work-header">
@@ -501,12 +522,12 @@
                                                 aria-expanded="false">
                                             <span class="yeu-cau-work-toggle-copy">
                                                 <strong data-work-title>@work.TenCongViec</strong>
-                                                <small data-work-status>@(isWorkCompleted ? "Hoàn thành" : "Đang thực hiện")</small>
+                                                <small data-work-status>@work.TrangThaiCongViecDisplay</small>
                                             </span>
                                             <i class="fa-solid fa-chevron-down" aria-hidden="true" data-work-toggle-icon></i>
                                         </button>
 
-                                        <button type="button" class="table-action-button delete" asp-permission-action="delete" data-work-remove>
+                                        <button type="button" class="table-action-button delete @(isWorkCompleted ? "is-hidden" : null)" asp-permission-action="delete" data-work-remove hidden="@isWorkCompleted">
                                             <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                                             <span>Xóa</span>
                                         </button>
@@ -530,12 +551,27 @@
                                             </label>
 
                                             <label class="login-field">
+                                                <span>Trạng thái công việc</span>
+                                                <span class="login-input-shell select-shell">
+                                                    <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                                                    <select name="Form.CongViecs[@workIndex].TrangThaiCongViec" data-work-status-select>
+                                                        @foreach (var option in Model.WorkStatusOptions)
+                                                        {
+                                                            <option value="@option.Value" selected="@(work.TrangThaiCongViecDisplay == option.Value ? "selected" : null)">@option.Label</option>
+                                                        }
+                                                    </select>
+                                                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                                </span>
+                                            </label>
+
+                                            <label class="login-field">
                                                 <span>Thời gian bắt đầu</span>
                                                 <span class="login-input-shell">
                                                     <i class="fa-solid fa-play" aria-hidden="true"></i>
-                                                    <input type="datetime-local"
-                                                           name="Form.CongViecs[@workIndex].CheckInTime"
-                                                           value="@(work.CheckInTime?.ToString("yyyy-MM-ddTHH:mm"))" />
+                                                   <input type="datetime-local"
+                                                          name="Form.CongViecs[@workIndex].CheckInTime"
+                                                          value="@(work.CheckInTime?.ToString("yyyy-MM-ddTHH:mm"))"
+                                                          @(isWorkCompleted ? "readonly" : null) />
                                                 </span>
                                             </label>
 
@@ -550,10 +586,18 @@
                                             </label>
                                         </div>
 
+                                        <label class="login-field yeu-cau-work-note-field">
+                                            <span>Ghi chú công việc</span>
+                                            <span class="login-textarea-shell">
+                                                <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>
+                                                <textarea name="Form.CongViecs[@workIndex].GhiChu" rows="2" maxlength="500" placeholder="Nhập ghi chú cho công việc..." data-work-note>@work.GhiChu</textarea>
+                                            </span>
+                                        </label>
+
                                         <div class="yeu-cau-work-split">
                                             <section class="yeu-cau-work-assignees">
                                                 <div class="yeu-cau-work-column-title">
-                                                    <button type="button" class="secondary-button yeu-cau-work-employee-add" data-work-employee-add>
+                                                    <button type="button" class="secondary-button yeu-cau-work-employee-add @(isWorkCompleted ? "is-hidden" : null)" asp-permission-code="YeuCau_WorkEmployee_Insert" data-work-employee-add>
                                                         <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
                                                         <span>Thêm nhân viên</span>
                                                     </button>
@@ -570,7 +614,7 @@
                                                             var linked = work.NhanViens[linkedIndex];
                                                             var employeeAvatarUrl = string.IsNullOrWhiteSpace(linked.Avatar) ? "/images/default-avatar.svg" : linked.Avatar;
 
-                                                            <label class="yeu-cau-work-employee-choice" data-work-employee-choice>
+                                                            <div class="yeu-cau-work-employee-choice" data-work-employee-choice>
                                                                 <input type="hidden"
                                                                        name="Form.CongViecs[@workIndex].NhanViens[@linkedIndex].NhanVienId"
                                                                        value="@linked.NhanVienId"
@@ -593,7 +637,11 @@
                                                                     <strong>@linked.HoTen</strong>
                                                                     <span>@(string.IsNullOrWhiteSpace(linked.ChucVu) ? "Chưa có vị trí công việc" : linked.ChucVu)</span>
                                                                 </span>
-                                                            </label>
+                                                                <button type="button" class="table-action-button delete yeu-cau-work-employee-remove @(isWorkCompleted ? "is-hidden" : null)" asp-permission-code="YeuCau_WorkEmployee_Delete" data-work-employee-remove aria-label="Xóa nhân viên @linked.HoTen">
+                                                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                                                    <span>Xóa</span>
+                                                                </button>
+                                                            </div>
                                                         }
                                                     }
                                                 </div>
@@ -601,6 +649,13 @@
 
                                             <div class="yeu-cau-work-checklist">
                                                 <div class="yeu-cau-work-column-title">Checklist công việc</div>
+                                                <div class="yeu-cau-work-checklist-add" data-work-checklist-add-shell>
+                                                    <input type="text" class="login-input" placeholder="Them checklist..." maxlength="250" data-work-checklist-add-input />
+                                                    <button type="button" class="secondary-button" data-work-checklist-add>
+                                                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                                        <span>Them</span>
+                                                    </button>
+                                                </div>
                                                 <div class="yeu-cau-work-checklist-empty @(work.Checklists.Count > 0 ? "is-hidden" : null)" data-work-checklist-empty>Công việc này chưa có checklist.</div>
 
                                                 <div class="yeu-cau-work-checklist-list" data-work-checklist-list>
@@ -637,15 +692,15 @@
                                         </div>
 
                                         <div class="yeu-cau-work-images" data-work-images>
-                                            <section class="yeu-cau-work-image-group" data-work-image-group data-image-type="CheckIn" data-required-count="@work.SoLuongAnhCheckIn">
+                                            <section class="yeu-cau-work-image-group @(work.SoLuongAnhCheckIn > 0 && checkInImages.Count < work.SoLuongAnhCheckIn ? "is-missing" : null)" data-work-image-group data-image-type="CheckIn" data-required-count="@work.SoLuongAnhCheckIn">
                                                 <div class="yeu-cau-work-image-header">
-                                                    <strong>Ảnh checkin</strong>
+                                                    <strong>Ảnh trước thực hiện</strong>
                                                     @if (work.SoLuongAnhCheckIn > 0)
                                                     {
                                                         <span class="yeu-cau-work-image-count @(checkInImages.Count >= work.SoLuongAnhCheckIn ? "is-complete" : "is-missing")" data-work-image-count>@checkInImages.Count / @work.SoLuongAnhCheckIn</span>
                                                     }
                                                 </div>
-                                                <div class="yeu-cau-work-image-actions">
+                                                <div class="yeu-cau-work-image-actions @(isWorkCompleted ? "is-hidden" : null)">
                                                     <button type="button" class="secondary-button" data-work-image-upload>
                                                         <i class="fa-solid fa-upload" aria-hidden="true"></i>
                                                         <span>Upload ảnh</span>
@@ -660,22 +715,31 @@
                                                 <div class="yeu-cau-work-image-list" data-work-image-list>
                                                     @foreach (var image in checkInImages)
                                                     {
-                                                        <button type="button" class="yeu-cau-work-image-thumb" data-checkin-image-open data-checkin-image="@image.ImagePath" data-checkin-employee="@work.TenCongViec" data-checkin-address="Ảnh checkin công việc">
-                                                            <img src="@image.ImagePath" alt="Ảnh checkin @work.TenCongViec" />
-                                                        </button>
+                                                        <span class="yeu-cau-work-image-item" data-work-image-item data-work-image-id="@image.Id">
+                                                            <button type="button" class="yeu-cau-work-image-thumb" data-checkin-image-open data-checkin-image="@image.ImagePath" data-checkin-employee="@work.TenCongViec" data-checkin-address="Ảnh trước thực hiện">
+                                                                <img src="@image.ImagePath" alt="Ảnh trước thực hiện @work.TenCongViec" />
+                                                            </button>
+                                                            @if (image.CanDelete)
+                                                            {
+                                                                <button type="button" class="table-action-button delete yeu-cau-work-image-delete" data-work-image-delete aria-label="Xóa ảnh">
+                                                                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                                                                    <span>Xóa</span>
+                                                                </button>
+                                                            }
+                                                        </span>
                                                     }
                                                 </div>
                                             </section>
 
-                                            <section class="yeu-cau-work-image-group" data-work-image-group data-image-type="CheckOut" data-required-count="@work.SoLuongAnhCheckOut">
+                                            <section class="yeu-cau-work-image-group @(work.SoLuongAnhCheckOut > 0 && checkOutImages.Count < work.SoLuongAnhCheckOut ? "is-missing" : null)" data-work-image-group data-image-type="CheckOut" data-required-count="@work.SoLuongAnhCheckOut">
                                                 <div class="yeu-cau-work-image-header">
-                                                    <strong>Ảnh checkout</strong>
+                                                    <strong>Ảnh sau thực hiện</strong>
                                                     @if (work.SoLuongAnhCheckOut > 0)
                                                     {
                                                         <span class="yeu-cau-work-image-count @(checkOutImages.Count >= work.SoLuongAnhCheckOut ? "is-complete" : "is-missing")" data-work-image-count>@checkOutImages.Count / @work.SoLuongAnhCheckOut</span>
                                                     }
                                                 </div>
-                                                <div class="yeu-cau-work-image-actions">
+                                                <div class="yeu-cau-work-image-actions @(isWorkCompleted ? "is-hidden" : null)">
                                                     <button type="button" class="secondary-button" data-work-image-upload>
                                                         <i class="fa-solid fa-upload" aria-hidden="true"></i>
                                                         <span>Upload ảnh</span>
@@ -690,9 +754,18 @@
                                                 <div class="yeu-cau-work-image-list" data-work-image-list>
                                                     @foreach (var image in checkOutImages)
                                                     {
-                                                        <button type="button" class="yeu-cau-work-image-thumb" data-checkin-image-open data-checkin-image="@image.ImagePath" data-checkin-employee="@work.TenCongViec" data-checkin-address="Ảnh checkout công việc">
-                                                            <img src="@image.ImagePath" alt="Ảnh checkout @work.TenCongViec" />
-                                                        </button>
+                                                        <span class="yeu-cau-work-image-item" data-work-image-item data-work-image-id="@image.Id">
+                                                            <button type="button" class="yeu-cau-work-image-thumb" data-checkin-image-open data-checkin-image="@image.ImagePath" data-checkin-employee="@work.TenCongViec" data-checkin-address="Ảnh sau thực hiện">
+                                                                <img src="@image.ImagePath" alt="Ảnh sau thực hiện @work.TenCongViec" />
+                                                            </button>
+                                                            @if (image.CanDelete)
+                                                            {
+                                                                <button type="button" class="table-action-button delete yeu-cau-work-image-delete" data-work-image-delete aria-label="Xóa ảnh">
+                                                                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                                                                    <span>Xóa</span>
+                                                                </button>
+                                                            }
+                                                        </span>
                                                     }
                                                 </div>
                                             </section>
@@ -704,7 +777,7 @@
                     </div>
 
                     <template data-work-template>
-                        <section class="yeu-cau-work-card is-collapsed" data-work-item>
+                        <section class="yeu-cau-work-card is-collapsed pending" data-work-item>
                             <input type="hidden" value="" data-work-id />
                             <input type="hidden" value="" data-work-name />
 
@@ -715,7 +788,7 @@
                                         aria-expanded="false">
                                     <span class="yeu-cau-work-toggle-copy">
                                         <strong data-work-title>Công việc</strong>
-                                        <small data-work-status>Đang thực hiện</small>
+                                        <small data-work-status>Tạo mới</small>
                                     </span>
                                     <i class="fa-solid fa-chevron-down" aria-hidden="true" data-work-toggle-icon></i>
                                 </button>
@@ -744,6 +817,20 @@
                                     </label>
 
                                     <label class="login-field">
+                                        <span>Trạng thái công việc</span>
+                                        <span class="login-input-shell select-shell">
+                                            <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                                            <select data-work-status-select>
+                                                @foreach (var option in Model.WorkStatusOptions)
+                                                {
+                                                    <option value="@option.Value">@option.Label</option>
+                                                }
+                                            </select>
+                                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                        </span>
+                                    </label>
+
+                                    <label class="login-field">
                                         <span>Thời gian bắt đầu</span>
                                         <span class="login-input-shell">
                                             <i class="fa-solid fa-play" aria-hidden="true"></i>
@@ -760,10 +847,18 @@
                                     </label>
                                 </div>
 
+                                <label class="login-field yeu-cau-work-note-field">
+                                    <span>Ghi chú công việc</span>
+                                    <span class="login-textarea-shell">
+                                        <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>
+                                        <textarea rows="2" maxlength="500" placeholder="Nhập ghi chú cho công việc..." data-work-note></textarea>
+                                    </span>
+                                </label>
+
                                 <div class="yeu-cau-work-split">
                                     <section class="yeu-cau-work-assignees">
                                         <div class="yeu-cau-work-column-title">
-                                            <button type="button" class="secondary-button yeu-cau-work-employee-add" data-work-employee-add>
+                                            <button type="button" class="secondary-button yeu-cau-work-employee-add" asp-permission-code="YeuCau_WorkEmployee_Insert" data-work-employee-add>
                                                 <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
                                                 <span>Thêm nhân viên</span>
                                             </button>
@@ -773,6 +868,13 @@
 
                                     <div class="yeu-cau-work-checklist">
                                         <div class="yeu-cau-work-column-title">Checklist công việc</div>
+                                        <div class="yeu-cau-work-checklist-add" data-work-checklist-add-shell>
+                                            <input type="text" class="login-input" placeholder="Them checklist..." maxlength="250" data-work-checklist-add-input />
+                                            <button type="button" class="secondary-button" data-work-checklist-add>
+                                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                                                <span>Them</span>
+                                            </button>
+                                        </div>
                                         <div class="yeu-cau-work-checklist-empty" data-work-checklist-empty>Công việc này chưa có checklist.</div>
                                         <div class="yeu-cau-work-checklist-list" data-work-checklist-list></div>
                                     </div>
@@ -781,7 +883,7 @@
                                 <div class="yeu-cau-work-images" data-work-images>
                                     <section class="yeu-cau-work-image-group" data-work-image-group data-image-type="CheckIn" data-required-count="0">
                                         <div class="yeu-cau-work-image-header">
-                                            <strong>Ảnh checkin</strong>
+                                            <strong>Ảnh trước thực hiện</strong>
                                             <span class="yeu-cau-work-image-count" data-work-image-count hidden>0 / 0</span>
                                         </div>
                                         <div class="yeu-cau-work-image-actions">
@@ -795,7 +897,7 @@
 
                                     <section class="yeu-cau-work-image-group" data-work-image-group data-image-type="CheckOut" data-required-count="0">
                                         <div class="yeu-cau-work-image-header">
-                                            <strong>Ảnh checkout</strong>
+                                            <strong>Ảnh sau thực hiện</strong>
                                             <span class="yeu-cau-work-image-count" data-work-image-count hidden>0 / 0</span>
                                         </div>
                                         <div class="yeu-cau-work-image-actions">
@@ -839,7 +941,7 @@
                             <h3>Checkin</h3>
                         </div>
 
-                        @if (Model.IsEditMode)
+                        @if (Model.IsEditMode && hasIncompleteWork)
                         {
                             <button type="button"
                                     class="secondary-button"
@@ -883,72 +985,80 @@
                                             var checkoutCoordinate = checkin.LatAddressCheckOut.HasValue && checkin.LongAddressCheckOut.HasValue
                                                 ? $"{checkin.LatAddressCheckOut.Value:0.00000}, {checkin.LongAddressCheckOut.Value:0.00000}"
                                                 : "Chua co toa do checkout";
-                                            <article class="yeu-cau-checkin-card">
-                                                <button type="button"
-                                                        class="yeu-cau-checkin-photo"
-                                                        data-checkin-image-open
-                                                        data-checkin-image="@checkin.ImgPath"
-                                                        data-checkin-time="@(checkin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "")"
-                                                        data-checkin-address="@checkin.CoordinateDisplay"
-                                                        data-checkin-lat="@(checkin.LatAddress?.ToString(invariantCulture) ?? "")"
-                                                        data-checkin-long="@(checkin.LongAddress?.ToString(invariantCulture) ?? "")"
-                                                        data-checkin-employee="@checkin.EmployeeDisplay"
-                                                        @(string.IsNullOrWhiteSpace(checkin.ImgPath) ? "disabled" : null)>
-                                                    @if (!string.IsNullOrWhiteSpace(checkin.ImgPath))
-                                                    {
-                                                        <img src="@checkin.ImgPath" alt="&#7842;nh checkin @checkin.EmployeeDisplay" />
-                                                    }
-                                                    else
-                                                    {
-                                                        <i class="fa-regular fa-image" aria-hidden="true"></i>
-                                                    }
-                                                </button>
+                                            <article class="yeu-cau-checkin-card @(checkin.IsOpen ? "is-pending" : "is-complete")">
+                                                <span class="yeu-cau-checkin-dot" aria-hidden="true"></span>
                                                 <div class="yeu-cau-checkin-copy">
                                                     <div class="yeu-cau-checkin-title">
                                                         <strong>@checkin.EmployeeDisplay</strong>
                                                         <span>@(checkin.ThoiDiem?.ToString("HH:mm") ?? "--:--")</span>
                                                     </div>
-                                                    <div class="yeu-cau-checkin-meta">
-                                                        <span><i class="fa-solid fa-user" aria-hidden="true"></i>@checkin.CustomerDisplay</span>
-                                                        <span><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>@checkin.CoordinateDisplay</span>
-                                                        @if (checkin.IsOpen)
-                                                        {
-                                                            <span class="yeu-cau-checkin-open"><i class="fa-solid fa-person-walking-arrow-right" aria-hidden="true"></i>Ch&#432;a checkout</span>
-                                                        }
-                                                        else if (checkin.ThoiDiemCheckOut.HasValue)
-                                                        {
-                                                            <span><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Checkout @(checkin.ThoiDiemCheckOut?.ToString("HH:mm") ?? "--:--")</span>
-                                                        }
-                                                    </div>
-                                                    @if (checkin.ThoiDiemCheckOut.HasValue)
-                                                    {
-                                                        <div class="yeu-cau-checkin-meta">
-                                                            <span><i class="fa-solid fa-location-dot" aria-hidden="true"></i>@checkoutCoordinate</span>
-                                                            @if (!string.IsNullOrWhiteSpace(checkin.ImgPathCheckOut))
+                                                    <section class="yeu-cau-checkin-line is-checkin">
+                                                        <button type="button"
+                                                                class="yeu-cau-checkin-photo"
+                                                                data-checkin-image-open
+                                                                data-checkin-image="@checkin.ImgPath"
+                                                                data-checkin-time="@(checkin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "")"
+                                                                data-checkin-address="@checkin.CoordinateDisplay"
+                                                                data-checkin-lat="@(checkin.LatAddress?.ToString(invariantCulture) ?? "")"
+                                                                data-checkin-long="@(checkin.LongAddress?.ToString(invariantCulture) ?? "")"
+                                                                data-checkin-employee="@checkin.EmployeeDisplay"
+                                                                @(string.IsNullOrWhiteSpace(checkin.ImgPath) ? "disabled" : null)>
+                                                            @if (!string.IsNullOrWhiteSpace(checkin.ImgPath))
                                                             {
-                                                                <button type="button"
-                                                                        class="table-action-button edit" asp-permission-action="update"
-                                                                        data-checkin-image-open
-                                                                        data-checkin-image="@checkin.ImgPathCheckOut"
-                                                                        data-checkin-time="@(checkin.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm") ?? "")"
-                                                                        data-checkin-address="@checkoutCoordinate"
-                                                                        data-checkin-lat="@(checkin.LatAddressCheckOut?.ToString(invariantCulture) ?? "")"
-                                                                        data-checkin-long="@(checkin.LongAddressCheckOut?.ToString(invariantCulture) ?? "")"
-                                                                        data-checkin-employee="@checkin.EmployeeDisplay">
-                                                                    <i class="fa-regular fa-image" aria-hidden="true"></i>
-                                                                    <span>&#7842;nh checkout</span>
-                                                                </button>
+                                                                <img src="@checkin.ImgPath" alt="&#7842;nh checkin @checkin.EmployeeDisplay" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <i class="fa-regular fa-image" aria-hidden="true"></i>
+                                                            }
+                                                        </button>
+                                                        <div class="yeu-cau-checkin-line-copy">
+                                                            <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>@(checkin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "--:--")</strong>
+                                                            <span><i class="fa-solid fa-user" aria-hidden="true"></i>@checkin.CustomerDisplay</span>
+                                                            <span><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>@checkin.CoordinateDisplay</span>
+                                                            @if (!string.IsNullOrWhiteSpace(checkin.GhiChuNhanVien))
+                                                            {
+                                                                <p>@checkin.GhiChuNhanVien</p>
                                                             }
                                                         </div>
-                                                    }
-                                                    @if (!string.IsNullOrWhiteSpace(checkin.GhiChuNhanVien))
-                                                    {
-                                                        <p>@checkin.GhiChuNhanVien</p>
-                                                    }
-                                                    @if (!string.IsNullOrWhiteSpace(checkin.GhiChuCheckOut))
-                                                    {
-                                                        <p>@checkin.GhiChuCheckOut</p>
-                                                    }
+                                                    </section>
+                                                    <section class="yeu-cau-checkin-line @(checkin.ThoiDiemCheckOut.HasValue ? "is-checkout-complete" : "is-checkout-pending")">
+                                                        @if (!string.IsNullOrWhiteSpace(checkin.ImgPathCheckOut))
+                                                        {
+                                                            <button type="button"
+                                                                    class="yeu-cau-checkin-photo"
+                                                                    data-checkin-image-open
+                                                                    data-checkin-image="@checkin.ImgPathCheckOut"
+                                                                    data-checkin-time="@(checkin.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm") ?? "")"
+                                                                    data-checkin-address="@checkoutCoordinate"
+                                                                    data-checkin-lat="@(checkin.LatAddressCheckOut?.ToString(invariantCulture) ?? "")"
+                                                                    data-checkin-long="@(checkin.LongAddressCheckOut?.ToString(invariantCulture) ?? "")"
+                                                                    data-checkin-employee="@checkin.EmployeeDisplay">
+                                                                <img src="@checkin.ImgPathCheckOut" alt="&#7842;nh checkout @checkin.EmployeeDisplay" />
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="yeu-cau-checkin-photo is-empty">
+                                                                <i class="fa-regular fa-image" aria-hidden="true"></i>
+                                                            </div>
+                                                        }
+                                                        <div class="yeu-cau-checkin-line-copy">
+                                                            @if (checkin.ThoiDiemCheckOut.HasValue)
+                                                            {
+                                                                <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>@(checkin.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm") ?? "--:--")</strong>
+                                                                <span><i class="fa-solid fa-location-dot" aria-hidden="true"></i>@checkoutCoordinate</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Ch&#432;a checkout</strong>
+                                                            }
+                                                            @if (!string.IsNullOrWhiteSpace(checkin.GhiChuCheckOut))
+                                                            {
+                                                                <p>@checkin.GhiChuCheckOut</p>
+                                                            }
+                                                        </div>
+                                                    </section>
                                                     @if (Model.CurrentUserIsAdmin)
                                                     {
                                                         <button type="button"
@@ -1048,7 +1158,7 @@
 
                 <div class="crud-modal-actions">
                     <button type="button" class="secondary-button crud-cancel-button" data-linked-employee-picker-close>Hủy</button>
-                    <button type="button" class="primary-button" asp-permission-action="insert" data-linked-employee-picker-submit>
+                    <button type="button" class="primary-button" asp-permission-code="YeuCau_WorkEmployee_Insert" data-linked-employee-picker-submit>
                         <span class="button-content">
                             <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
                             <span>Thêm đã chọn</span>
@@ -1218,33 +1328,31 @@
                         </span>
                     </label>
 
-                    <div class="yeu-cau-checkin-camera" data-checkin-camera-shell>
-                        <video playsinline autoplay muted data-checkin-video></video>
-                        <canvas data-checkin-canvas hidden></canvas>
-                        <img data-checkin-preview alt="&#7842;nh checkin v&#7915;a ch&#7909;p" hidden />
-                        <div class="yeu-cau-checkin-stamp" data-checkin-stamp hidden>
-                            <strong data-checkin-stamp-time></strong>
-                            <span data-checkin-stamp-address></span>
+                    <div class="yeu-cau-checkin-capture-stack">
+                        <div class="yeu-cau-checkin-camera" data-checkin-camera-shell>
+                            <video playsinline autoplay muted data-checkin-video></video>
+                            <canvas data-checkin-canvas hidden></canvas>
+                            <img data-checkin-preview alt="&#7842;nh checkin v&#7915;a ch&#7909;p" hidden />
+                            <div class="yeu-cau-checkin-stamp" data-checkin-stamp hidden>
+                                <strong data-checkin-stamp-time></strong>
+                                <span data-checkin-stamp-address></span>
+                            </div>
+                            <div class="yeu-cau-checkin-placeholder" data-checkin-placeholder>
+                                <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                <span>B&#7845;m Ch&#7909;p &#7843;nh &#273;&#7875; m&#7903; camera</span>
+                            </div>
                         </div>
-                        <div class="yeu-cau-checkin-placeholder" data-checkin-placeholder>
-                            <i class="fa-solid fa-camera" aria-hidden="true"></i>
-                            <span>B&#7845;m Ch&#7909;p &#7843;nh &#273;&#7875; m&#7903; camera</span>
-                        </div>
-                    </div>
 
-                    <div class="yeu-cau-checkin-actions">
-                        <button type="button" class="secondary-button" data-checkin-capture>
-                            <i class="fa-solid fa-camera" aria-hidden="true"></i>
-                            <span>Ch&#7909;p &#7843;nh</span>
-                        </button>
-                        <button type="button" class="secondary-button" data-checkin-retake disabled>
-                            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-                            <span>Ch&#7909;p l&#7841;i</span>
-                        </button>
-                        <button type="button" class="secondary-button" data-checkin-gps-retry>
-                            <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
-                            <span>L&#7845;y GPS</span>
-                        </button>
+                        <div class="yeu-cau-checkin-actions">
+                            <button type="button" class="secondary-button" data-checkin-capture>
+                                <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                                <span>Ch&#7909;p &#7843;nh</span>
+                            </button>
+                            <button type="button" class="secondary-button" data-checkin-retake disabled>
+                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                <span>B&#7887; &#7843;nh</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="account-form-grid">
@@ -1383,6 +1491,103 @@
         </div>
 
         *@
+        <div class="crud-modal-shell" data-location-create-shell hidden>
+            <div class="crud-modal-backdrop" aria-hidden="true" data-location-create-close></div>
+
+            <section class="crud-modal" role="dialog" aria-modal="true" aria-labelledby="yeu-cau-location-create-title">
+                <div class="crud-modal-header">
+                    <div class="crud-modal-heading">
+                        <h2 id="yeu-cau-location-create-title">Thêm địa điểm khách hàng</h2>
+                        <p class="crud-modal-subtitle">Chọn khách hàng có sẵn hoặc tạo khách mới, sau đó lưu địa điểm để dùng cho phiếu yêu cầu.</p>
+                    </div>
+
+                    <button type="button"
+                            class="menu-nav-button crud-close-button"
+                            aria-label="Đóng popup thêm địa điểm"
+                            data-location-create-close>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="crud-form">
+                    <label class="login-field">
+                        <span>Khách hàng</span>
+                        <span class="login-input-shell select-shell" data-location-create-customer-shell>
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
+                            <select data-location-create-customer>
+                                <option value="">Tạo khách mới</option>
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+
+                    <div class="crud-form-grid" data-location-create-new-customer-fields>
+                        <label class="login-field">
+                            <span>Tên khách</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-building" aria-hidden="true"></i>
+                                <input type="text" maxlength="250" data-location-create-customer-name />
+                            </span>
+                        </label>
+
+                        <label class="login-field">
+                            <span>Số điện thoại</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-phone" aria-hidden="true"></i>
+                                <input type="tel" maxlength="50" data-location-create-customer-phone />
+                            </span>
+                        </label>
+
+                        <label class="login-field crud-form-grid-wide">
+                            <span>Địa chỉ khách</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                <input type="text" maxlength="250" data-location-create-customer-address />
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="crud-form-grid" data-location-create-existing-location-fields>
+                        <label class="login-field crud-form-grid-wide">
+                            <span>Địa chỉ địa điểm</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                                <input type="text" maxlength="250" data-location-create-address />
+                            </span>
+                        </label>
+
+                        <label class="login-field">
+                            <span>Người liên hệ</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-address-card" aria-hidden="true"></i>
+                                <input type="text" maxlength="150" data-location-create-contact />
+                            </span>
+                        </label>
+
+                        <label class="login-field">
+                            <span>Điện thoại địa điểm</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>
+                                <input type="tel" maxlength="50" data-location-create-phone />
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="page-alert info yeu-cau-checkin-status" data-location-create-status hidden></div>
+                </div>
+
+                <div class="crud-modal-actions">
+                    <button type="button" class="secondary-button crud-cancel-button" data-location-create-close>Hủy</button>
+                    <button type="button" class="primary-button" data-location-create-save>
+                        <span class="button-content">
+                            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                            <span>Lưu địa điểm</span>
+                        </span>
+                    </button>
+                </div>
+            </section>
+        </div>
+
         <div class="crud-modal-shell" data-location-view-shell hidden>
             <div class="crud-modal-backdrop" aria-hidden="true" data-location-view-close></div>
 
@@ -1451,11 +1656,16 @@
             }
 
             const searchUrl = root.dataset.searchUrl;
+            const customerSearchUrl = root.dataset.customerSearchUrl;
+            const locationCreateUrl = root.dataset.locationCreateUrl;
             const codeUrl = root.dataset.codeUrl;
             const checkinUrl = root.dataset.checkinUrl;
             const checkoutUrl = root.dataset.checkoutUrl;
             const workImageUrl = root.dataset.workImageUrl;
+            const workImageDeleteUrl = root.dataset.workImageDeleteUrl;
+            const workChecklistAddUrl = root.dataset.workChecklistAddUrl;
             const locationCoordinateUrl = root.dataset.locationCoordinateUrl;
+            const locationCoordinateDraftUrl = root.dataset.locationCoordinateDraftUrl;
             const checkinDeleteUrl = root.dataset.checkinDeleteUrl;
             const currentEmployeeId = Number.parseInt(root.dataset.currentEmployeeId || "", 10);
             const currentAuditUser = root.dataset.currentUser || "system";
@@ -1483,9 +1693,23 @@
             const previewCoordinates = root.querySelector("[data-preview-coordinates]");
             const previewLongInput = root.querySelector("[data-preview-long]");
             const previewLatInput = root.querySelector("[data-preview-lat]");
-            const clearLocationButton = root.querySelector("[data-location-clear]");
             const previewMapButton = root.querySelector("[data-request-location-map-preview]");
             const locationCoordinateButton = root.querySelector("[data-location-coordinate-capture]");
+            const locationCreateOpenButton = root.querySelector("[data-location-create-open]");
+            const locationCreateShell = root.querySelector("[data-location-create-shell]");
+            const locationCreateCloseButtons = root.querySelectorAll("[data-location-create-close]");
+            const locationCreateCustomerShell = root.querySelector("[data-location-create-customer-shell]");
+            const locationCreateCustomerSelect = root.querySelector("[data-location-create-customer]");
+            const locationCreateNewCustomerFields = root.querySelector("[data-location-create-new-customer-fields]");
+            const locationCreateExistingLocationFields = root.querySelector("[data-location-create-existing-location-fields]");
+            const locationCreateCustomerNameInput = root.querySelector("[data-location-create-customer-name]");
+            const locationCreateCustomerPhoneInput = root.querySelector("[data-location-create-customer-phone]");
+            const locationCreateCustomerAddressInput = root.querySelector("[data-location-create-customer-address]");
+            const locationCreateAddressInput = root.querySelector("[data-location-create-address]");
+            const locationCreateContactInput = root.querySelector("[data-location-create-contact]");
+            const locationCreatePhoneInput = root.querySelector("[data-location-create-phone]");
+            const locationCreateStatus = root.querySelector("[data-location-create-status]");
+            const locationCreateSaveButton = root.querySelector("[data-location-create-save]");
             const previewMapElement = root.querySelector("[data-request-location-preview-map]");
             const previewTitle = root.querySelector("[data-request-location-preview-title]");
             const viewShell = root.querySelector("[data-location-view-shell]");
@@ -1512,6 +1736,8 @@
             const linkedEmployeePickerEmpty = root.querySelector("[data-linked-employee-picker-empty]");
             const linkedEmployeePickerSubmit = root.querySelector("[data-linked-employee-picker-submit]");
             const linkedEmployeePickerCloseButtons = root.querySelectorAll("[data-linked-employee-picker-close]");
+            const canAddWorkEmployee = !!root.querySelector("[data-can-add-work-employee]");
+            const canDeleteWorkEmployee = !!root.querySelector("[data-can-delete-work-employee]");
             const checkinOpenButton = root.querySelector("[data-checkin-open]");
             const checkinShell = root.querySelector("[data-checkin-shell]");
             const checkinCloseButtons = root.querySelectorAll("[data-checkin-close]");
@@ -1594,7 +1820,6 @@
                 !(previewCoordinates instanceof HTMLElement) ||
                 !(previewLongInput instanceof HTMLInputElement) ||
                 !(previewLatInput instanceof HTMLInputElement) ||
-                !(clearLocationButton instanceof HTMLButtonElement) ||
                 !(previewMapButton instanceof HTMLElement) ||
                 !(previewMapElement instanceof HTMLElement) ||
                 !(previewTitle instanceof HTMLElement) ||
@@ -1611,8 +1836,7 @@
                 !(workPickerSubmit instanceof HTMLButtonElement) ||
                 !(linkedEmployeePickerShell instanceof HTMLElement) ||
                 !(linkedEmployeePickerList instanceof HTMLElement) ||
-                !(linkedEmployeePickerEmpty instanceof HTMLElement) ||
-                !(linkedEmployeePickerSubmit instanceof HTMLButtonElement)) {
+                !(linkedEmployeePickerEmpty instanceof HTMLElement)) {
                 return;
             }
 
@@ -2909,24 +3133,72 @@
                 ? new Date(input.value)
                 : null;
 
+            const normalizeWorkStatusValue = (value) => `${value || ""}`
+                .normalize("NFD")
+                .replace(/[\u0111\u0110]/g, "d")
+                .replace(/\s+/g, "")
+                .trim()
+                .toLowerCase();
+
+            const isCompletedWorkStatus = (value) => normalizeWorkStatusValue(value) === "hoanthanh";
+
             const isValidWorkCompletion = (workItem) => {
-                const checkInInput = workItem.querySelector("input[type='datetime-local'][name*='CheckInTime'], [data-work-checkin]");
-                const checkOutInput = workItem.querySelector("input[type='datetime-local'][name*='CheckOutTime'], [data-work-checkout]");
-                const start = parseWorkDate(checkInInput);
-                const end = parseWorkDate(checkOutInput);
-                return start instanceof Date &&
-                    end instanceof Date &&
-                    !Number.isNaN(start.getTime()) &&
-                    !Number.isNaN(end.getTime()) &&
-                    end > start;
+                const statusSelect = workItem.querySelector("[data-work-status-select]");
+                return statusSelect instanceof HTMLSelectElement && isCompletedWorkStatus(statusSelect.value);
+            };
+
+            const syncCompletedWorkActionLock = (workItem, completed) => {
+                workItem.classList.toggle("is-action-locked", completed);
+
+                workItem.querySelectorAll("[data-work-image-upload], [data-work-image-camera]").forEach((button) => {
+                    if (button instanceof HTMLButtonElement) {
+                        button.disabled = completed;
+                    }
+                });
+
+                workItem.querySelectorAll("[data-work-remove], [data-work-employee-add], [data-work-employee-remove], .yeu-cau-work-image-actions").forEach((element) => {
+                    if (element instanceof HTMLElement) {
+                        element.hidden = completed;
+                        element.classList.toggle("is-hidden", completed);
+                    }
+                });
+
+                workItem.querySelectorAll("[data-work-image-file], [data-work-image-camera-file]").forEach((input) => {
+                    if (input instanceof HTMLInputElement) {
+                        input.disabled = completed;
+                    }
+                });
+
+                workItem.querySelectorAll("input[type='datetime-local'][name*='CheckInTime'], [data-work-checkin]").forEach((input) => {
+                    if (input instanceof HTMLInputElement) {
+                        input.readOnly = completed;
+                    }
+                });
             };
 
             const syncWorkCompletionState = (workItem) => {
                 const completed = isValidWorkCompletion(workItem);
                 const status = workItem.querySelector("[data-work-status]");
+                const statusSelect = workItem.querySelector("[data-work-status-select]");
+                const statusValue = statusSelect instanceof HTMLSelectElement && statusSelect.value
+                    ? statusSelect.value
+                    : "Tạo mới";
                 workItem.classList.toggle("is-completed", completed);
+                syncCompletedWorkActionLock(workItem, completed);
+                workItem.classList.remove("pending", "in-progress", "review", "cancelled");
+                if (!completed) {
+                    const normalizedStatus = normalizeWorkStatusValue(statusValue);
+                    const statusClass = normalizedStatus === "dangthuchien"
+                        ? "in-progress"
+                        : normalizedStatus === "chodanhgia"
+                            ? "review"
+                            : normalizedStatus === "huy"
+                                ? "cancelled"
+                                : "pending";
+                    workItem.classList.add(statusClass);
+                }
                 if (status instanceof HTMLElement) {
-                    status.textContent = completed ? "Hoàn thành" : "Đang thực hiện";
+                    status.textContent = statusValue;
                 }
             };
 
@@ -3170,7 +3442,7 @@
                     const employeeRole = employee.chucVu || "";
                     const employeeAvatar = employee.avatar || "";
 
-                    const wrapper = document.createElement("label");
+                    const wrapper = document.createElement("div");
                     wrapper.className = "yeu-cau-work-employee-choice";
                     wrapper.innerHTML = `
                         <input type="hidden"
@@ -3195,6 +3467,16 @@
                             <span>${employeeRole || "Chưa có vị trí công việc"}</span>
                         </span>
                     `;
+
+                    if (canDeleteWorkEmployee) {
+                        const removeButton = document.createElement("button");
+                        removeButton.type = "button";
+                        removeButton.className = "table-action-button delete yeu-cau-work-employee-remove";
+                        removeButton.setAttribute("data-work-employee-remove", "");
+                        removeButton.setAttribute("aria-label", `Xóa nhân viên ${employeeName}`);
+                        removeButton.innerHTML = `<i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Xóa</span>`;
+                        wrapper.appendChild(removeButton);
+                    }
 
                     employeeList.appendChild(wrapper);
                 });
@@ -3264,6 +3546,93 @@
                 });
             };
 
+            const getWorkIdFromItem = (workItem) => {
+                const select = workItem.querySelector("[data-work-option-select]");
+                const idInput = workItem.querySelector("[data-work-id]");
+                const rawValue = select instanceof HTMLSelectElement && select.value
+                    ? select.value
+                    : idInput instanceof HTMLInputElement
+                        ? idInput.value
+                        : "";
+                const parsed = Number.parseInt(rawValue, 10);
+                return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+            };
+
+            const addChecklistToWork = async (workItem) => {
+                if (!workChecklistAddUrl) {
+                    return;
+                }
+
+                const input = workItem.querySelector("[data-work-checklist-add-input]");
+                const button = workItem.querySelector("[data-work-checklist-add]");
+                if (!(input instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                const checklistName = input.value.trim();
+                if (!checklistName) {
+                    input.focus();
+                    return;
+                }
+
+                const workId = getWorkIdFromItem(workItem);
+                if (workId <= 0) {
+                    window.alert("Vui long chon cong viec truoc khi them checklist.");
+                    return;
+                }
+
+                const token = root.querySelector("input[name='__RequestVerificationToken']");
+                const payload = new FormData();
+                payload.append("CongViecId", `${workId}`);
+                payload.append("TenChecklist", checklistName);
+
+                if (button instanceof HTMLButtonElement) {
+                    button.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(workChecklistAddUrl, {
+                        method: "POST",
+                        headers: token instanceof HTMLInputElement ? { RequestVerificationToken: token.value } : {},
+                        body: payload
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.succeeded || !result.checklist) {
+                        throw new Error(result.message || "Khong the them checklist cong viec.");
+                    }
+
+                    const option = findWorkOption(workId);
+                    if (option) {
+                        option.checklists = Array.isArray(option.checklists) ? option.checklists : [];
+                        option.checklists.push(result.checklist);
+                    }
+
+                    const currentItems = Array.from(workItem.querySelectorAll("[data-work-checklist-item]")).map((item) => {
+                        const idInput = item.querySelector("[data-work-checklist-id]");
+                        const nameInput = item.querySelector("[data-work-checklist-name]");
+                        const orderInput = item.querySelector("[data-work-checklist-order]");
+                        const completedInput = item.querySelector("[data-work-checklist-completed]");
+                        return {
+                            checklistId: idInput instanceof HTMLInputElement ? Number.parseInt(idInput.value, 10) : 0,
+                            tenChecklist: nameInput instanceof HTMLInputElement ? nameInput.value : "",
+                            viTri: orderInput instanceof HTMLInputElement ? Number.parseInt(orderInput.value, 10) : 0,
+                            isCompleted: completedInput instanceof HTMLInputElement && completedInput.checked
+                        };
+                    });
+                    currentItems.push(result.checklist);
+                    renderWorkChecklists(workItem, currentItems);
+                    updateWorkIndexes();
+                    input.value = "";
+                    input.focus();
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : "Khong the them checklist cong viec.");
+                } finally {
+                    if (button instanceof HTMLButtonElement) {
+                        button.disabled = false;
+                    }
+                }
+            };
+
             const applyWorkOption = (workItem, workId, options = {}) => {
                 const shouldRefreshDetails = options.refreshDetails !== false;
                 const option = findWorkOption(workId);
@@ -3308,13 +3677,17 @@
                         countNode.hidden = true;
                         countNode.textContent = "";
                         countNode.classList.remove("is-missing", "is-complete");
+                        group.classList.remove("is-missing", "is-complete");
                         return;
                     }
 
+                    const isComplete = imageCount >= requiredCount;
                     countNode.hidden = false;
                     countNode.textContent = `${imageCount} / ${requiredCount}`;
-                    countNode.classList.toggle("is-missing", imageCount < requiredCount);
-                    countNode.classList.toggle("is-complete", imageCount >= requiredCount);
+                    countNode.classList.toggle("is-missing", !isComplete);
+                    countNode.classList.toggle("is-complete", isComplete);
+                    group.classList.toggle("is-missing", !isComplete);
+                    group.classList.toggle("is-complete", isComplete);
                 });
             };
 
@@ -3335,10 +3708,17 @@
                 syncWorkImageCounts(workItem);
             };
 
-            const appendWorkImageThumb = (group, imagePath, title) => {
+            const appendWorkImageThumb = (group, imagePath, title, imageId = 0, canDelete = false) => {
                 const list = group.querySelector("[data-work-image-list]");
                 if (!(list instanceof HTMLElement) || !imagePath) {
                     return;
+                }
+
+                const wrapper = document.createElement("span");
+                wrapper.className = "yeu-cau-work-image-item";
+                wrapper.setAttribute("data-work-image-item", "");
+                if (Number.isFinite(Number(imageId)) && Number(imageId) > 0) {
+                    wrapper.dataset.workImageId = `${imageId}`;
                 }
 
                 const button = document.createElement("button");
@@ -3347,14 +3727,75 @@
                 button.setAttribute("data-checkin-image-open", "");
                 button.dataset.checkinImage = imagePath;
                 button.dataset.checkinEmployee = title || "Ảnh công việc";
-                button.dataset.checkinAddress = group.dataset.imageType === "CheckOut" ? "Ảnh checkout công việc" : "Ảnh checkin công việc";
+                button.dataset.checkinAddress = group.dataset.imageType === "CheckOut" ? "Ảnh sau thực hiện" : "Ảnh trước thực hiện";
                 button.innerHTML = `<img src="${imagePath}" alt="${button.dataset.checkinAddress || "Ảnh công việc"}" />`;
                 button.addEventListener("click", () => openCheckinImageModal(button));
-                list.appendChild(button);
+                wrapper.appendChild(button);
+
+                if (canDelete && Number.isFinite(Number(imageId)) && Number(imageId) > 0) {
+                    const deleteButton = document.createElement("button");
+                    deleteButton.type = "button";
+                    deleteButton.className = "table-action-button delete yeu-cau-work-image-delete";
+                    deleteButton.setAttribute("data-work-image-delete", "");
+                    deleteButton.setAttribute("aria-label", "Xoa anh");
+                    deleteButton.innerHTML = `<i class="fa-solid fa-trash" aria-hidden="true"></i><span>Xoa</span>`;
+                    wrapper.appendChild(deleteButton);
+                }
+
+                list.appendChild(wrapper);
+            };
+
+            const deleteWorkImage = async (button) => {
+                if (!workImageDeleteUrl || !(button instanceof HTMLButtonElement)) {
+                    return;
+                }
+
+                const item = button.closest("[data-work-image-item]");
+                const group = button.closest("[data-work-image-group]");
+                const workItem = button.closest("[data-work-item]");
+                const imageId = Number.parseInt(item?.dataset.workImageId || "", 10);
+                if (!(item instanceof HTMLElement) || !Number.isFinite(imageId) || imageId <= 0) {
+                    return;
+                }
+
+                const token = root.querySelector("input[name='__RequestVerificationToken']");
+                const payload = new FormData();
+                payload.append("ImageId", `${imageId}`);
+
+                button.disabled = true;
+                try {
+                    const response = await fetch(workImageDeleteUrl, {
+                        method: "POST",
+                        headers: token instanceof HTMLInputElement ? { RequestVerificationToken: token.value } : {},
+                        body: payload
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !result.succeeded) {
+                        throw new Error(result.message || "Khong the xoa anh cong viec.");
+                    }
+
+                    item.remove();
+                    if (workItem instanceof HTMLElement) {
+                        syncWorkImageCounts(workItem);
+                    } else if (group instanceof HTMLElement) {
+                        const ownerWorkItem = group.closest("[data-work-item]");
+                        if (ownerWorkItem instanceof HTMLElement) {
+                            syncWorkImageCounts(ownerWorkItem);
+                        }
+                    }
+                } catch (error) {
+                    window.alert(error instanceof Error ? error.message : "Khong the xoa anh cong viec.");
+                    button.disabled = false;
+                }
             };
 
             const uploadWorkImage = async (workItem, group, file) => {
                 if (!workImageUrl || !(file instanceof File)) {
+                    return false;
+                }
+
+                if (isValidWorkCompletion(workItem)) {
+                    window.alert("Công việc đã hoàn thành nên không thể thêm hình ảnh.");
                     return false;
                 }
 
@@ -3384,7 +3825,12 @@
                     }
 
                     const title = workItem.querySelector("[data-work-title]");
-                    appendWorkImageThumb(group, result.imagePath || "", title instanceof HTMLElement ? title.textContent?.trim() : "");
+                    appendWorkImageThumb(
+                        group,
+                        result.imagePath || "",
+                        title instanceof HTMLElement ? title.textContent?.trim() : "",
+                        Number.parseInt(`${result.id || 0}`, 10),
+                        Boolean(result.canDelete));
                     syncWorkImageCounts(workItem);
                     return true;
                 } catch (error) {
@@ -3486,6 +3932,11 @@
                     return;
                 }
 
+                if (isValidWorkCompletion(workItem)) {
+                    window.alert("Công việc đã hoàn thành nên không thể chụp ảnh.");
+                    return;
+                }
+
                 const workIdInput = workItem.querySelector("[data-work-id]");
                 const workId = workIdInput instanceof HTMLInputElement ? Number.parseInt(workIdInput.value, 10) : Number.NaN;
                 if (!Number.isFinite(workId) || workId <= 0) {
@@ -3495,7 +3946,7 @@
 
                 activeWorkCamera = { workItem, group };
                 const title = workItem.querySelector("[data-work-title]");
-                const imageTypeText = group.dataset.imageType === "CheckOut" ? "checkout" : "checkin";
+                const imageTypeText = group.dataset.imageType === "CheckOut" ? "sau thực hiện" : "trước thực hiện";
                 if (workCameraTitle instanceof HTMLElement) {
                     workCameraTitle.textContent = `Chụp ảnh ${imageTypeText} - ${title instanceof HTMLElement ? title.textContent?.trim() || "Công việc" : "Công việc"}`;
                 }
@@ -3598,9 +4049,17 @@
                 const cameraButton = group.querySelector("[data-work-image-camera]");
                 const uploadInput = group.querySelector("[data-work-image-file]");
                 const cameraInput = group.querySelector("[data-work-image-camera-file]");
+                const imageList = group.querySelector("[data-work-image-list]");
 
                 if (uploadButton instanceof HTMLButtonElement && uploadInput instanceof HTMLInputElement) {
-                    uploadButton.addEventListener("click", () => uploadInput.click());
+                    uploadButton.addEventListener("click", () => {
+                        if (isValidWorkCompletion(workItem)) {
+                            window.alert("Công việc đã hoàn thành nên không thể upload hình ảnh.");
+                            return;
+                        }
+
+                        uploadInput.click();
+                    });
                     uploadInput.addEventListener("change", () => {
                         const file = uploadInput.files?.[0] || null;
                         uploadInput.value = "";
@@ -3612,6 +4071,11 @@
 
                 if (cameraButton instanceof HTMLButtonElement && cameraInput instanceof HTMLInputElement) {
                     cameraButton.addEventListener("click", () => {
+                        if (isValidWorkCompletion(workItem)) {
+                            window.alert("Công việc đã hoàn thành nên không thể chụp ảnh.");
+                            return;
+                        }
+
                         void openWorkCameraModal(workItem, group);
                     });
                     cameraInput.addEventListener("change", () => {
@@ -3622,6 +4086,22 @@
                         }
                     });
                 }
+
+                if (imageList instanceof HTMLElement && !imageList.dataset.deleteBound) {
+                    imageList.dataset.deleteBound = "true";
+                    imageList.addEventListener("click", (event) => {
+                        const target = event.target instanceof HTMLElement
+                            ? event.target.closest("[data-work-image-delete]")
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void deleteWorkImage(target);
+                    });
+                }
             };
 
             const bindWorkItem = (workItem) => {
@@ -3630,8 +4110,12 @@
                 const icon = workItem.querySelector("[data-work-toggle-icon]");
                 const removeButton = workItem.querySelector("[data-work-remove]");
                 const employeeAddButton = workItem.querySelector("[data-work-employee-add]");
+                const employeeList = workItem.querySelector("[data-work-employee-list]");
                 const workSelect = workItem.querySelector("[data-work-option-select]");
                 const workIdInput = workItem.querySelector("[data-work-id]");
+                const statusSelect = workItem.querySelector("[data-work-status-select]");
+                const checklistAddButton = workItem.querySelector("[data-work-checklist-add]");
+                const checklistAddInput = workItem.querySelector("[data-work-checklist-add-input]");
 
                 if (toggle instanceof HTMLButtonElement && body instanceof HTMLElement) {
                     toggle.addEventListener("click", (event) => {
@@ -3652,6 +4136,10 @@
                 if (removeButton instanceof HTMLButtonElement) {
                     removeButton.addEventListener("click", (event) => {
                         event.stopPropagation();
+                        if (isValidWorkCompletion(workItem)) {
+                            return;
+                        }
+
                         workItem.remove();
                         updateWorkIndexes();
                         syncWorkEmptyState();
@@ -3661,8 +4149,33 @@
 
                 if (employeeAddButton instanceof HTMLButtonElement) {
                     employeeAddButton.addEventListener("click", () => {
+                        if (isValidWorkCompletion(workItem)) {
+                            return;
+                        }
+
                         activeEmployeeWorkItem = workItem;
                         openLinkedEmployeePicker();
+                    });
+                }
+
+                if (employeeList instanceof HTMLElement) {
+                    employeeList.addEventListener("click", (event) => {
+                        const target = event.target instanceof HTMLElement
+                            ? event.target.closest("[data-work-employee-remove]")
+                            : null;
+                        if (!(target instanceof HTMLButtonElement)) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (isValidWorkCompletion(workItem)) {
+                            return;
+                        }
+
+                        target.closest("[data-work-employee-choice]")?.remove();
+                        renderWorkEmployees(workItem);
+                        updateWorkIndexes();
                     });
                 }
 
@@ -3675,6 +4188,30 @@
                             setActiveTab("cong-viec");
                             showWorkOverlapWarning(overlapResult);
                         }
+                    });
+                }
+
+                if (statusSelect instanceof HTMLSelectElement) {
+                    statusSelect.addEventListener("change", () => {
+                        syncWorkCompletionState(workItem);
+                        syncWorkProgress();
+                    });
+                }
+
+                if (checklistAddButton instanceof HTMLButtonElement) {
+                    checklistAddButton.addEventListener("click", () => {
+                        void addChecklistToWork(workItem);
+                    });
+                }
+
+                if (checklistAddInput instanceof HTMLInputElement) {
+                    checklistAddInput.addEventListener("keydown", (event) => {
+                        if (event.key !== "Enter") {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        void addChecklistToWork(workItem);
                     });
                 }
 
@@ -3705,8 +4242,6 @@
                         });
                     }
                 });
-                syncWorkCompletionState(workItem);
-
                 workItem.querySelectorAll("[data-work-checklist-item]").forEach((item) => {
                     if (item instanceof HTMLElement) {
                         bindWorkChecklistItem(item);
@@ -3729,6 +4264,8 @@
                 } else {
                     renderWorkEmployees(workItem);
                 }
+
+                syncWorkCompletionState(workItem);
             };
 
             const createWorkItem = () => {
@@ -3750,6 +4287,8 @@
                     const workIdInput = workItem.querySelector("[data-work-id]");
                     const workNameInput = workItem.querySelector("[data-work-name]");
                     const workSelect = workItem.querySelector("[data-work-option-select]");
+                    const statusSelect = workItem.querySelector("[data-work-status-select]");
+                    const noteInput = workItem.querySelector("[data-work-note]");
                     const checkInInput = workItem.querySelector("input[type='datetime-local'][name*='CheckInTime'], [data-work-checkin]");
                     const checkOutInput = workItem.querySelector("input[type='datetime-local'][name*='CheckOutTime'], [data-work-checkout]");
 
@@ -3761,6 +4300,12 @@
                     }
                     if (workSelect instanceof HTMLSelectElement) {
                         workSelect.name = `Form.CongViecs[${workIndex}].CongViecId`;
+                    }
+                    if (statusSelect instanceof HTMLSelectElement) {
+                        statusSelect.name = `Form.CongViecs[${workIndex}].TrangThaiCongViec`;
+                    }
+                    if (noteInput instanceof HTMLTextAreaElement) {
+                        noteInput.name = `Form.CongViecs[${workIndex}].GhiChu`;
                     }
                     if (checkInInput instanceof HTMLInputElement) {
                         checkInInput.name = `Form.CongViecs[${workIndex}].CheckInTime`;
@@ -3971,6 +4516,21 @@
                 });
             };
 
+            const syncLocationCoordinateButton = (item) => {
+                if (!(locationCoordinateButton instanceof HTMLElement)) {
+                    return;
+                }
+
+                const resolvedItem = item ?? {};
+                const hasLocation = !!resolvedItem.idDiaDiem;
+                const lat = Number.isFinite(resolvedItem.latAddress) ? resolvedItem.latAddress : null;
+                const lng = Number.isFinite(resolvedItem.longAddress) ? resolvedItem.longAddress : null;
+                const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+                locationCoordinateButton.hidden = false;
+                locationCoordinateButton.classList.toggle("is-hidden", !hasLocation || hasCoordinates);
+                locationCoordinateButton.disabled = false;
+            };
+
             const updatePreview = (item) => {
                 const resolvedItem = item ?? {};
 
@@ -3997,6 +4557,7 @@
                 previewLongInput.value = Number.isFinite(lng) ? `${lng}` : "";
                 previewLatInput.value = Number.isFinite(lat) ? `${lat}` : "";
 
+                syncLocationCoordinateButton(item);
                 syncPreviewMap();
             };
 
@@ -4015,6 +4576,202 @@
                 selectedLocationLabel = item.displayLabel || "";
                 updatePreview(item);
                 clearSuggestions();
+            };
+
+            const setLocationCreateStatus = (message, type = "info") => {
+                if (!(locationCreateStatus instanceof HTMLElement)) {
+                    return;
+                }
+
+                locationCreateStatus.textContent = message;
+                locationCreateStatus.className = `page-alert ${type} yeu-cau-checkin-status`;
+                locationCreateStatus.hidden = !message;
+            };
+
+            const syncLocationCreateCustomerFields = () => {
+                if (!(locationCreateCustomerSelect instanceof HTMLSelectElement) ||
+                    !(locationCreateNewCustomerFields instanceof HTMLElement)) {
+                    return;
+                }
+
+                const isNewCustomer = !locationCreateCustomerSelect.value;
+                locationCreateNewCustomerFields.hidden = !isNewCustomer;
+                if (locationCreateCustomerShell instanceof HTMLElement) {
+                    locationCreateCustomerShell.classList.toggle("is-new-customer", isNewCustomer);
+                }
+                if (locationCreateExistingLocationFields instanceof HTMLElement) {
+                    locationCreateExistingLocationFields.hidden = isNewCustomer;
+                }
+            };
+
+            const resetLocationCreateForm = () => {
+                if (locationCreateCustomerSelect instanceof HTMLSelectElement) {
+                    locationCreateCustomerSelect.value = "";
+                }
+
+                [
+                    locationCreateCustomerNameInput,
+                    locationCreateCustomerPhoneInput,
+                    locationCreateCustomerAddressInput,
+                    locationCreateAddressInput,
+                    locationCreateContactInput,
+                    locationCreatePhoneInput
+                ].forEach((input) => {
+                    if (input instanceof HTMLInputElement) {
+                        input.value = "";
+                    }
+                });
+
+                syncLocationCreateCustomerFields();
+                setLocationCreateStatus("", "info");
+            };
+
+            const loadLocationCreateCustomers = async () => {
+                if (!customerSearchUrl || !(locationCreateCustomerSelect instanceof HTMLSelectElement)) {
+                    return;
+                }
+
+                const currentValue = locationCreateCustomerSelect.value;
+                try {
+                    const response = await fetch(customerSearchUrl, {
+                        headers: {
+                            Accept: "application/json"
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Không thể tải danh sách khách hàng.");
+                    }
+
+                    const customers = await response.json();
+                    locationCreateCustomerSelect.replaceChildren();
+
+                    const createOption = document.createElement("option");
+                    createOption.value = "";
+                    createOption.textContent = "Tạo khách mới";
+                    locationCreateCustomerSelect.appendChild(createOption);
+
+                    if (Array.isArray(customers)) {
+                        customers.forEach((customer) => {
+                            const option = document.createElement("option");
+                            option.value = `${customer.id || ""}`;
+                            option.textContent = customer.tenKhachHang || `Khách hàng #${customer.id}`;
+                            option.dataset.phone = customer.soDienThoai || "";
+                            option.dataset.address = customer.diaChi || "";
+                            locationCreateCustomerSelect.appendChild(option);
+                        });
+                    }
+
+                    locationCreateCustomerSelect.value = currentValue &&
+                        Array.from(locationCreateCustomerSelect.options).some((option) => option.value === currentValue)
+                        ? currentValue
+                        : "";
+                    syncLocationCreateCustomerFields();
+                } catch (error) {
+                    setLocationCreateStatus(error instanceof Error ? error.message : "Không thể tải danh sách khách hàng.", "error");
+                }
+            };
+
+            const openLocationCreateModal = async () => {
+                if (!(locationCreateShell instanceof HTMLElement)) {
+                    return;
+                }
+
+                resetLocationCreateForm();
+                locationCreateShell.hidden = false;
+                await loadLocationCreateCustomers();
+                if (locationCreateCustomerSelect instanceof HTMLSelectElement) {
+                    locationCreateCustomerSelect.focus();
+                }
+            };
+
+            const closeLocationCreateModal = () => {
+                if (locationCreateShell instanceof HTMLElement) {
+                    locationCreateShell.hidden = true;
+                }
+            };
+
+            const saveLocationCreateForm = async () => {
+                if (!locationCreateUrl ||
+                    !(locationCreateCustomerSelect instanceof HTMLSelectElement) ||
+                    !(locationCreateSaveButton instanceof HTMLButtonElement)) {
+                    return;
+                }
+
+                const customerId = Number.parseInt(locationCreateCustomerSelect.value || "", 10);
+                const isNewCustomer = !(Number.isFinite(customerId) && customerId > 0);
+                const customerName = locationCreateCustomerNameInput instanceof HTMLInputElement ? locationCreateCustomerNameInput.value.trim() : "";
+                const customerPhone = locationCreateCustomerPhoneInput instanceof HTMLInputElement ? locationCreateCustomerPhoneInput.value.trim() : "";
+                const customerAddress = locationCreateCustomerAddressInput instanceof HTMLInputElement ? locationCreateCustomerAddressInput.value.trim() : "";
+                const locationAddress = locationCreateAddressInput instanceof HTMLInputElement ? locationCreateAddressInput.value.trim() : "";
+                const locationContact = locationCreateContactInput instanceof HTMLInputElement ? locationCreateContactInput.value.trim() : "";
+                const locationPhone = locationCreatePhoneInput instanceof HTMLInputElement ? locationCreatePhoneInput.value.trim() : "";
+                const payload = {
+                    idKhachHang: isNewCustomer ? null : customerId,
+                    tenKhachHang: customerName,
+                    soDienThoai: customerPhone,
+                    diaChiKhachHang: customerAddress,
+                    diaChi: isNewCustomer ? customerAddress : locationAddress,
+                    nguoiLienHe: isNewCustomer ? customerName : locationContact,
+                    dienThoai: isNewCustomer ? customerPhone : locationPhone
+                };
+
+                if (isNewCustomer && !payload.tenKhachHang) {
+                    setLocationCreateStatus("Vui lòng nhập tên khách hàng mới.", "error");
+                    if (locationCreateCustomerNameInput instanceof HTMLInputElement) {
+                        locationCreateCustomerNameInput.focus();
+                    }
+                    return;
+                }
+
+                if (isNewCustomer && !payload.diaChiKhachHang) {
+                    setLocationCreateStatus("Vui lòng nhập địa chỉ khách hàng.", "error");
+                    if (locationCreateCustomerAddressInput instanceof HTMLInputElement) {
+                        locationCreateCustomerAddressInput.focus();
+                    }
+                    return;
+                }
+
+                if (!isNewCustomer && !payload.diaChi) {
+                    setLocationCreateStatus("Vui lòng nhập địa chỉ địa điểm.", "error");
+                    if (locationCreateAddressInput instanceof HTMLInputElement) {
+                        locationCreateAddressInput.focus();
+                    }
+                    return;
+                }
+
+                const token = root.querySelector("input[name='__RequestVerificationToken']");
+                locationCreateSaveButton.disabled = true;
+                setLocationCreateStatus("Đang lưu địa điểm...", "info");
+
+                try {
+                    const response = await fetch(locationCreateUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Accept: "application/json",
+                            ...(token instanceof HTMLInputElement ? { RequestVerificationToken: token.value } : {})
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Không thể lưu địa điểm khách hàng.");
+                    }
+
+                    const data = await response.json();
+                    if (!data.succeeded || !data.item) {
+                        throw new Error(data.errorMessage || "Không thể lưu địa điểm khách hàng.");
+                    }
+
+                    selectLocation(data.item);
+                    syncLocationCoordinateButton(data.item);
+                    closeLocationCreateModal();
+                } catch (error) {
+                    setLocationCreateStatus(error instanceof Error ? error.message : "Không thể lưu địa điểm khách hàng.", "error");
+                } finally {
+                    locationCreateSaveButton.disabled = false;
+                }
             };
 
             const highlightSuggestion = (index) => {
@@ -4039,14 +4796,20 @@
 
                 suggestionList.innerHTML = "";
                 suggestionButtons = items.map((item, index) => {
+                    const hasCoordinates = Number.isFinite(item.latAddress) && Number.isFinite(item.longAddress);
                     const button = document.createElement("button");
                     button.type = "button";
                     button.className = "yeu-cau-location-suggestion-item";
                     button.innerHTML = `
-                        <strong>${item.tenKhachHang || "Khách hàng chưa xác định"}</strong>
-                        <span><b>Địa chỉ:</b> ${item.diaChi || "Chưa có địa điểm"}</span>
-                        <small><b>Điện thoại:</b> ${item.dienThoai || "-"}</small>
-                        <small><b>Người liên hệ:</b> ${item.nguoiLienHe || "-"}</small>
+                        <span class="yeu-cau-location-coordinate-state ${hasCoordinates ? "has-coordinate" : "missing-coordinate"}" title="${hasCoordinates ? "Đã có định vị" : "Chưa có định vị"}" aria-label="${hasCoordinates ? "Đã có định vị" : "Chưa có định vị"}">
+                            <i class="fa-solid ${hasCoordinates ? "fa-check" : "fa-xmark"}" aria-hidden="true"></i>
+                        </span>
+                        <span class="yeu-cau-location-suggestion-copy">
+                            <strong>${item.tenKhachHang || "Khách hàng chưa xác định"}</strong>
+                            <span><b>Địa chỉ:</b> ${item.diaChi || "Chưa có địa điểm"}</span>
+                            <small><b>Điện thoại:</b> ${item.dienThoai || "-"}</small>
+                            <small><b>Người liên hệ:</b> ${item.nguoiLienHe || "-"}</small>
+                        </span>
                     `;
                     button.addEventListener("mouseenter", () => {
                         highlightSuggestion(index);
@@ -4197,9 +4960,6 @@
 
                     previewMap.setView([data.latAddress, data.longAddress], 15);
                     previewTitle.textContent = "Xem bản đồ";
-                    if (locationCoordinateButton instanceof HTMLButtonElement) {
-                        locationCoordinateButton.hidden = true;
-                    }
                 } else {
                     if (previewMarker) {
                         previewMap.removeLayer(previewMarker);
@@ -4208,22 +4968,32 @@
 
                     previewMap.setView(defaultCenter, defaultZoom);
                     previewTitle.textContent = "Chưa có ghim";
-                    if (locationCoordinateButton instanceof HTMLButtonElement) {
-                        const hasAnyCoordinateValue = previewLatInput.value.trim() || previewLongInput.value.trim();
-                        locationCoordinateButton.hidden = !locationIdInput.value || Boolean(hasAnyCoordinateValue);
-                    }
                 }
 
+                syncLocationCoordinateButton(data);
                 window.setTimeout(() => previewMap.invalidateSize(), 100);
             };
 
             const captureCustomerCoordinates = async () => {
-                if (!locationCoordinateUrl || !(formIdInput instanceof HTMLInputElement) || !(locationCoordinateButton instanceof HTMLButtonElement)) {
+                if (!(locationCoordinateButton instanceof HTMLButtonElement)) {
                     return;
                 }
 
                 if (!locationIdInput.value) {
                     window.alert("Vui lòng chọn địa điểm khách hàng trước.");
+                    return;
+                }
+
+                const requestId = formIdInput instanceof HTMLInputElement ? formIdInput.value.trim() : "";
+                const isSavedRequest = !!requestId;
+                if (isSavedRequest && locationCoordinateButton.dataset.canUpdateLocationCoordinate !== "true") {
+                    window.alert("Bạn chưa có quyền cập nhật tọa độ địa điểm cho phiếu này.");
+                    return;
+                }
+
+                const submitUrl = isSavedRequest ? locationCoordinateUrl : locationCoordinateDraftUrl;
+                if (!submitUrl) {
+                    window.alert("Không tìm thấy đường dẫn cập nhật tọa độ địa điểm.");
                     return;
                 }
 
@@ -4249,13 +5019,15 @@
                     });
 
                     const payload = new FormData();
-                    payload.append("IDYeuCau", formIdInput.value);
+                    if (isSavedRequest) {
+                        payload.append("IDYeuCau", requestId);
+                    }
                     payload.append("IDDiaDiem", locationIdInput.value);
                     payload.append("LongAddress", `${position.coords.longitude}`);
                     payload.append("LatAddress", `${position.coords.latitude}`);
 
                     const token = root.querySelector("input[name='__RequestVerificationToken']");
-                    const response = await fetch(locationCoordinateUrl, {
+                    const response = await fetch(submitUrl, {
                         method: "POST",
                         headers: token instanceof HTMLInputElement ? { RequestVerificationToken: token.value } : {},
                         body: payload
@@ -4269,6 +5041,7 @@
                     previewLatInput.value = `${result.latAddress ?? position.coords.latitude}`;
                     previewCoordinates.textContent = result.coordinateDisplay || `${formatCoordinate(position.coords.latitude)}, ${formatCoordinate(position.coords.longitude)}`;
                     locationCoordinateButton.hidden = true;
+                    locationCoordinateButton.classList.add("is-hidden");
                     syncPreviewMap();
                     window.alert("Đã cập nhật tọa độ điểm khách hàng.");
                 } catch (error) {
@@ -4490,13 +5263,36 @@
                 }
             });
 
-            clearLocationButton.addEventListener("click", () => {
-                locationInput.value = "";
-                clearSelectedLocation();
-                updatePreview(null);
-                clearSuggestions();
-                locationInput.focus();
+            if (locationCreateOpenButton instanceof HTMLButtonElement) {
+                locationCreateOpenButton.addEventListener("click", () => {
+                    void openLocationCreateModal();
+                });
+            }
+
+            locationCreateCloseButtons.forEach((button) => {
+                button.addEventListener("click", closeLocationCreateModal);
             });
+
+            if (locationCreateCustomerSelect instanceof HTMLSelectElement) {
+                locationCreateCustomerSelect.addEventListener("change", () => {
+                    syncLocationCreateCustomerFields();
+                    if (locationCreateCustomerSelect.value) {
+                        const selectedOption = locationCreateCustomerSelect.selectedOptions[0];
+                        if (locationCreatePhoneInput instanceof HTMLInputElement && !locationCreatePhoneInput.value) {
+                            locationCreatePhoneInput.value = selectedOption?.dataset.phone || "";
+                        }
+                        if (locationCreateAddressInput instanceof HTMLInputElement && !locationCreateAddressInput.value) {
+                            locationCreateAddressInput.value = selectedOption?.dataset.address || "";
+                        }
+                    }
+                });
+            }
+
+            if (locationCreateSaveButton instanceof HTMLButtonElement) {
+                locationCreateSaveButton.addEventListener("click", () => {
+                    void saveLocationCreateForm();
+                });
+            }
 
             tabButtons.forEach((button) => {
                 button.addEventListener("click", () => {
@@ -4528,7 +5324,8 @@
 
             employeeSelect.addEventListener("change", syncEmployeeText);
 
-            linkedEmployeePickerSubmit.addEventListener("click", () => {
+            if (linkedEmployeePickerSubmit instanceof HTMLButtonElement) {
+                linkedEmployeePickerSubmit.addEventListener("click", () => {
                 const checkedItems = Array.from(linkedEmployeePickerList.querySelectorAll("[data-linked-employee-picker-checkbox]:checked"));
                 if (checkedItems.length === 0) {
                     window.alert("Vui lòng chọn ít nhất một nhân viên để thêm.");
@@ -4555,6 +5352,11 @@
                 });
 
                 if (activeEmployeeWorkItem instanceof HTMLElement) {
+                    if (isValidWorkCompletion(activeEmployeeWorkItem)) {
+                        closeLinkedEmployeePicker();
+                        return;
+                    }
+
                     const existingIds = getWorkEmployeeIds(activeEmployeeWorkItem);
                     const mergedEmployees = [
                         ...existingIds.map((employeeId) => getEmployeeOptions().find((option) => option.id === employeeId)).filter((employee) => employee),
@@ -4567,6 +5369,7 @@
                 closeLinkedEmployeePicker();
                 setActiveTab("cong-viec");
             });
+            }
 
             linkedEmployeePickerCloseButtons.forEach((button) => {
                 button.addEventListener("click", closeLinkedEmployeePicker);

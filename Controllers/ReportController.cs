@@ -11,10 +11,12 @@ namespace ApptechDashboard.Controllers;
 [Authorize]
 public class ReportController(
     IChamCongReportService chamCongReportService,
+    ICongViecReportService congViecReportService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService) : Controller
 {
     private readonly IChamCongReportService _chamCongReportService = chamCongReportService;
+    private readonly ICongViecReportService _congViecReportService = congViecReportService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
 
@@ -36,6 +38,21 @@ public class ReportController(
         return View(model);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> CongViec([FromQuery] CongViecReportQuery query)
+    {
+        if (!await CanViewCongViecReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var model = await _congViecReportService.GetReportAsync(query.DateFrom, query.DateTo, query.EmployeeIds, HttpContext.RequestAborted);
+
+        ViewData["Title"] = "Báo cáo công việc";
+        ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Công việc";
+        return View(model);
+    }
+
     private async Task<bool> CanViewChamCongReportAsync(CancellationToken cancellationToken)
     {
         var account = await GetCurrentAccountAsync(cancellationToken);
@@ -53,6 +70,26 @@ public class ReportController(
         return permissions.Any(permission =>
             string.Equals(permission.PermissionCode, "3068_View", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(NormalizePermissionCode(permission.PermissionCode), "3068view", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<bool> CanViewCongViecReportAsync(CancellationToken cancellationToken)
+    {
+        var account = await GetCurrentAccountAsync(cancellationToken);
+        if (IsAdminAccount(account))
+        {
+            return true;
+        }
+
+        if (account is null)
+        {
+            return false;
+        }
+
+        var permissions = await UserPermissionSession.GetOrLoadAsync(HttpContext, _userPermissionService, cancellationToken);
+        var expectedCode = NormalizePermissionCode(PermissionCatalogService.WorkReportViewPermissionCode);
+        return permissions.Any(permission =>
+            string.Equals(permission.PermissionCode, PermissionCatalogService.WorkReportViewPermissionCode, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(NormalizePermissionCode(permission.PermissionCode), expectedCode, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<UserAccount?> GetCurrentAccountAsync(CancellationToken cancellationToken)

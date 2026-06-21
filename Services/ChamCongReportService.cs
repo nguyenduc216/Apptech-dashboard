@@ -38,7 +38,8 @@ public sealed class ChamCongReportService(
     private sealed record AttendanceReportMetrics(
         Dictionary<int, Dictionary<int, decimal>> HoursByEmployeeDay,
         Dictionary<int, Dictionary<int, int>> LateEarlyMinutesByEmployeeDay,
-        Dictionary<int, Dictionary<int, ChamCongReportCount>> CountsByEmployeeDay);
+        Dictionary<int, Dictionary<int, ChamCongReportCount>> CountsByEmployeeDay,
+        Dictionary<int, Dictionary<int, List<ChamCongReportCheckinDetail>>> DetailsByEmployeeDay);
 
     public async Task<ChamCongReportViewModel> GetMonthlyReportAsync(
         int month,
@@ -93,6 +94,11 @@ public sealed class ChamCongReportService(
                 if (metrics.CountsByEmployeeDay.TryGetValue(employee.EmployeeId, out var countsByDay))
                 {
                     employee.CountsByDay = countsByDay;
+                }
+
+                if (metrics.DetailsByEmployeeDay.TryGetValue(employee.EmployeeId, out var detailsByDay))
+                {
+                    employee.DetailsByDay = detailsByDay;
                 }
             }
 
@@ -238,7 +244,11 @@ public sealed class ChamCongReportService(
             SELECT
                 IDNhanVien,
                 ThoiDiem,
-                ThoiDiemCheckOut
+                ThoiDiemCheckOut,
+                ImgPath,
+                ImgPathCheckOut,
+                GhiChuNhanVien,
+                GhiChuCheckOut
             FROM [{CheckinHistoryTableName}]
             WHERE CheckInType = @CheckInType
               AND ThoiDiem >= @DateFrom
@@ -253,6 +263,7 @@ public sealed class ChamCongReportService(
         var hoursResult = new Dictionary<int, Dictionary<int, decimal>>();
         var lateEarlyResult = new Dictionary<int, Dictionary<int, int>>();
         var countsResult = new Dictionary<int, Dictionary<int, ChamCongReportCount>>();
+        var detailsResult = new Dictionary<int, Dictionary<int, List<ChamCongReportCheckinDetail>>>();
         var totals = new Dictionary<(int EmployeeId, int Day), decimal>();
         var lateEarlyTotals = new Dictionary<(int EmployeeId, int Day), decimal>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -266,6 +277,29 @@ public sealed class ChamCongReportService(
             }
 
             var day = checkinTime.Value.Day;
+            var checkoutTime = GetNullableDateTime(reader, "ThoiDiemCheckOut");
+            if (!detailsResult.TryGetValue(employeeId, out var detailsByDay))
+            {
+                detailsByDay = [];
+                detailsResult[employeeId] = detailsByDay;
+            }
+
+            if (!detailsByDay.TryGetValue(day, out var details))
+            {
+                details = [];
+                detailsByDay[day] = details;
+            }
+
+            details.Add(new ChamCongReportCheckinDetail
+            {
+                CheckinTime = checkinTime,
+                CheckoutTime = checkoutTime,
+                CheckinImage = GetNullableString(reader, "ImgPath"),
+                CheckoutImage = GetNullableString(reader, "ImgPathCheckOut"),
+                CheckinNote = GetNullableString(reader, "GhiChuNhanVien"),
+                CheckoutNote = GetNullableString(reader, "GhiChuCheckOut")
+            });
+
             if (!hoursResult.TryGetValue(employeeId, out var hoursByDay))
             {
                 hoursByDay = [];
@@ -287,7 +321,6 @@ public sealed class ChamCongReportService(
 
             count.CheckinCount++;
 
-            var checkoutTime = GetNullableDateTime(reader, "ThoiDiemCheckOut");
             if (!checkoutTime.HasValue)
             {
                 continue;
@@ -316,7 +349,7 @@ public sealed class ChamCongReportService(
             }
         }
 
-        return new AttendanceReportMetrics(hoursResult, lateEarlyResult, countsResult);
+        return new AttendanceReportMetrics(hoursResult, lateEarlyResult, countsResult, detailsResult);
     }
 
     private static decimal CalculateRawMinutes(DateTime checkinTime, DateTime checkoutTime)

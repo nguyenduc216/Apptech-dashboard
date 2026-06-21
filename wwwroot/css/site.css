@@ -74,6 +74,10 @@
     display: none;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 html,
 body {
     margin: 0;
@@ -865,6 +869,14 @@ button {
     z-index: 80;
 }
 
+.menu-popup-shell[hidden],
+.crud-modal-shell[hidden],
+.settings-permission-modal-shell[hidden],
+.vat-tu-camera-shell[hidden],
+.vat-tu-image-viewer[hidden] {
+    display: none !important;
+}
+
 .account-popup-shell {
     z-index: 90;
 }
@@ -1580,6 +1592,443 @@ body.menu-open {
     width: 100%;
 }
 
+/* Last cascade guard: request checkin popup must remain one column on narrow screens. */
+[data-checkin-shell] .yeu-cau-checkin-modal {
+    width: min(760px, calc(100vw - 24px)) !important;
+    max-height: calc(100vh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow: hidden !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-distance-panel,
+[data-checkin-shell] .attendance-camera-select-shell,
+[data-checkin-shell] .yeu-cau-checkin-camera,
+[data-checkin-shell] .yeu-cau-checkin-actions,
+[data-checkin-shell] .account-form-grid,
+[data-checkin-shell] .login-field,
+[data-checkin-shell] .yeu-cau-checkin-status {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 auto !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-camera {
+    aspect-ratio: 4 / 3 !important;
+    min-height: 0 !important;
+    max-height: min(42vh, 320px) !important;
+    border-radius: 12px !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+    width: 100% !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+}
+
+[data-checkin-shell] .account-form-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+[data-checkin-shell] .crud-modal-actions {
+    flex: 0 0 auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr) !important;
+    gap: 10px !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 3 !important;
+    padding-top: 12px !important;
+    background: linear-gradient(180deg, rgba(244, 251, 248, 0), rgba(244, 251, 248, 0.98) 28%) !important;
+}
+
+[data-checkin-shell] [data-checkin-save] {
+    order: 1 !important;
+}
+
+[data-checkin-shell] [data-checkin-close].crud-cancel-button {
+    order: 2 !important;
+}
+
+@media (max-width: 520px), (max-height: 640px) {
+    [data-checkin-shell] .yeu-cau-checkin-modal {
+        top: 8px !important;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 16px) !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100vh - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        padding: 14px !important;
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-header {
+        gap: 10px !important;
+        padding-bottom: 10px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-header h2 {
+        font-size: 1.08rem !important;
+        line-height: 1.25 !important;
+    }
+
+    [data-checkin-shell] .crud-modal-subtitle {
+        margin-top: 4px !important;
+        font-size: 0.86rem !important;
+        line-height: 1.35 !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-body {
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-camera {
+        max-height: min(30vh, 190px) !important;
+        border-radius: 9px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+        min-height: 44px !important;
+        padding-inline: 10px !important;
+        font-size: 0.9rem !important;
+        gap: 5px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button span {
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    [data-checkin-shell] .account-form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .login-input-shell,
+    [data-checkin-shell] .login-textarea-shell,
+    [data-checkin-shell] .yeu-cau-checkin-distance-toggle {
+        min-height: 44px !important;
+    }
+
+    [data-checkin-shell] .login-textarea-shell {
+        min-height: 82px !important;
+    }
+
+    [data-checkin-shell] textarea[data-checkin-note] {
+        min-height: 58px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-actions {
+        grid-template-columns: minmax(0, 1fr) minmax(92px, 0.45fr) !important;
+        gap: 8px !important;
+        padding-top: 10px !important;
+    }
+}
+
+/* Final mobile-safe override for the request checkin camera popup. */
+[data-checkin-shell] .yeu-cau-checkin-modal {
+    width: min(760px, calc(100vw - 24px)) !important;
+    max-height: calc(100vh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow: hidden !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-distance-panel,
+[data-checkin-shell] .attendance-camera-select-shell,
+[data-checkin-shell] .yeu-cau-checkin-camera,
+[data-checkin-shell] .yeu-cau-checkin-actions,
+[data-checkin-shell] .account-form-grid,
+[data-checkin-shell] .login-field,
+[data-checkin-shell] .yeu-cau-checkin-status {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 auto !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-camera {
+    aspect-ratio: 4 / 3 !important;
+    min-height: 0 !important;
+    max-height: min(42vh, 320px) !important;
+    border-radius: 12px !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+    width: 100% !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+}
+
+[data-checkin-shell] .account-form-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+[data-checkin-shell] .crud-modal-actions {
+    flex: 0 0 auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr) !important;
+    gap: 10px !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 3 !important;
+    padding-top: 12px !important;
+    background: linear-gradient(180deg, rgba(244, 251, 248, 0), rgba(244, 251, 248, 0.98) 28%) !important;
+}
+
+[data-checkin-shell] [data-checkin-save] {
+    order: 1 !important;
+}
+
+[data-checkin-shell] [data-checkin-close].crud-cancel-button {
+    order: 2 !important;
+}
+
+@media (max-width: 520px), (max-height: 640px) {
+    [data-checkin-shell] .yeu-cau-checkin-modal {
+        top: 8px !important;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 16px) !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100vh - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        padding: 14px !important;
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-header {
+        gap: 10px !important;
+        padding-bottom: 10px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-header h2 {
+        font-size: 1.08rem !important;
+        line-height: 1.25 !important;
+    }
+
+    [data-checkin-shell] .crud-modal-subtitle {
+        margin-top: 4px !important;
+        font-size: 0.86rem !important;
+        line-height: 1.35 !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-body {
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-camera {
+        max-height: min(30vh, 190px) !important;
+        border-radius: 9px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+        min-height: 44px !important;
+        padding-inline: 7px !important;
+        font-size: 0.86rem !important;
+        gap: 5px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button span {
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    [data-checkin-shell] .account-form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .login-input-shell,
+    [data-checkin-shell] .login-textarea-shell,
+    [data-checkin-shell] .yeu-cau-checkin-distance-toggle {
+        min-height: 44px !important;
+    }
+
+    [data-checkin-shell] .login-textarea-shell {
+        min-height: 82px !important;
+    }
+
+    [data-checkin-shell] textarea[data-checkin-note] {
+        min-height: 58px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-actions {
+        grid-template-columns: minmax(0, 1fr) minmax(92px, 0.45fr) !important;
+        gap: 8px !important;
+        padding-top: 10px !important;
+    }
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-modal {
+    width: min(760px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+[data-cham-cong-camera-shell] .crud-modal-header {
+    flex: 0 0 auto;
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-camera {
+    min-height: 0;
+    max-height: min(42vh, 320px);
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-placeholder {
+    min-height: 180px;
+}
+
+[data-cham-cong-camera-shell] .cham-cong-camera-footer {
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding-top: 12px;
+    background: linear-gradient(180deg, rgba(244, 251, 248, 0), rgba(244, 251, 248, 0.98) 28%);
+}
+
+@media (max-width: 480px), (max-height: 640px) {
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-modal {
+        top: 8px;
+        transform: translateX(-50%);
+        width: calc(100vw - 16px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+        padding: 14px;
+        gap: 10px;
+    }
+
+    [data-cham-cong-camera-shell] .crud-modal-header {
+        gap: 10px;
+        padding-bottom: 10px;
+    }
+
+    [data-cham-cong-camera-shell] .crud-modal-header h2 {
+        font-size: 1.08rem;
+        line-height: 1.25;
+    }
+
+    [data-cham-cong-camera-shell] .crud-modal-subtitle {
+        margin-top: 4px;
+        font-size: 0.86rem;
+        line-height: 1.35;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-body {
+        gap: 10px;
+    }
+
+    [data-cham-cong-camera-shell] .attendance-camera-select-shell > span:first-child,
+    [data-cham-cong-camera-shell] .master-data-filter-field > span:first-child {
+        font-size: 0.9rem;
+    }
+
+    [data-cham-cong-camera-shell] .login-input-shell,
+    [data-cham-cong-camera-shell] .login-textarea-shell,
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-distance-toggle {
+        min-height: 44px;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-camera {
+        aspect-ratio: 4 / 3;
+        max-height: min(32vh, 220px);
+        border-radius: 9px;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-placeholder {
+        min-height: 138px;
+        padding: 14px;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-actions {
+        gap: 8px;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-actions .secondary-button,
+    [data-cham-cong-camera-shell] .cham-cong-camera-footer .primary-button,
+    [data-cham-cong-camera-shell] .cham-cong-camera-footer .secondary-button {
+        min-height: 46px;
+        padding-inline: 10px;
+        font-size: 0.92rem;
+    }
+
+    [data-cham-cong-camera-shell] .cham-cong-note-field .login-textarea-shell {
+        min-height: 72px;
+    }
+
+    [data-cham-cong-camera-shell] .cham-cong-note-field textarea {
+        min-height: 54px;
+    }
+
+    [data-cham-cong-camera-shell] .page-alert {
+        margin-bottom: 0;
+        padding: 10px 12px;
+        font-size: 0.86rem;
+        line-height: 1.35;
+    }
+
+    [data-cham-cong-camera-shell] .cham-cong-camera-footer {
+        grid-template-columns: minmax(0, 1fr) minmax(92px, 0.45fr);
+        gap: 8px;
+        padding-top: 10px;
+    }
+}
+
 .settings-page {
     display: grid;
     gap: 18px;
@@ -2238,11 +2687,41 @@ body.menu-open {
     accent-color: var(--teal-500);
 }
 
+.cham-cong-report-fullscreen-button {
+    position: sticky;
+    top: 8px;
+    left: calc(100% - 52px);
+    z-index: 80;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    margin: 8px 10px -50px auto;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    background: #078d9b;
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(5, 64, 82, 0.22);
+}
+
+.cham-cong-report-fullscreen-button:hover,
+.cham-cong-report-fullscreen-button:focus-visible {
+    background: #057381;
+    color: #fff;
+}
+
 .cham-cong-report-wrap {
+    position: relative;
+    --report-header-row-height: 56px;
     overflow: auto;
     max-height: calc(100vh - 280px);
+    min-height: 260px;
     border: 1px solid rgba(10, 74, 61, 0.12);
     border-radius: 8px;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
 }
 
 .cham-cong-report-table {
@@ -2262,21 +2741,23 @@ body.menu-open {
 .cham-cong-report-table thead th {
     position: sticky;
     top: 0;
-    z-index: 3;
+    z-index: 30;
     background: #16dce6;
     color: #063c3f;
     font-size: 0.78rem;
     vertical-align: middle;
 }
 
+.cham-cong-report-table thead tr:first-child th {
+    height: var(--report-header-row-height);
+}
+
 .cham-cong-report-table thead tr:nth-child(2) th {
-    top: 36px;
+    top: var(--report-header-row-height);
+    z-index: 31;
 }
 
 .cham-cong-report-table tfoot td {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
     background: #f5fffd;
     color: #064f3f;
     font-weight: 800;
@@ -2293,7 +2774,7 @@ body.menu-open {
 .cham-cong-report-table thead .report-index-col,
 .cham-cong-report-table thead .report-name-col,
 .cham-cong-report-table thead .report-role-col {
-    z-index: 5;
+    z-index: 40;
     background: #16dce6;
 }
 
@@ -2341,13 +2822,79 @@ body.menu-open {
     color: #12382f;
 }
 
+.report-hour-detail-button {
+    width: 100%;
+    min-height: 34px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.report-hour-detail-button:hover,
+.report-hour-detail-button:focus-visible {
+    color: #047863;
+    text-decoration: underline;
+    outline: none;
+}
+
 .cham-cong-report-table .report-total-col {
     min-width: 96px;
     font-weight: 800;
 }
 
+.cham-cong-report-table .is-incomplete {
+    background: #e7ecea !important;
+    color: #53635f;
+}
+
 .cham-cong-report-table .is-sunday {
     background: #fff200 !important;
+}
+
+body.report-fullscreen-open {
+    overflow: hidden;
+}
+
+.cham-cong-report-wrap.is-report-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: block;
+    padding: 0;
+    background: #f4fbf8;
+    max-height: none;
+    height: auto;
+    min-height: 0;
+    border-radius: 0;
+}
+
+.cham-cong-report-wrap.is-report-fullscreen .cham-cong-report-fullscreen-button {
+    top: 10px;
+    left: calc(100% - 52px);
+    margin: 10px 10px -52px auto;
+    z-index: 10001;
+}
+
+.cham-cong-report-wrap.is-report-fullscreen .cham-cong-report-table {
+    margin: 0;
+}
+
+.cham-cong-report-detail-shell .cham-cong-report-detail-modal {
+    width: min(760px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px);
+}
+
+.cham-cong-report-detail-body {
+    display: grid;
+    gap: 10px;
+    overflow: auto;
+}
+
+.cham-cong-report-detail-body .cham-cong-timeline-item {
+    margin: 0;
 }
 
 @media (max-width: 768px) {
@@ -2360,8 +2907,50 @@ body.menu-open {
     }
 
     .cham-cong-report-wrap {
-        max-height: calc(100vh - 340px);
+        width: 100%;
+        max-width: 100%;
+        height: min(58dvh, 520px);
+        max-height: calc(100dvh - 300px);
+        min-height: 320px;
+        overflow: auto;
+        scrollbar-width: thin;
     }
+
+    .cham-cong-report-table {
+        min-width: 1040px;
+    }
+
+    .cham-cong-report-table th,
+    .cham-cong-report-table td {
+        padding: 12px 10px;
+    }
+
+    .cham-cong-report-table .report-index-col {
+        left: 0;
+        min-width: 48px;
+        width: 48px;
+    }
+
+    .cham-cong-report-table .report-name-col {
+        left: 48px;
+        min-width: 170px;
+        width: 170px;
+        max-width: 170px;
+        white-space: normal;
+        line-height: 1.25;
+    }
+
+    .cham-cong-report-table .report-role-col {
+        position: static;
+        min-width: 150px;
+    }
+
+    .cham-cong-report-table thead .report-role-col {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+    }
+
 }
 
 .cham-cong-panel .cham-cong-camera-map,
@@ -2531,6 +3120,7 @@ body.menu-open {
     display: grid;
     grid-template-columns: 1fr;
     gap: 8px;
+    align-content: start;
     min-width: 0;
 }
 
@@ -2552,13 +3142,17 @@ body.menu-open {
 
 .cham-cong-attendance-line {
     display: grid;
-    grid-template-columns: 74px minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
-    padding: 8px;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    height: 72px;
+    min-height: 72px;
+    max-height: 72px;
+    padding: 6px 8px;
     border-radius: 8px;
     border: 1px solid rgba(10, 74, 61, 0.12);
     background: rgba(245, 250, 248, 0.94);
+    overflow: hidden;
 }
 
 .cham-cong-attendance-line.is-checkin,
@@ -2602,7 +3196,8 @@ body.menu-open {
 .cham-cong-entry-content {
     min-width: 0;
     display: grid;
-    gap: 4px;
+    gap: 2px;
+    overflow: hidden;
 }
 
 .cham-cong-entry-content > strong {
@@ -2610,8 +3205,8 @@ body.menu-open {
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: 0.9rem;
-    line-height: 1.35;
+    font-size: 0.84rem;
+    line-height: 1.2;
     overflow-wrap: anywhere;
 }
 
@@ -2655,7 +3250,10 @@ body.menu-open {
 
 .cham-cong-entry-photo {
     width: 100%;
-    height: 54px;
+    height: 44px;
+    min-width: 0;
+    min-height: 44px;
+    max-height: 44px;
     border: 1px solid rgba(10, 74, 61, 0.12);
     border-radius: 6px;
     overflow: hidden;
@@ -2663,13 +3261,26 @@ body.menu-open {
     display: grid;
     place-items: center;
     color: #6f8c84;
+    font-size: 0;
+    line-height: 0;
 }
 
 .cham-cong-entry-photo img {
     width: 100%;
     height: 100%;
+    min-width: 100%;
+    min-height: 100%;
     display: block;
     object-fit: cover;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    text-indent: -9999px;
+}
+
+.cham-cong-entry-photo > i {
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .cham-cong-entry-image-button {
@@ -2679,6 +3290,12 @@ body.menu-open {
     padding: 0;
     background: transparent;
     cursor: zoom-in;
+    display: block;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    text-indent: -9999px;
 }
 
 .cham-cong-entry > strong {
@@ -2700,6 +3317,8 @@ body.menu-open {
 .cham-cong-entry-content .cham-cong-note {
     display: flex;
     margin-top: 0;
+    max-height: 32px;
+    overflow: hidden;
 }
 
 .cham-cong-employee-select-shell {
@@ -3559,6 +4178,52 @@ body.menu-open {
     gap: 8px;
 }
 
+.avatar-editor-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 180px));
+    gap: 10px;
+}
+
+.avatar-editor-actions .secondary-button {
+    min-height: 46px;
+    gap: 8px;
+    padding: 0 12px;
+    white-space: nowrap;
+}
+
+.avatar-camera-panel {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(9, 154, 116, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.avatar-camera-video {
+    width: min(320px, 100%);
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    background: #10231f;
+    object-fit: cover;
+}
+
+.avatar-camera-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 150px));
+    gap: 10px;
+}
+
+.avatar-camera-actions .primary-button,
+.avatar-camera-actions .secondary-button {
+    min-height: 44px;
+}
+
+.avatar-camera-status {
+    margin: 0;
+    padding: 9px 11px;
+}
+
 .avatar-upload-label {
     font-weight: 700;
 }
@@ -3930,6 +4595,18 @@ body.menu-open {
         flex-direction: column;
         align-items: stretch;
         text-align: center;
+    }
+
+    .avatar-editor-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .avatar-camera-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .avatar-camera-video {
+        width: 100%;
     }
 
     .profile-avatar {
@@ -7283,6 +7960,16 @@ body.menu-open {
     gap: 20px;
 }
 
+.crud-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.crud-form-grid-wide {
+    grid-column: 1 / -1;
+}
+
 .validation-summary {
     margin-bottom: 0;
     align-items: flex-start;
@@ -7479,6 +8166,10 @@ body.menu-open {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .crud-form-grid {
+        grid-template-columns: 1fr;
+    }
+
     [data-checkin-shell] .yeu-cau-checkin-modal,
     [data-work-camera-shell] .yeu-cau-checkin-modal {
         width: calc(100vw - 12px);
@@ -7513,6 +8204,109 @@ body.menu-open {
     [data-checkin-shell] .yeu-cau-checkin-camera,
     [data-work-camera-shell] .yeu-cau-checkin-camera {
         border-radius: 9px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-modal {
+        top: 8px;
+        transform: translateX(-50%);
+        width: calc(100vw - 16px);
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+        padding: 14px;
+        gap: 10px;
+    }
+
+    [data-checkin-shell] .crud-modal-header {
+        gap: 10px;
+        padding-bottom: 10px;
+    }
+
+    [data-checkin-shell] .crud-modal-header h2 {
+        font-size: 1.08rem;
+        line-height: 1.25;
+    }
+
+    [data-checkin-shell] .crud-modal-subtitle {
+        margin-top: 4px;
+        font-size: 0.86rem;
+        line-height: 1.35;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-body {
+        gap: 10px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-distance-toggle,
+    [data-checkin-shell] .login-input-shell,
+    [data-checkin-shell] .login-textarea-shell {
+        min-height: 44px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-camera {
+        aspect-ratio: 4 / 3;
+        max-height: min(32vh, 220px);
+        border-radius: 9px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-placeholder {
+        min-height: 138px;
+        padding: 14px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+        min-height: 44px;
+        padding-inline: 8px;
+        font-size: 0.88rem;
+        gap: 5px;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    [data-checkin-shell] .account-form-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    [data-checkin-shell] .login-field > span:first-child {
+        font-size: 0.9rem;
+    }
+
+    [data-checkin-shell] .login-textarea-shell {
+        min-height: 82px;
+    }
+
+    [data-checkin-shell] textarea[data-checkin-note] {
+        min-height: 58px;
+    }
+
+    [data-checkin-shell] .page-alert {
+        margin-bottom: 0;
+        padding: 10px 12px;
+        font-size: 0.86rem;
+        line-height: 1.35;
+    }
+
+    [data-checkin-shell] .crud-modal-actions {
+        grid-template-columns: minmax(0, 1fr) minmax(92px, 0.45fr);
+        gap: 8px;
+        padding-top: 10px;
+    }
+
+    [data-checkin-shell] .crud-modal-actions .primary-button,
+    [data-checkin-shell] .crud-modal-actions .secondary-button {
+        min-height: 46px;
+        padding-inline: 10px;
+        font-size: 0.92rem;
     }
 
     .xuat-kho-filter-form {
@@ -8097,6 +8891,57 @@ body.menu-open {
     font-weight: 800;
 }
 
+.yeu-cau-work-card.is-completed [data-work-remove],
+.yeu-cau-work-card.is-completed [data-work-employee-add],
+.yeu-cau-work-card.is-completed [data-work-employee-remove],
+.yeu-cau-work-card.is-completed .yeu-cau-work-image-actions,
+.yeu-cau-work-card:has([data-work-status-select] option:checked[value="Hoàn thành"]) [data-work-remove],
+.yeu-cau-work-card:has([data-work-status-select] option:checked[value="Hoàn thành"]) [data-work-employee-add],
+.yeu-cau-work-card:has([data-work-status-select] option:checked[value="Hoàn thành"]) [data-work-employee-remove],
+.yeu-cau-work-card:has([data-work-status-select] option:checked[value="Hoàn thành"]) .yeu-cau-work-image-actions,
+.yeu-cau-work-card.is-action-locked [data-work-image-upload],
+.yeu-cau-work-card.is-action-locked [data-work-image-camera] {
+    display: none !important;
+}
+
+.yeu-cau-work-card.is-action-locked [data-work-image-upload],
+.yeu-cau-work-card.is-action-locked [data-work-image-camera] {
+    cursor: not-allowed;
+    opacity: 0.58;
+    box-shadow: none;
+}
+
+.yeu-cau-work-card.is-action-locked [data-work-checkin],
+.yeu-cau-work-card.is-action-locked input[name*="CheckInTime"] {
+    cursor: not-allowed;
+    color: #6b8179;
+}
+
+.yeu-cau-work-card.pending .yeu-cau-work-toggle-copy small {
+    color: #557169;
+    font-weight: 800;
+}
+
+.yeu-cau-work-card.in-progress .yeu-cau-work-toggle-copy small {
+    color: #0b4f9c;
+    font-weight: 800;
+}
+
+.yeu-cau-work-card.review .yeu-cau-work-toggle-copy small {
+    color: #a15d06;
+    font-weight: 800;
+}
+
+.yeu-cau-work-card.cancelled {
+    border-color: rgba(216, 93, 93, 0.26);
+    background: linear-gradient(180deg, rgba(255, 247, 247, 0.98), rgba(252, 238, 238, 0.94));
+}
+
+.yeu-cau-work-card.cancelled .yeu-cau-work-toggle-copy small {
+    color: #b13838;
+    font-weight: 800;
+}
+
 .yeu-cau-work-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -8143,8 +8988,18 @@ body.menu-open {
 }
 
 .yeu-cau-work-time-grid {
-    grid-template-columns: minmax(260px, 1.4fr) minmax(220px, 1fr) minmax(220px, 1fr);
+    grid-template-columns: minmax(220px, 1.25fr) minmax(190px, 0.95fr) minmax(210px, 1fr) minmax(210px, 1fr);
     align-items: end;
+}
+
+.yeu-cau-work-note-field .login-textarea-shell {
+    min-height: 92px;
+    padding: 12px 14px;
+}
+
+.yeu-cau-work-note-field textarea {
+    min-height: 58px;
+    line-height: 1.45;
 }
 
 .yeu-cau-work-split {
@@ -8178,7 +9033,7 @@ body.menu-open {
 
 .yeu-cau-work-employee-choice {
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -8186,6 +9041,14 @@ body.menu-open {
     border: 1px solid rgba(18, 73, 59, 0.08);
     background: rgba(255, 255, 255, 0.72);
     cursor: pointer;
+}
+
+.yeu-cau-work-employee-remove {
+    justify-self: end;
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid rgba(216, 93, 93, 0.18);
 }
 
 .yeu-cau-work-employee-choice input[type="checkbox"] {
@@ -8241,6 +9104,81 @@ body.menu-open {
     margin-bottom: 0;
 }
 
+.work-report-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.work-report-summary-card,
+.work-report-count {
+    border: 1px solid rgba(18, 73, 59, 0.12);
+    background: rgba(255, 255, 255, 0.86);
+    color: #103a31;
+    cursor: pointer;
+}
+
+.work-report-summary-card {
+    min-height: 92px;
+    border-radius: 8px;
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    gap: 8px;
+    padding: 18px;
+    text-align: left;
+}
+
+.work-report-summary-card span {
+    color: #557169;
+    font-weight: 800;
+}
+
+.work-report-summary-card strong {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.work-report-summary-card.completed strong,
+.work-report-count.completed {
+    color: #08785e;
+}
+
+.work-report-summary-card.incomplete strong,
+.work-report-count.incomplete {
+    color: #b13838;
+}
+
+.work-report-count {
+    min-width: 52px;
+    height: 34px;
+    border-radius: 8px;
+    font-weight: 900;
+}
+
+.work-report-request-link {
+    color: #0b4f9c;
+    font-weight: 900;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.work-report-request-link:hover,
+.work-report-request-link:focus-visible {
+    color: #083f7d;
+}
+
+.work-report-detail-modal {
+    width: min(1120px, calc(100vw - 32px));
+}
+
+.work-report-detail-body {
+    max-height: min(68vh, 680px);
+    overflow: auto;
+}
+
 .yeu-cau-work-images {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8253,6 +9191,16 @@ body.menu-open {
     border-radius: 8px;
     padding: 12px;
     background: rgba(255, 255, 255, 0.78);
+}
+
+.yeu-cau-work-image-group.is-missing {
+    border-color: rgba(231, 155, 61, 0.58);
+    background: linear-gradient(180deg, rgba(255, 248, 237, 0.98), rgba(255, 242, 216, 0.92));
+    box-shadow: 0 0 0 3px rgba(231, 155, 61, 0.12);
+}
+
+.yeu-cau-work-image-group.is-missing .yeu-cau-work-image-header strong {
+    color: #8a520d;
 }
 
 .yeu-cau-work-image-header,
@@ -8275,7 +9223,7 @@ body.menu-open {
 }
 
 .yeu-cau-work-image-count.is-missing {
-    color: #dc2626;
+    color: #c46a10;
 }
 
 .yeu-cau-work-image-count.is-complete {
@@ -8330,6 +9278,27 @@ body.menu-open {
     gap: 18px;
 }
 
+.crud-tab-panel[data-tab="checkin"] > .panel-header {
+    align-items: center;
+}
+
+.crud-tab-panel[data-tab="checkin"] [data-checkin-open] {
+    min-height: 48px;
+    min-width: min(100%, 260px);
+    justify-content: center;
+    border-color: transparent;
+    background: linear-gradient(135deg, #0cb386, #43d0aa);
+    color: #fff;
+    box-shadow: 0 12px 22px rgba(12, 179, 134, 0.22);
+}
+
+.crud-tab-panel[data-tab="checkin"] [data-checkin-open]:hover,
+.crud-tab-panel[data-tab="checkin"] [data-checkin-open]:focus-visible {
+    background: linear-gradient(135deg, #099a74, #2ec396);
+    color: #fff;
+    box-shadow: 0 14px 26px rgba(12, 179, 134, 0.3);
+}
+
 .yeu-cau-checkin-group {
     display: grid;
     gap: 12px;
@@ -8371,6 +9340,7 @@ body.menu-open {
 
 .yeu-cau-checkin-list {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 12px;
 }
 
@@ -8379,31 +9349,132 @@ body.menu-open {
 }
 
 .yeu-cau-checkin-card {
+    position: relative;
     display: grid;
-    grid-template-columns: 148px minmax(0, 1fr);
-    gap: 14px;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
     padding: 12px;
-    border: 1px solid rgba(18, 73, 59, 0.1);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(10, 74, 61, 0.14);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.yeu-cau-checkin-card.is-complete {
+    border-color: rgba(10, 161, 125, 0.4);
+    background: rgba(12, 179, 134, 0.08);
+}
+
+.yeu-cau-checkin-card.is-pending {
+    border-color: rgba(116, 129, 125, 0.34);
+    background: rgba(116, 129, 125, 0.16);
+}
+
+.yeu-cau-checkin-dot {
+    width: 12px;
+    height: 12px;
+    margin-top: 6px;
+    border-radius: 999px;
+    background: #0cb386;
+    box-shadow: 0 0 0 4px rgba(12, 179, 134, 0.16);
+}
+
+.yeu-cau-checkin-card.is-pending .yeu-cau-checkin-dot {
+    background: #7b8c87;
+    box-shadow: 0 0 0 4px rgba(116, 129, 125, 0.14);
+}
+
+.yeu-cau-checkin-line {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    background: rgba(245, 250, 248, 0.94);
+}
+
+.yeu-cau-checkin-line.is-checkin,
+.yeu-cau-checkin-line.is-checkout-complete {
+    border-color: rgba(10, 161, 125, 0.42);
+    background: rgba(12, 179, 134, 0.16);
+    color: #064f3f;
+}
+
+.yeu-cau-checkin-line.is-checkout-pending {
+    border-color: rgba(116, 129, 125, 0.34);
+    background: rgba(248, 250, 249, 0.72);
+    color: #5f6d69;
+}
+
+.yeu-cau-checkin-line-copy {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+}
+
+.yeu-cau-checkin-line-copy strong,
+.yeu-cau-checkin-line-copy span,
+.yeu-cau-checkin-line-copy p {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.yeu-cau-checkin-line-copy strong,
+.yeu-cau-checkin-line-copy span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.yeu-cau-checkin-line-copy strong {
+    color: #05755c;
+    font-size: 0.94rem;
+    line-height: 1.35;
+    font-weight: 900;
+}
+
+.yeu-cau-checkin-line.is-checkout-pending .yeu-cau-checkin-line-copy strong {
+    color: #5f6d69;
+}
+
+.yeu-cau-checkin-line-copy span {
+    color: #557169;
+    font-size: 0.86rem;
+    line-height: 1.35;
+}
+
+.yeu-cau-checkin-line-copy i {
+    color: #2f7563;
+    flex: 0 0 auto;
+}
+
+.yeu-cau-checkin-line.is-checkout-pending .yeu-cau-checkin-line-copy i {
+    color: #7b8c87;
 }
 
 .yeu-cau-checkin-photo {
-    aspect-ratio: 4 / 3;
-    border-radius: 10px;
+    width: 100%;
+    height: 72px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    border-radius: 6px;
     overflow: hidden;
     display: grid;
     place-items: center;
-    background: rgba(11, 79, 156, 0.08);
-    color: #557169;
-    border: 0;
+    background: rgba(10, 74, 61, 0.06);
+    color: #6f8c84;
     padding: 0;
     cursor: pointer;
+}
+
+.yeu-cau-checkin-photo.is-empty {
+    cursor: default;
 }
 
 .yeu-cau-checkin-photo img {
     width: 100%;
     height: 100%;
+    display: block;
     object-fit: cover;
 }
 
@@ -8431,6 +9502,18 @@ body.menu-open {
     min-width: 0;
 }
 
+.yeu-cau-checkin-title strong {
+    color: #064f3f;
+    font-size: 1rem;
+    line-height: 1.25;
+    font-weight: 900;
+}
+
+.yeu-cau-checkin-title span {
+    color: #31594f;
+    font-weight: 800;
+}
+
 .yeu-cau-checkin-meta {
     display: flex;
     flex-wrap: wrap;
@@ -8454,11 +9537,14 @@ body.menu-open {
 .yeu-cau-checkin-copy p {
     margin: 0;
     color: #31594f;
-    line-height: 1.5;
+    line-height: 1.45;
+    font-size: 0.9rem;
 }
 
 .yeu-cau-checkin-delete {
     width: fit-content;
+    min-height: 38px;
+    margin-top: 2px;
 }
 
 .yeu-cau-checkin-checkout {
@@ -8797,6 +9883,91 @@ body.menu-open {
     max-width: 100%;
 }
 
+[data-checkin-shell] .yeu-cau-checkin-modal {
+    width: min(760px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+[data-checkin-shell] .crud-modal-header {
+    flex: 0 0 auto;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-distance-panel,
+[data-checkin-shell] .attendance-camera-select-shell,
+[data-checkin-shell] .yeu-cau-checkin-camera,
+[data-checkin-shell] .yeu-cau-checkin-actions,
+[data-checkin-shell] .account-form-grid,
+[data-checkin-shell] .login-field,
+[data-checkin-shell] .yeu-cau-checkin-status {
+    grid-column: 1 / -1;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-camera {
+    width: 100%;
+    min-height: 0;
+    max-height: min(42vh, 320px);
+    border-radius: 12px;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-placeholder {
+    min-height: 180px;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: stretch;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    justify-content: center;
+    padding-inline: 10px;
+    white-space: nowrap;
+}
+
+[data-checkin-shell] .account-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+[data-checkin-shell] .crud-modal-actions {
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr);
+    gap: 10px;
+    padding-top: 12px;
+    background: linear-gradient(180deg, rgba(244, 251, 248, 0), rgba(244, 251, 248, 0.98) 28%);
+}
+
+[data-checkin-shell] [data-checkin-save] {
+    order: 1;
+}
+
+[data-checkin-shell] [data-checkin-close].crud-cancel-button {
+    order: 2;
+}
+
 .yeu-cau-checkin-status {
     margin: 0;
 }
@@ -8816,6 +9987,30 @@ body.menu-open {
     display: grid;
     gap: 10px;
     grid-column: 1 / -1;
+}
+
+.yeu-cau-location-create-button {
+    background: linear-gradient(135deg, #0cb386, #43d0aa);
+    color: #ffffff;
+    box-shadow: 0 12px 22px rgba(12, 179, 134, 0.24);
+}
+
+.yeu-cau-location-create-button:hover,
+.yeu-cau-location-create-button:focus-visible {
+    background: linear-gradient(135deg, #099a74, #2ec396);
+    color: #ffffff;
+    box-shadow: 0 14px 26px rgba(12, 179, 134, 0.3);
+}
+
+.login-input-shell.is-new-customer {
+    border-color: rgba(12, 179, 134, 0.42);
+    background: linear-gradient(135deg, rgba(12, 179, 134, 0.14), rgba(67, 208, 170, 0.1));
+    box-shadow: 0 14px 28px rgba(12, 179, 134, 0.12);
+}
+
+.login-input-shell.is-new-customer i,
+.login-input-shell.is-new-customer .select-indicator {
+    color: #08785e;
 }
 
 .yeu-cau-map-preview {
@@ -8868,8 +10063,16 @@ body.menu-open {
     color: #20473d;
     text-align: left;
     display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: start;
     gap: 4px;
     cursor: pointer;
+}
+
+.yeu-cau-location-suggestion-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
 }
 
 .yeu-cau-location-suggestion-item strong {
@@ -8884,6 +10087,26 @@ body.menu-open {
 .yeu-cau-location-suggestion-item b {
     color: #20473d;
     font-weight: 700;
+}
+
+.yeu-cau-location-coordinate-state {
+    width: 24px;
+    height: 24px;
+    margin-top: 1px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 0.78rem;
+}
+
+.yeu-cau-location-coordinate-state.has-coordinate {
+    background: rgba(12, 179, 134, 0.14);
+    color: #08785e;
+}
+
+.yeu-cau-location-coordinate-state.missing-coordinate {
+    background: rgba(216, 93, 93, 0.13);
+    color: #b13838;
 }
 
 .yeu-cau-location-picker-hint {
@@ -9053,15 +10276,50 @@ body.menu-open {
     }
 
     .yeu-cau-work-employee-choice {
-        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-columns: auto 44px minmax(0, 1fr) auto;
+        gap: 10px;
+    }
+
+    .yeu-cau-work-employee-choice input[type="checkbox"] {
+        grid-row: auto;
+    }
+
+    .yeu-cau-work-employee-remove {
+        grid-column: auto;
+        width: auto;
+        justify-content: center;
+        padding: 0 10px;
     }
 
     .yeu-cau-work-header {
         grid-template-columns: 1fr;
     }
 
-    .yeu-cau-checkin-card {
+    .work-report-summary {
         grid-template-columns: 1fr;
+    }
+
+    .yeu-cau-checkin-list {
+        grid-template-columns: 1fr;
+    }
+
+    .yeu-cau-checkin-card {
+        grid-template-columns: 16px minmax(0, 1fr);
+        padding: 10px;
+    }
+
+    .yeu-cau-checkin-line {
+        grid-template-columns: 74px minmax(0, 1fr);
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .yeu-cau-checkin-photo {
+        height: 56px;
+    }
+
+    .yeu-cau-checkin-title {
+        align-items: flex-start;
     }
 
     .yeu-cau-checkin-image-body {
@@ -9079,6 +10337,15 @@ body.menu-open {
 
 .xuat-kho-modal .crud-modal-actions.has-export-action .primary-button {
     grid-column: auto;
+}
+
+.xuat-kho-modal .crud-modal-actions {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 160px));
+    justify-content: start;
+}
+
+.xuat-kho-modal .crud-modal-actions.has-export-action {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 160px));
 }
 
 .xuat-kho-info-grid {
@@ -9368,10 +10635,70 @@ body.menu-open {
     color: #8aa39a;
 }
 
+.hang-hoa-phan-loai-panel {
+    display: grid;
+    gap: 14px;
+}
+
+.hang-hoa-phan-loai-toolbar {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.hang-hoa-phan-loai-grid .login-input-shell {
+    min-height: 44px;
+}
+
+.hang-hoa-phan-loai-grid input[type="text"],
+.hang-hoa-phan-loai-grid input:not([type]) {
+    min-width: 220px;
+}
+
+.hang-hoa-phan-loai-grid .table-action-button {
+    width: 44px;
+    height: 44px;
+}
+
+.compact-status-switch {
+    width: auto;
+    min-width: 162px;
+}
+
+.hang-hoa-phan-loai-empty {
+    margin: 0;
+}
+
 .xuat-kho-export-button {
     color: #0a5f49;
     border-color: rgba(9, 154, 116, 0.28);
     background: rgba(12, 179, 134, 0.1);
+}
+
+.document-camera-panel {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(15, 84, 68, 0.14);
+    border-radius: 8px;
+    background: #f7fbf9;
+}
+
+.document-camera-panel[hidden] {
+    display: none;
+}
+
+.document-camera-video {
+    width: 100%;
+    max-height: 360px;
+    border-radius: 8px;
+    background: #10231f;
+    object-fit: contain;
+}
+
+.document-camera-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 @media (max-width: 760px) {
@@ -9424,4 +10751,245 @@ body.menu-open {
 .cham-cong-camera-footer .primary-button,
 .cham-cong-camera-footer .secondary-button {
     width: 100%;
+}
+
+/* EOF cascade guard: request checkin popup must stay one-column on narrow screens. */
+[data-checkin-shell] .yeu-cau-checkin-capture-stack {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    grid-column: 1 / -1 !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-modal {
+    width: min(760px, calc(100vw - 24px)) !important;
+    max-height: calc(100vh - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow: hidden !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-distance-panel,
+[data-checkin-shell] .attendance-camera-select-shell,
+[data-checkin-shell] .yeu-cau-checkin-camera,
+[data-checkin-shell] .yeu-cau-checkin-actions,
+[data-checkin-shell] .account-form-grid,
+[data-checkin-shell] .login-field,
+[data-checkin-shell] .yeu-cau-checkin-status {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 auto !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-camera {
+    display: block !important;
+    aspect-ratio: 4 / 3 !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    max-height: min(42vh, 320px) !important;
+    border-radius: 12px !important;
+    flex: 0 0 auto !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+
+[data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+    width: 100% !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+}
+
+[data-checkin-shell] .account-form-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+[data-checkin-shell] .crud-modal-actions {
+    flex: 0 0 auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr) !important;
+    gap: 10px !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 3 !important;
+    padding-top: 12px !important;
+    background: linear-gradient(180deg, rgba(244, 251, 248, 0), rgba(244, 251, 248, 0.98) 28%) !important;
+}
+
+[data-checkin-shell] [data-checkin-save] {
+    order: 1 !important;
+}
+
+[data-checkin-shell] [data-checkin-close].crud-cancel-button {
+    order: 2 !important;
+}
+
+@media (max-width: 520px), (max-height: 640px) {
+    [data-checkin-shell] .yeu-cau-checkin-capture-stack {
+        gap: 8px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-modal {
+        top: 8px !important;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 16px) !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100vh - 16px) !important;
+        max-height: calc(100dvh - 16px) !important;
+        padding: 14px !important;
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-header {
+        gap: 10px !important;
+        padding-bottom: 10px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-header h2 {
+        font-size: 1.08rem !important;
+        line-height: 1.25 !important;
+    }
+
+    [data-checkin-shell] .crud-modal-subtitle {
+        margin-top: 4px !important;
+        font-size: 0.86rem !important;
+        line-height: 1.35 !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-body {
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-camera {
+        max-height: min(30vh, 190px) !important;
+        border-radius: 9px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button {
+        min-height: 44px !important;
+        padding-inline: 7px !important;
+        font-size: 0.86rem !important;
+        gap: 5px !important;
+    }
+
+    [data-checkin-shell] .yeu-cau-checkin-actions .secondary-button span {
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    [data-checkin-shell] .account-form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    [data-checkin-shell] .login-input-shell,
+    [data-checkin-shell] .login-textarea-shell,
+    [data-checkin-shell] .yeu-cau-checkin-distance-toggle {
+        min-height: 44px !important;
+    }
+
+    [data-checkin-shell] .login-textarea-shell {
+        min-height: 82px !important;
+    }
+
+    [data-checkin-shell] textarea[data-checkin-note] {
+        min-height: 58px !important;
+    }
+
+    [data-checkin-shell] .crud-modal-actions {
+        grid-template-columns: minmax(0, 1fr) minmax(92px, 0.45fr) !important;
+        gap: 8px !important;
+        padding-top: 10px !important;
+    }
+}
+
+/* Dashboard attendance popup EOF guard: keep photo actions below the camera. */
+[data-cham-cong-camera-shell] .yeu-cau-checkin-body {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-camera {
+    display: block !important;
+    position: relative !important;
+    z-index: 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: 4 / 3 !important;
+    max-height: min(42vh, 320px) !important;
+    min-height: 0 !important;
+    flex: 0 0 auto !important;
+    overflow: hidden !important;
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-camera video,
+[data-cham-cong-camera-shell] .yeu-cau-checkin-camera img,
+[data-cham-cong-camera-shell] .yeu-cau-checkin-placeholder {
+    position: relative !important;
+    z-index: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    position: relative !important;
+    z-index: 20 !important;
+    width: 100% !important;
+    margin-top: 2px !important;
+    flex: 0 0 auto !important;
+}
+
+[data-cham-cong-camera-shell] .yeu-cau-checkin-actions .secondary-button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 48px !important;
+    justify-content: center !important;
+}
+
+@media (max-width: 520px), (max-height: 640px) {
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-body {
+        gap: 10px !important;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-camera {
+        max-height: min(30vh, 190px) !important;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-actions {
+        gap: 8px !important;
+    }
+
+    [data-cham-cong-camera-shell] .yeu-cau-checkin-actions .secondary-button {
+        min-height: 44px !important;
+        padding-inline: 8px !important;
+        font-size: 0.88rem !important;
+    }
 }

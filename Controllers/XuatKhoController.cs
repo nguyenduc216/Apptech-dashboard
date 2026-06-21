@@ -7,10 +7,24 @@ using Microsoft.AspNetCore.Mvc;
 namespace ApptechDashboard.Controllers;
 
 [Authorize]
-public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
+public class XuatKhoController(
+    IXuatKhoService xuatKhoService,
+    INhapXuatImageService nhapXuatImageService,
+    IWebHostEnvironment webHostEnvironment) : Controller
 {
+    private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    };
+
     private const int DefaultPageSize = 10;
+    private const long MaxImageSizeInBytes = 5 * 1024 * 1024;
     private readonly IXuatKhoService _xuatKhoService = xuatKhoService;
+    private readonly INhapXuatImageService _nhapXuatImageService = nhapXuatImageService;
+    private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
 
     [HttpGet]
     public async Task<IActionResult> Index([FromQuery] XuatKhoListQuery query)
@@ -34,6 +48,13 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
         if (item is null)
         {
             TempData["StatusMessage"] = "Không tìm thấy phiếu xuất kho cần in.";
+            TempData["StatusType"] = "error";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (XuatKhoPhieuStatus.Normalize(item.TrangThaiPhieu) != XuatKhoPhieuStatus.Exported)
+        {
+            TempData["StatusMessage"] = "Phiếu chưa xuất kho nên không thể in.";
             TempData["StatusType"] = "error";
             return RedirectToAction(nameof(Index));
         }
@@ -138,16 +159,29 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
         model.TrangThaiPhieu = XuatKhoPhieuStatus.Draft;
         ValidateNgayXuatKho(model);
         ValidateDetails(model);
+        ValidateImages(model.NewImageFiles);
 
         if (!ModelState.IsValid)
         {
-            model.ActiveTab = HasDetailErrors() ? "vat-tu-xuat" : "thong-tin";
+            model.ActiveTab = ResolveActiveTab();
             return View("Index", await BuildPageModelForPostbackAsync(model, XuatKhoPopupMode.Create, HttpContext.RequestAborted));
         }
+
+        var uploadedImages = await SaveImagesAsync(model.NewImageFiles, HttpContext.RequestAborted);
+        if (uploadedImages.ErrorMessage is not null)
+        {
+            DeleteLocalImagesIfOwned(uploadedImages.AbsolutePaths);
+            ModelState.AddModelError("Form.NewImageFiles", uploadedImages.ErrorMessage);
+            model.ActiveTab = "hinh-anh";
+            return View("Index", await BuildPageModelForPostbackAsync(model, XuatKhoPopupMode.Create, HttpContext.RequestAborted));
+        }
+
+        model.UploadedImagePaths.AddRange(uploadedImages.RelativePaths);
 
         var result = await _xuatKhoService.CreateAsync(model, GetCurrentAuditUser(), HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
+            DeleteLocalImagesIfOwned(uploadedImages.AbsolutePaths);
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "Không thể tạo phiếu xuất kho.");
             model.ActiveTab = "vat-tu-xuat";
             return View("Index", await BuildPageModelForPostbackAsync(model, XuatKhoPopupMode.Create, HttpContext.RequestAborted));
@@ -167,21 +201,46 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
             model.TrangThaiPhieu = XuatKhoPhieuStatus.Exported;
         }
 
+        var existingImages = model.Id.HasValue
+            ? await _nhapXuatImageService.GetImagesAsync(model.Id.Value, NhapXuatImageLoaiPhieu.Xuat, HttpContext.RequestAborted)
+            : [];
+        if (model.ExistingImages.Count == 0)
+        {
+            model.ExistingImages = existingImages.ToList();
+        }
+
         ValidateNgayXuatKho(model);
         ValidateDetails(model);
+        ValidateImages(model.NewImageFiles);
 
         if (!ModelState.IsValid)
         {
-            model.ActiveTab = HasDetailErrors() ? "vat-tu-xuat" : "thong-tin";
+            model.ActiveTab = ResolveActiveTab();
             return View("Index", await BuildPageModelForPostbackAsync(model, XuatKhoPopupMode.Edit, HttpContext.RequestAborted));
         }
+
+        var uploadedImages = await SaveImagesAsync(model.NewImageFiles, HttpContext.RequestAborted);
+        if (uploadedImages.ErrorMessage is not null)
+        {
+            DeleteLocalImagesIfOwned(uploadedImages.AbsolutePaths);
+            ModelState.AddModelError("Form.NewImageFiles", uploadedImages.ErrorMessage);
+            model.ActiveTab = "hinh-anh";
+            return View("Index", await BuildPageModelForPostbackAsync(model, XuatKhoPopupMode.Edit, HttpContext.RequestAborted));
+        }
+
+        model.UploadedImagePaths.AddRange(uploadedImages.RelativePaths);
 
         var result = await _xuatKhoService.UpdateAsync(model, GetCurrentAuditUser(), HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
+            DeleteLocalImagesIfOwned(uploadedImages.AbsolutePaths);
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "Không thể cập nhật phiếu xuất kho.");
             return View("Index", await BuildPageModelForPostbackAsync(model, XuatKhoPopupMode.Edit, HttpContext.RequestAborted));
         }
+
+        DeleteLocalImagesIfOwned(existingImages
+            .Where(image => model.RemovedImagePaths.Contains(image.ImagePath, StringComparer.OrdinalIgnoreCase))
+            .Select(image => image.ImagePath));
 
         TempData["StatusMessage"] = XuatKhoPhieuStatus.Normalize(model.TrangThaiPhieu) == XuatKhoPhieuStatus.Exported
             ? "Đã xuất kho và cập nhật tồn kho thành công."
@@ -194,7 +253,13 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(XuatKhoDeleteModel model)
     {
+        var existingImages = await _nhapXuatImageService.GetImagesAsync(model.Id, NhapXuatImageLoaiPhieu.Xuat, HttpContext.RequestAborted);
         var result = await _xuatKhoService.DeleteAsync(model.Id, HttpContext.RequestAborted);
+        if (result.Succeeded)
+        {
+            DeleteLocalImagesIfOwned(existingImages.Select(image => image.ImagePath));
+        }
+
         TempData["StatusMessage"] = result.Succeeded
             ? "Đã xóa phiếu xuất kho."
             : result.ErrorMessage ?? "Không thể xóa phiếu xuất kho.";
@@ -264,6 +329,7 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
         }
 
         var details = await _xuatKhoService.GetDetailsAsync(query.EditId.Value, cancellationToken);
+        var images = await _nhapXuatImageService.GetImagesAsync(query.EditId.Value, NhapXuatImageLoaiPhieu.Xuat, cancellationToken);
         model.PopupMode = XuatKhoPopupMode.Edit;
         model.Form = new XuatKhoFormModel
         {
@@ -277,6 +343,7 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
             DiaChiNguoiNhanHang = item.DiaChiNguoiNhanHang,
             TrangThaiPhieu = XuatKhoPhieuStatus.Normalize(item.TrangThaiPhieu),
             Details = details.ToList(),
+            ExistingImages = images.ToList(),
             Keyword = query.Keyword,
             StatusFilter = query.StatusFilter,
             FromDate = query.FromDate,
@@ -382,6 +449,121 @@ public class XuatKhoController(IXuatKhoService xuatKhoService) : Controller
     private bool HasDetailErrors()
     {
         return ModelState.Keys.Any(key => key.StartsWith("Form.Details", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool HasImageErrors()
+    {
+        return ModelState.Keys.Any(key => key.StartsWith("Form.NewImageFiles", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string ResolveActiveTab()
+    {
+        if (HasDetailErrors())
+        {
+            return "vat-tu-xuat";
+        }
+
+        return HasImageErrors() ? "hinh-anh" : "thong-tin";
+    }
+
+    private void ValidateImages(IEnumerable<IFormFile>? imageFiles)
+    {
+        foreach (var imageFile in imageFiles ?? [])
+        {
+            if (imageFile is null || imageFile.Length == 0)
+            {
+                continue;
+            }
+
+            var extension = Path.GetExtension(imageFile.FileName);
+            if (!AllowedImageExtensions.Contains(extension))
+            {
+                ModelState.AddModelError("Form.NewImageFiles", "Ảnh chứng từ chỉ hỗ trợ JPG, PNG hoặc WEBP.");
+            }
+
+            if (imageFile.Length > MaxImageSizeInBytes)
+            {
+                ModelState.AddModelError("Form.NewImageFiles", "Mỗi ảnh chứng từ chỉ được tối đa 5MB.");
+            }
+        }
+    }
+
+    private async Task<(List<string> RelativePaths, List<string> AbsolutePaths, string? ErrorMessage)> SaveImagesAsync(
+        IEnumerable<IFormFile>? imageFiles,
+        CancellationToken cancellationToken)
+    {
+        var relativePaths = new List<string>();
+        var absolutePaths = new List<string>();
+
+        foreach (var imageFile in imageFiles ?? [])
+        {
+            if (imageFile is null || imageFile.Length == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var extension = Path.GetExtension(imageFile.FileName).ToLowerInvariant();
+                var uploadsRoot = Path.Combine(_webHostEnvironment.WebRootPath, "uploads");
+                var uploadsFolder = Path.Combine(uploadsRoot, "nhap-xuat");
+                Directory.CreateDirectory(uploadsRoot);
+                Directory.CreateDirectory(uploadsFolder);
+
+                var fileName = $"nhap-xuat-{Guid.NewGuid():N}-{DateTime.UtcNow:yyyyMMddHHmmssfff}{extension}";
+                var absolutePath = Path.Combine(uploadsFolder, fileName);
+                await using var stream = System.IO.File.Create(absolutePath);
+                await imageFile.CopyToAsync(stream, cancellationToken);
+
+                relativePaths.Add($"/uploads/nhap-xuat/{fileName}");
+                absolutePaths.Add(absolutePath);
+            }
+            catch
+            {
+                return (relativePaths, absolutePaths, "Không thể lưu ảnh chứng từ lên hệ thống.");
+            }
+        }
+
+        return (relativePaths, absolutePaths, null);
+    }
+
+    private void DeleteLocalImagesIfOwned(IEnumerable<string?>? imagePaths)
+    {
+        foreach (var imagePath in imagePaths ?? [])
+        {
+            DeleteLocalImageIfOwned(imagePath);
+        }
+    }
+
+    private void DeleteLocalImageIfOwned(string? imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            return;
+        }
+
+        string absolutePath;
+        if (Path.IsPathRooted(imagePath))
+        {
+            absolutePath = imagePath;
+        }
+        else
+        {
+            var relativePath = imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+            absolutePath = Path.Combine(_webHostEnvironment.WebRootPath, relativePath);
+        }
+
+        var uploadsRoot = Path.GetFullPath(Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "nhap-xuat"));
+        var normalizedAbsolutePath = Path.GetFullPath(absolutePath);
+        if (!normalizedAbsolutePath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (System.IO.File.Exists(normalizedAbsolutePath))
+        {
+            System.IO.File.Delete(normalizedAbsolutePath);
+        }
     }
 
     private object BuildRouteValues(string? keyword, string? statusFilter, DateTime? fromDate, DateTime? toDate, int page, int? editId = null)
