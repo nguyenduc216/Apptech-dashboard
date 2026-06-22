@@ -1,11 +1,13 @@
 using ApptechDashboard.Configuration;
 using ApptechDashboard.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Rewrite;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddJsonFile("appsettings.Database.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddEnvironmentVariables();
 
 var sqlServerOptions = builder.Configuration
     .GetSection(SqlServerOptions.SectionName)
@@ -40,6 +42,12 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 builder.Services.AddControllersWithViews();
+var dataProtection = builder.Services.AddDataProtection();
+var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
+}
 builder.Services.AddHttpClient("ZaloOA");
 builder.Services.AddScoped<ISidebarMenuService, SidebarMenuService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
@@ -64,6 +72,8 @@ builder.Services.AddScoped<INhapXuatImageService, NhapXuatImageService>();
 builder.Services.AddScoped<INhaCungCapService, NhaCungCapService>();
 builder.Services.AddScoped<ICommonAuditService, CommonAuditService>();
 builder.Services.AddScoped<ISimpleExcelService, SimpleExcelService>();
+builder.Services.AddSingleton<IZaloSettingsService, ZaloSettingsService>();
+builder.Services.AddScoped<IZaloRequestService, ZaloRequestService>();
 builder.Services.AddScoped<ZaloIntegrationService>();
 builder.Services.AddScoped<IZaloAuthService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
 builder.Services.AddScoped<IZaloMessageService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
@@ -76,10 +86,13 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    var zaloSettingsService = scope.ServiceProvider.GetRequiredService<IZaloSettingsService>();
+    await zaloSettingsService.InitializeAsync();
     var permissionCatalogService = scope.ServiceProvider.GetRequiredService<IPermissionCatalogService>();
     await permissionCatalogService.EnsureYeuCauWorkEmployeePermissionsAsync();
     await permissionCatalogService.EnsureYeuCauCheckinDistancePermissionsAsync();
     await permissionCatalogService.EnsureCongViecReportPermissionsAsync();
+    await permissionCatalogService.EnsureZaloManagementPermissionsAsync();
 }
 
 if (!app.Environment.IsDevelopment())
@@ -203,6 +216,16 @@ app.MapControllerRoute(
     name: "setting",
     pattern: "cai-dat",
     defaults: new { controller = "Setting", action = "Index" });
+
+app.MapControllerRoute(
+    name: "zalo-management",
+    pattern: "quan-ly-zalo",
+    defaults: new { controller = "Zalo", action = "Index" });
+
+app.MapControllerRoute(
+    name: "zalo-settings-admin",
+    pattern: "admin/zalo-settings",
+    defaults: new { controller = "Zalo", action = "Index" });
 
 app.MapControllerRoute(
     name: "settings",

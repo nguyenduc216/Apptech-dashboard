@@ -138,6 +138,8 @@ public sealed class KhachHangDetailViewModel
     public string? StatusMessage { get; set; }
     public string StatusType { get; set; } = "info";
     public bool CurrentUserIsAdmin { get; set; }
+    public string? ZaloCustomerLink { get; set; }
+    public string? ZaloCustomerLinkToken { get; set; }
 
     public bool IsEditMode => Form.Id.HasValue && Form.Id.Value > 0;
 

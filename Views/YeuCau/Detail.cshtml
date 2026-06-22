@@ -111,6 +111,9 @@
           data-location-coordinate-url="@Url.Action("UpdateLocationCoordinates", "YeuCau")"
           data-location-coordinate-draft-url="@Url.Action("UpdateDraftLocationCoordinates", "YeuCau")"
           data-checkin-delete-url="@Url.Action("DeleteCheckin", "YeuCau")"
+          data-zalo-request-id="@Model.Form.Id"
+          data-zalo-request-link-url="/api/zalo/request-links"
+          data-zalo-request-status-base="/api/zalo/request-links"
           data-current-employee-id="@currentEmployeeIdValue"
           data-current-user="@currentAuditUser"
           data-checkin-distance-limit="@checkinDistanceLimitValue"
@@ -163,16 +166,11 @@
 
                 @if (Model.IsEditMode)
                 {
-                    <button type="submit"
+                    <button type="button"
                             class="secondary-button"
-                            asp-action="SendZaloSchedule"
-                            asp-route-id="@Model.Form.Id"
-                            asp-route-keyword="@Model.Filter.Keyword"
-                            asp-route-statusFilter="@Model.Filter.StatusFilter"
-                            asp-route-workStatusFilter="@Model.Filter.WorkStatusFilter"
-                            asp-route-page="@Model.Filter.Page">
-                        <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-                        <span>Gui lich Zalo</span>
+                            data-zalo-qr-open>
+                        <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                        <span>Gửi lịch Zalo</span>
                     </button>
                 }
 
@@ -1635,6 +1633,52 @@
                 </div>
             </section>
         </div>
+
+        <div class="crud-modal-shell zalo-qr-modal-shell" data-zalo-qr-shell hidden>
+            <div class="crud-modal-backdrop" aria-hidden="true" data-zalo-qr-close></div>
+            <section class="crud-modal zalo-qr-modal" role="dialog" aria-modal="true" aria-labelledby="zalo-qr-title">
+                <div class="crud-modal-header">
+                    <div class="crud-modal-heading">
+                        <h2 id="zalo-qr-title">Quét QR bằng Zalo</h2>
+                        <p class="crud-modal-subtitle">Khách hàng quét mã để xem lịch, quan tâm OA và đánh giá công việc.</p>
+                    </div>
+                    <button type="button" class="menu-nav-button crud-close-button" aria-label="Đóng popup QR" data-zalo-qr-close>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="zalo-qr-body">
+                    <div class="zalo-qr-image-shell">
+                        <div class="zalo-qr-loading" data-zalo-qr-loading>
+                            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                            <span>Đang tạo mã QR...</span>
+                        </div>
+                        <img data-zalo-qr-image alt="Mã QR lịch Zalo" hidden />
+                    </div>
+                    <div class="zalo-qr-details">
+                        <div class="zalo-qr-status">
+                            <span>Trạng thái</span>
+                            <strong data-zalo-qr-status>Chưa quét</strong>
+                        </div>
+                        <label>
+                            <span>Link gửi khách hàng</span>
+                            <input type="text" readonly data-zalo-qr-url />
+                        </label>
+                        <div class="zalo-qr-actions">
+                            <button type="button" class="secondary-button" data-zalo-qr-copy>
+                                <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                                <span>Copy link</span>
+                            </button>
+                            <a class="primary-button" href="#" target="_blank" rel="noopener" data-zalo-qr-open-link>
+                                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                <span>Mở link</span>
+                            </a>
+                            <button type="button" class="secondary-button" data-zalo-qr-close>Đóng</button>
+                        </div>
+                        <div class="zalo-qr-message" data-zalo-qr-message aria-live="polite"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
     </form>
 </section>
 
@@ -1642,6 +1686,28 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="" />
+    <style>
+        .zalo-qr-modal { width: min(720px, calc(100% - 24px)); }
+        .zalo-qr-body { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 22px; padding: 22px; }
+        .zalo-qr-image-shell { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid #cfe5df; border-radius: 8px; background: #f3faf8; overflow: hidden; }
+        .zalo-qr-image-shell img { display: block; width: 100%; height: 100%; object-fit: contain; padding: 10px; background: #fff; }
+        .zalo-qr-loading { display: grid; justify-items: center; gap: 10px; color: #397068; font-weight: 700; }
+        .zalo-qr-loading i { font-size: 28px; color: #0b8c74; }
+        .zalo-qr-details { display: grid; align-content: start; gap: 15px; }
+        .zalo-qr-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px; border: 1px solid #cfe5df; border-radius: 7px; background: #f5fbf9; }
+        .zalo-qr-status span { color: #607b76; }
+        .zalo-qr-status strong { color: #08735f; }
+        .zalo-qr-details label { display: grid; gap: 7px; color: #244f49; font-weight: 700; }
+        .zalo-qr-details input { width: 100%; min-height: 44px; padding: 0 11px; border: 1px solid #c9ddd8; border-radius: 7px; background: #fff; color: #164b44; font: inherit; }
+        .zalo-qr-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+        .zalo-qr-message { min-height: 22px; color: #08735f; font-weight: 700; font-size: 13px; }
+        .zalo-qr-message.error { color: #b53737; }
+        @@media (max-width: 680px) {
+            .zalo-qr-body { grid-template-columns: 1fr; padding: 16px; }
+            .zalo-qr-image-shell { width: min(280px, 100%); justify-self: center; }
+            .zalo-qr-actions > * { flex: 1 1 calc(50% - 9px); }
+        }
+    </style>
 }
 
 @section Scripts {
@@ -1654,6 +1720,152 @@
             if (!(root instanceof HTMLFormElement)) {
                 return;
             }
+
+            const zaloQrOpenButton = root.querySelector("[data-zalo-qr-open]");
+            const zaloQrShell = root.querySelector("[data-zalo-qr-shell]");
+            const zaloQrCloseButtons = zaloQrShell?.querySelectorAll("[data-zalo-qr-close]") ?? [];
+            const zaloQrImage = zaloQrShell?.querySelector("[data-zalo-qr-image]");
+            const zaloQrLoading = zaloQrShell?.querySelector("[data-zalo-qr-loading]");
+            const zaloQrStatus = zaloQrShell?.querySelector("[data-zalo-qr-status]");
+            const zaloQrUrl = zaloQrShell?.querySelector("[data-zalo-qr-url]");
+            const zaloQrCopyButton = zaloQrShell?.querySelector("[data-zalo-qr-copy]");
+            const zaloQrOpenLink = zaloQrShell?.querySelector("[data-zalo-qr-open-link]");
+            const zaloQrMessage = zaloQrShell?.querySelector("[data-zalo-qr-message]");
+            let zaloQrPollTimer = 0;
+            let zaloQrToken = "";
+
+            const setZaloQrMessage = (message, isError = false) => {
+                if (!(zaloQrMessage instanceof HTMLElement)) {
+                    return;
+                }
+
+                zaloQrMessage.textContent = message;
+                zaloQrMessage.classList.toggle("error", isError);
+            };
+
+            const zaloStatusLabels = {
+                Created: "Chưa quét",
+                Opened: "Đã quét",
+                ZaloConnected: "Đã kết nối Zalo",
+                Rated: "Đã đánh giá",
+                Expired: "Đã hết hạn"
+            };
+
+            const updateZaloQrStatus = (status) => {
+                if (zaloQrStatus instanceof HTMLElement) {
+                    zaloQrStatus.textContent = zaloStatusLabels[status] || status || "Chưa quét";
+                }
+            };
+
+            const stopZaloQrPolling = () => {
+                if (zaloQrPollTimer) {
+                    window.clearInterval(zaloQrPollTimer);
+                    zaloQrPollTimer = 0;
+                }
+            };
+
+            const pollZaloQrStatus = async () => {
+                if (!zaloQrToken) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${root.dataset.zaloRequestStatusBase}/${encodeURIComponent(zaloQrToken)}/status`, {
+                        headers: { "Accept": "application/json" }
+                    });
+                    if (!response.ok) {
+                        return;
+                    }
+
+                    const data = await response.json();
+                    updateZaloQrStatus(data.status);
+                    if (data.rated || data.status === "Expired") {
+                        stopZaloQrPolling();
+                    }
+                } catch {
+                    // Polling will retry automatically.
+                }
+            };
+
+            const closeZaloQr = () => {
+                stopZaloQrPolling();
+                if (zaloQrShell instanceof HTMLElement) {
+                    zaloQrShell.hidden = true;
+                }
+            };
+
+            const openZaloQr = async () => {
+                if (!(zaloQrShell instanceof HTMLElement)) {
+                    return;
+                }
+
+                zaloQrShell.hidden = false;
+                zaloQrToken = "";
+                updateZaloQrStatus("Created");
+                setZaloQrMessage("");
+                if (zaloQrLoading instanceof HTMLElement) {
+                    zaloQrLoading.hidden = false;
+                }
+                if (zaloQrImage instanceof HTMLImageElement) {
+                    zaloQrImage.hidden = true;
+                    zaloQrImage.removeAttribute("src");
+                }
+
+                try {
+                    const requestId = Number(root.dataset.zaloRequestId || 0);
+                    const response = await fetch(root.dataset.zaloRequestLinkUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({ requestId })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || "Không thể tạo mã QR.");
+                    }
+
+                    zaloQrToken = data.token;
+                    if (zaloQrImage instanceof HTMLImageElement) {
+                        zaloQrImage.src = data.qrImageBase64;
+                        zaloQrImage.hidden = false;
+                    }
+                    if (zaloQrLoading instanceof HTMLElement) {
+                        zaloQrLoading.hidden = true;
+                    }
+                    if (zaloQrUrl instanceof HTMLInputElement) {
+                        zaloQrUrl.value = data.qrUrl;
+                    }
+                    if (zaloQrOpenLink instanceof HTMLAnchorElement) {
+                        zaloQrOpenLink.href = data.qrUrl;
+                    }
+                    updateZaloQrStatus(data.status);
+                    zaloQrPollTimer = window.setInterval(pollZaloQrStatus, 4000);
+                } catch (error) {
+                    if (zaloQrLoading instanceof HTMLElement) {
+                        zaloQrLoading.hidden = true;
+                    }
+                    setZaloQrMessage(error?.message || "Không thể tạo mã QR.", true);
+                }
+            };
+
+            zaloQrOpenButton?.addEventListener("click", () => void openZaloQr());
+            zaloQrCloseButtons.forEach(button => button.addEventListener("click", closeZaloQr));
+            zaloQrCopyButton?.addEventListener("click", async () => {
+                if (!(zaloQrUrl instanceof HTMLInputElement) || !zaloQrUrl.value) {
+                    return;
+                }
+
+                try {
+                    await navigator.clipboard.writeText(zaloQrUrl.value);
+                    setZaloQrMessage("Đã sao chép link.");
+                } catch {
+                    zaloQrUrl.select();
+                    document.execCommand("copy");
+                    setZaloQrMessage("Đã sao chép link.");
+                }
+            });
 
             const searchUrl = root.dataset.searchUrl;
             const customerSearchUrl = root.dataset.customerSearchUrl;

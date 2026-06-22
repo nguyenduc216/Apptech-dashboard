@@ -65,6 +65,9 @@ internal static class MenuIconMap
             "settings" => "fa-solid fa-sliders",
             "cai_dat" => "fa-solid fa-sliders",
             "cai-dat" => "fa-solid fa-sliders",
+            "zalo" => "fa-solid fa-comments",
+            "quan_ly_zalo" => "fa-solid fa-comments",
+            "quan-ly-zalo" => "fa-solid fa-comments",
             "material" => "fa-solid fa-toolbox",
             "vat_tu" => "fa-solid fa-toolbox",
             "vat-tu" => "fa-solid fa-toolbox",
@@ -73,11 +76,13 @@ internal static class MenuIconMap
             _ when ContainsAny(normalizedTitle, "nhap kho") => "fa-solid fa-dolly",
             _ when ContainsAny(normalizedTitle, "xuat kho") => "fa-solid fa-truck-ramp-box",
             _ when ContainsAny(normalizedTitle, "cai dat", "setting", "settings") => "fa-solid fa-sliders",
+            _ when ContainsAny(normalizedTitle, "zalo") => "fa-solid fa-comments",
             _ when ContainsAny(normalizedTitle, "vat tu") => "fa-solid fa-toolbox",
             _ when ContainsAny(normalizedUrl, "ncc", "nhacungcap", "nha-cung-cap", "nha_cung_cap") => "fa-solid fa-handshake",
             _ when ContainsAny(normalizedUrl, "nhapkho", "nhap-kho", "nhap_kho") => "fa-solid fa-dolly",
             _ when ContainsAny(normalizedUrl, "xuatkho", "xuat-kho", "xuat_kho") => "fa-solid fa-truck-ramp-box",
             _ when ContainsAny(normalizedUrl, "setting", "settings", "cai-dat", "cai_dat") => "fa-solid fa-sliders",
+            _ when ContainsAny(normalizedUrl, "zalo", "quan-ly-zalo") => "fa-solid fa-comments",
             _ when ContainsAny(normalizedUrl, "vat-tu") => "fa-solid fa-toolbox",
             _ => null
         };
@@ -157,6 +162,9 @@ internal static class MenuIconMap
             "settings" => "fa-solid fa-sliders",
             "cai_dat" => "fa-solid fa-sliders",
             "cai-dat" => "fa-solid fa-sliders",
+            "zalo" => "fa-solid fa-comments",
+            "quan_ly_zalo" => "fa-solid fa-comments",
+            "quan-ly-zalo" => "fa-solid fa-comments",
             _ when ContainsAny(normalizedTitle, "quan ly chung", "tong quan he thong", "tong hop") => "fa-solid fa-sliders",
             _ when ContainsAny(normalizedTitle, "quan ly nguoi dung", "nguoi dung", "tai khoan nguoi dung") => "fa-solid fa-user-gear",
             _ when ContainsAny(normalizedTitle, "vai tro nguoi dung", "vai tro") => "fa-solid fa-user-shield",
@@ -188,6 +196,7 @@ internal static class MenuIconMap
             _ when ContainsAny(normalizedTitle, "cai dat", "setting", "settings", "config", "he thong") => "fa-solid fa-sliders",
             _ when ContainsAny(normalizedTitle, "bao cao", "report", "thong ke") => "fa-solid fa-chart-column",
             _ when ContainsAny(normalizedTitle, "thong bao", "notify", "notification") => "fa-solid fa-bell",
+            _ when ContainsAny(normalizedTitle, "zalo") => "fa-solid fa-comments",
             _ when ContainsAny(normalizedUrl, "dashboard", "home", "index") => "fa-solid fa-gauge-high",
             _ when ContainsAny(normalizedUrl, "user", "account") => "fa-solid fa-user-gear",
             _ when ContainsAny(normalizedUrl, "role", "permission") => "fa-solid fa-user-shield",
@@ -204,6 +213,7 @@ internal static class MenuIconMap
             _ when ContainsAny(normalizedUrl, "checkin", "calendar", "attendance") => "fa-solid fa-calendar-check",
             _ when ContainsAny(normalizedUrl, "qrcode", "qr-code", "qr_code") => "fa-solid fa-qrcode",
             _ when ContainsAny(normalizedUrl, "setting", "settings", "cai-dat", "cai_dat") => "fa-solid fa-sliders",
+            _ when ContainsAny(normalizedUrl, "zalo", "quan-ly-zalo") => "fa-solid fa-comments",
             _ => "fa-solid fa-grid-2"
         };
     }

@@ -12,6 +12,7 @@ public sealed class ZaloOptions
     public string ApiBaseUrl { get; set; } = "https://openapi.zalo.me";
     public string OAuthBaseUrl { get; set; } = "https://oauth.zaloapp.com";
     public string? PublicBaseUrl { get; set; }
+    public string? WebhookUrl { get; set; }
     public int RefreshBeforeExpiryMinutes { get; set; } = 120;
     public int AccessTokenLifetimeHours { get; set; } = 25;
     public string TextMessageEndpoint { get; set; } = "/v3.0/oa/message/cs";

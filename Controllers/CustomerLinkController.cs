@@ -2,16 +2,13 @@ using ApptechDashboard.Configuration;
 using ApptechDashboard.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace ApptechDashboard.Controllers;
 
 public sealed class CustomerLinkController(
     ICustomerLinkService customerLinkService,
-    IOptions<ZaloOptions> options) : Controller
+    IZaloSettingsService settingsService) : Controller
 {
-    private readonly ZaloOptions _options = options.Value;
-
     [Authorize]
     [HttpPost("api/customer-links")]
     public async Task<IActionResult> Create([FromBody] CustomerLinkCreateRequest request, CancellationToken cancellationToken)
@@ -46,7 +43,7 @@ public sealed class CustomerLinkController(
             return Content(RenderInvalidLink(), "text/html; charset=utf-8");
         }
 
-        return Content(RenderConnectPage(link, _options), "text/html; charset=utf-8");
+        return Content(RenderConnectPage(link, settingsService.Current), "text/html; charset=utf-8");
     }
 
     private static string RenderInvalidLink()

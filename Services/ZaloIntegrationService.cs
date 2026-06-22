@@ -23,6 +23,11 @@ public interface IZaloMessageService
     Task<ZaloSendResult> SendBookingConfirmationAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendBookingReminderAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendRatingRequestAsync(int yeuCauId, CancellationToken cancellationToken = default);
+    Task<ZaloSendResult> SendRatingResultMessageAsync(
+        int yeuCauId,
+        Guid ratingId,
+        int ratingScore,
+        CancellationToken cancellationToken = default);
 }
 
 public interface ICustomerLinkService
@@ -75,7 +80,8 @@ public sealed class ZaloTokenRefreshWorker(
 
 public sealed class ZaloIntegrationService(
     IOptions<SqlServerOptions> sqlOptions,
-    IOptions<ZaloOptions> zaloOptions,
+    IZaloSettingsService zaloSettings,
+    IZaloRequestService zaloRequestService,
     IConfiguration configuration,
     IHttpClientFactory httpClientFactory,
     ILogger<ZaloIntegrationService> logger)
@@ -94,7 +100,7 @@ public sealed class ZaloIntegrationService(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
-    private readonly ZaloOptions _zaloOptions = zaloOptions.Value;
+    private ZaloOptions _zaloOptions => zaloSettings.Current;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly ILogger<ZaloIntegrationService> _logger = logger;
@@ -324,6 +330,27 @@ public sealed class ZaloIntegrationService(
         return await SendMessageAsync(booking, message, "RatingRequest", cancellationToken);
     }
 
+    public async Task<ZaloSendResult> SendRatingResultMessageAsync(
+        int yeuCauId,
+        Guid ratingId,
+        int ratingScore,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await LoadBookingAsync(yeuCauId, cancellationToken);
+        if (booking is null)
+        {
+            return ZaloSendResult.Fail("Không tìm thấy phiếu yêu cầu.");
+        }
+
+        var message = $"Cảm ơn anh/chị đã đánh giá chất lượng công việc. Phiếu yêu cầu: {booking.RequestId}. Kết quả đánh giá: {ratingScore}/5 sao. Công ty đã ghi nhận phản hồi của anh/chị.";
+        return await SendMessageAsync(
+            booking,
+            message,
+            "RatingResult",
+            cancellationToken,
+            requireZaloUserId: true);
+    }
+
     public async Task<ZaloCustomerLinkResult> CreateLinkAsync(
         int customerId,
         int? requestId,
@@ -438,6 +465,12 @@ public sealed class ZaloIntegrationService(
                     ? "FollowOA"
                     : "Message";
             await UpsertMappingFromExternalIdAsync(connection, userExternalId, zaloUserId, oaId, source, cancellationToken);
+            await zaloRequestService.MapWebhookUserAsync(
+                userExternalId,
+                zaloUserId,
+                oaId,
+                source,
+                cancellationToken);
         }
 
         await MarkWebhookProcessedAsync(connection, webhookId, cancellationToken);
@@ -448,13 +481,31 @@ public sealed class ZaloIntegrationService(
         ZaloBookingInfo booking,
         string message,
         string messageType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireZaloUserId = false)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await EnsureSchemaAsync(connection, cancellationToken);
         var zaloUserId = await FindZaloUserIdAsync(connection, booking.CustomerId, cancellationToken)
             ?? booking.CustomerZaloId;
         var phone = booking.PhoneNumber;
+
+        if (requireZaloUserId && string.IsNullOrWhiteSpace(zaloUserId))
+        {
+            await SaveMessageLogAsync(
+                connection,
+                booking.CustomerId,
+                booking.RequestId,
+                null,
+                phone,
+                "PendingSendZaloMessage",
+                "{}",
+                null,
+                false,
+                $"Pending {messageType}: customer has no Zalo user id.",
+                cancellationToken);
+            return ZaloSendResult.Fail("Khách hàng chưa kết nối Zalo. Tin nhắn đã được lưu ở trạng thái chờ.");
+        }
 
         if (string.IsNullOrWhiteSpace(zaloUserId) && string.IsNullOrWhiteSpace(phone))
         {

@@ -10,6 +10,7 @@ public interface IPermissionCatalogService
     Task EnsureYeuCauWorkEmployeePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureYeuCauCheckinDistancePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureCongViecReportPermissionsAsync(CancellationToken cancellationToken = default);
+    Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class PermissionCatalogService(
@@ -21,6 +22,7 @@ public sealed class PermissionCatalogService(
     public const string DeleteWorkEmployeePermissionCode = "YeuCau_WorkEmployee_Delete";
     public const string ToggleCheckinDistancePermissionCode = "YeuCau_CheckinDistance_Update";
     public const string WorkReportViewPermissionCode = "Report_Work_View";
+    public const string ZaloManagementViewPermissionCode = "Zalo_Manage_View";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -217,6 +219,71 @@ public sealed class PermissionCatalogService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to ensure work report permissions.");
+        }
+    }
+
+    public async Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
+                ? _connectionString
+                : _sqlOptions.BuildConnectionString();
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                IF NOT EXISTS (SELECT 1 FROM [TblChucNang] WHERE MaChucNang = N'System')
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'System', NULL, N'He thong', N'Nhom cau hinh he thong', NULL, N'90', N'fa-solid fa-sliders', 1);
+                END;
+
+                DECLARE @FunctionId int;
+
+                SELECT TOP (1) @FunctionId = ID
+                FROM [TblChucNang]
+                WHERE MaChucNang = N'Zalo_Manage';
+
+                IF @FunctionId IS NULL
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'Zalo_Manage', N'System', N'Quan ly Zalo OA', N'Quan ly ket noi, token, webhook va log Zalo OA', N'/quan-ly-zalo', N'90.2', N'fa-solid fa-comments', 1);
+
+                    SET @FunctionId = CONVERT(int, SCOPE_IDENTITY());
+                END
+                ELSE
+                BEGIN
+                    UPDATE [TblChucNang]
+                    SET MaChucNangCha = N'System',
+                        TenChucNang = N'Quan ly Zalo OA',
+                        MieuTa = N'Quan ly ket noi, token, webhook va log Zalo OA',
+                        URL = N'/quan-ly-zalo',
+                        ThuTuHienThi = N'90.2',
+                        CssClass = N'fa-solid fa-comments',
+                        TrangThaiSuDung = 1
+                    WHERE ID = @FunctionId;
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @ViewPermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, N'Xem quan ly Zalo OA', @ViewPermissionCode, N'Cho phep xem trang quan ly Zalo OA.');
+                END;
+                """;
+            command.Parameters.Add(new SqlParameter("@ViewPermissionCode", SqlDbType.NVarChar, 250) { Value = ZaloManagementViewPermissionCode });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure Zalo management permissions.");
         }
     }
 }

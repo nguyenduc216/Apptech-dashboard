@@ -2,7 +2,6 @@ using ApptechDashboard.Configuration;
 using ApptechDashboard.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace ApptechDashboard.Controllers;
 
@@ -10,28 +9,31 @@ namespace ApptechDashboard.Controllers;
 [Route("api/zalo/oauth")]
 public sealed class ZaloOAuthController(
     IZaloAuthService zaloAuthService,
-    IOptions<ZaloOptions> options) : Controller
+    IZaloSettingsService settingsService) : Controller
 {
-    private readonly ZaloOptions _options = options.Value;
-
     [HttpGet("start")]
     public IActionResult Start()
     {
-        if (string.IsNullOrWhiteSpace(_options.AppId) || string.IsNullOrWhiteSpace(_options.OAuthRedirectUri))
+        var options = settingsService.Current;
+        if (!IsConfigured(options.AppId) ||
+            !IsConfigured(options.AppSecret) ||
+            string.IsNullOrWhiteSpace(options.OAuthRedirectUri))
         {
-            return BadRequest(new { message = "Missing Zalo AppId or OAuthRedirectUri." });
+            TempData["StatusMessage"] = "Thieu Zalo App ID, App Secret hoac OAuth Callback URL. Vui long bo sung cau hinh.";
+            TempData["StatusType"] = "error";
+            return Redirect("/admin/zalo-settings");
         }
 
-        var authorizeBase = string.IsNullOrWhiteSpace(_options.OAuthBaseUrl)
+        var authorizeBase = string.IsNullOrWhiteSpace(options.OAuthBaseUrl)
             ? "https://oauth.zaloapp.com"
-            : _options.OAuthBaseUrl.TrimEnd('/');
-        var path = string.IsNullOrWhiteSpace(_options.OAuthAuthorizePath)
+            : options.OAuthBaseUrl.TrimEnd('/');
+        var path = string.IsNullOrWhiteSpace(options.OAuthAuthorizePath)
             ? "/v4/oa/permission"
-            : _options.OAuthAuthorizePath.StartsWith('/') ? _options.OAuthAuthorizePath : "/" + _options.OAuthAuthorizePath;
+            : options.OAuthAuthorizePath.StartsWith('/') ? options.OAuthAuthorizePath : "/" + options.OAuthAuthorizePath;
         var state = Guid.NewGuid().ToString("N");
         HttpContext.Session.SetString("zalo_oauth_state", state);
 
-        var url = $"{authorizeBase}{path}?app_id={Uri.EscapeDataString(_options.AppId)}&redirect_uri={Uri.EscapeDataString(_options.OAuthRedirectUri)}&state={Uri.EscapeDataString(state)}";
+        var url = $"{authorizeBase}{path}?app_id={Uri.EscapeDataString(options.AppId!)}&redirect_uri={Uri.EscapeDataString(options.OAuthRedirectUri!)}&state={Uri.EscapeDataString(state)}";
         return Redirect(url);
     }
 
@@ -46,15 +48,37 @@ public sealed class ZaloOAuthController(
         }
 
         var result = await zaloAuthService.ExchangeAuthorizationCodeAsync(code ?? string.Empty, cancellationToken);
+        if (!result.Succeeded &&
+            result.Message.Contains("Missing Zalo AppId/AppSecret", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["StatusMessage"] = "Thieu Zalo App ID hoac App Secret. Vui long bo sung cau hinh.";
+            TempData["StatusType"] = "error";
+            return Redirect("/admin/zalo-settings");
+        }
+
         return result.Succeeded
-            ? Ok(new { message = result.Message })
+            ? Redirect("/admin/zalo-settings")
             : BadRequest(new { message = result.Message });
     }
 
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh(CancellationToken cancellationToken)
     {
-        await zaloAuthService.ForceRefreshTokenAsync(cancellationToken);
-        return Ok(new { message = "Zalo token refreshed." });
+        try
+        {
+            await zaloAuthService.ForceRefreshTokenAsync(cancellationToken);
+            return Ok(new { message = "Zalo token refreshed." });
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("Missing Zalo AppId/AppSecret", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["StatusMessage"] = "Thieu Zalo App ID hoac App Secret. Vui long bo sung cau hinh.";
+            TempData["StatusType"] = "error";
+            return Redirect("/admin/zalo-settings");
+        }
     }
+
+    private static bool IsConfigured(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        !value.Trim().StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
 }

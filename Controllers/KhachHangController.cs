@@ -11,10 +11,12 @@ namespace ApptechDashboard.Controllers;
 [Authorize]
 public class KhachHangController(
     IKhachHangService khachHangService,
+    ICustomerLinkService customerLinkService,
     IUserAccountService userAccountService) : Controller
 {
     private const int DefaultPageSize = 10;
     private readonly IKhachHangService _khachHangService = khachHangService;
+    private readonly ICustomerLinkService _customerLinkService = customerLinkService;
     private readonly IUserAccountService _userAccountService = userAccountService;
 
     [HttpGet]
@@ -111,6 +113,50 @@ public class KhachHangController(
             id = model.Id,
             keyword = model.Keyword,
             page = Math.Max(model.Page, 1)
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateZaloLink(
+        int id,
+        string? keyword,
+        int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await _khachHangService.GetByIdAsync(id, cancellationToken);
+        if (customer is null)
+        {
+            TempData["StatusMessage"] = "Không tìm thấy khách hàng để tạo link Zalo.";
+            TempData["StatusType"] = "error";
+            return RedirectToAction(nameof(Index), BuildRouteValues(keyword, page));
+        }
+
+        try
+        {
+            var result = await _customerLinkService.CreateLinkAsync(
+                id,
+                requestId: null,
+                purpose: "ConnectZalo",
+                expiresInDays: 30,
+                cancellationToken);
+
+            TempData["ZaloCustomerLink"] = result.Link;
+            TempData["ZaloCustomerLinkToken"] = result.Token;
+            TempData["StatusMessage"] = "Đã tạo link Zalo riêng cho khách hàng. Link có hiệu lực trong 30 ngày.";
+            TempData["StatusType"] = "success";
+        }
+        catch (Exception ex)
+        {
+            TempData["StatusMessage"] = $"Không thể tạo link Zalo: {ex.Message}";
+            TempData["StatusType"] = "error";
+        }
+
+        return RedirectToAction(nameof(Edit), new
+        {
+            id,
+            keyword,
+            page = Math.Max(page, 1)
         });
     }
 
@@ -273,6 +319,8 @@ public class KhachHangController(
             Form = form,
             StatusMessage = TempData["StatusMessage"]?.ToString(),
             StatusType = TempData["StatusType"]?.ToString() ?? "info",
+            ZaloCustomerLink = TempData["ZaloCustomerLink"]?.ToString(),
+            ZaloCustomerLinkToken = TempData["ZaloCustomerLinkToken"]?.ToString(),
             CurrentUserIsAdmin = currentUserIsAdmin
         };
     }

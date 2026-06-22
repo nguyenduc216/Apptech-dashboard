@@ -199,6 +199,12 @@ public class YeuCauController(
         var result = await _zaloMessageService.SendBookingConfirmationAsync(id, HttpContext.RequestAborted);
         TempData["StatusMessage"] = result.Message;
         TempData["StatusType"] = result.Succeeded ? "success" : "error";
+        if (!result.Succeeded &&
+            result.Message.Contains("Missing Zalo AppId/AppSecret", StringComparison.OrdinalIgnoreCase))
+        {
+            return Redirect("/admin/zalo-settings");
+        }
+
         return RedirectToAction(nameof(Edit), new
         {
             id,
