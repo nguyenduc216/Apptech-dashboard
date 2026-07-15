@@ -266,6 +266,9 @@ public sealed class YeuCauListQuery
     public DateTime? ExecutionDateTo { get; set; }
     public string? AssigneeKeyword { get; set; }
     public string? WorkStatusFilter { get; set; }
+    public bool? HasRating { get; set; }
+    public int? RatingScore { get; set; }
+    public bool? ZaloConnected { get; set; }
     public int Page { get; set; } = 1;
 }
 
@@ -279,6 +282,9 @@ public sealed class YeuCauFilterState
     public DateTime? ExecutionDateTo { get; set; }
     public string? AssigneeKeyword { get; set; }
     public string? WorkStatusFilter { get; set; }
+    public bool? HasRating { get; set; }
+    public int? RatingScore { get; set; }
+    public bool? ZaloConnected { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
@@ -311,6 +317,12 @@ public sealed class YeuCauListItem
     public IReadOnlyList<YeuCauNhanVienLienKetItem> NhanVienLienKet { get; set; } = [];
     public int SoCongViec { get; set; }
     public int SoCongViecHoanThanh { get; set; }
+    public bool HasCustomerRating { get; set; }
+    public int? CustomerRatingScore { get; set; }
+    public DateTime? CustomerRatingSubmittedAt { get; set; }
+    public bool ZaloConnected { get; set; }
+    public string? ZaloDisplayName { get; set; }
+    public string? ZaloPhoneNumber { get; set; }
     public int TiLeHoanThanh => SoCongViec <= 0
         ? 0
         : (int)Math.Round(SoCongViecHoanThanh * 100m / SoCongViec);
@@ -324,6 +336,12 @@ public sealed class YeuCauListItem
     public string TrangThaiHienThi => YeuCauTrangThaiCatalog.Normalize(TrangThaiYeuCau);
 
     public string TrangThaiCssClass => YeuCauTrangThaiCatalog.GetCssClass(TrangThaiYeuCau);
+
+    public string CustomerRatingDisplay => HasCustomerRating && CustomerRatingScore.HasValue
+        ? $"{CustomerRatingScore.Value}/5"
+        : "Chua danh gia";
+
+    public string ZaloConnectionDisplay => ZaloConnected ? "Da ket noi Zalo" : "Chua ket noi Zalo";
 }
 
 public sealed class YeuCauLocationOption
@@ -647,6 +665,11 @@ public sealed class YeuCauCheckinItem
     public string? ImgPathCheckOut { get; set; }
     public string? GhiChuNhanVien { get; set; }
     public string? GhiChuCheckOut { get; set; }
+    public bool IsProxyAction { get; set; }
+    public string? ProxyCheckInBy { get; set; }
+    public DateTime? ProxyCheckInAt { get; set; }
+    public string? ProxyCheckOutBy { get; set; }
+    public DateTime? ProxyCheckOutAt { get; set; }
     public bool IsOpen => ThoiDiem.HasValue && !ThoiDiemCheckOut.HasValue;
 
     public string CustomerDisplay => string.IsNullOrWhiteSpace(TenKhachHang)
@@ -673,6 +696,9 @@ public sealed class YeuCauCheckinCreateModel
     public decimal? LatAddress { get; set; }
     public string? ImgPath { get; set; }
     public string? GhiChuNhanVien { get; set; }
+    public bool IsProxyAction { get; set; }
+    public string? ProxyActionBy { get; set; }
+    public Guid? ProxyActionAccountId { get; set; }
 }
 
 public sealed class YeuCauCheckoutCreateModel
@@ -685,6 +711,9 @@ public sealed class YeuCauCheckoutCreateModel
     public decimal? LatAddressCheckOut { get; set; }
     public string? ImgPathCheckOut { get; set; }
     public string? GhiChuCheckOut { get; set; }
+    public bool IsProxyAction { get; set; }
+    public string? ProxyActionBy { get; set; }
+    public Guid? ProxyActionAccountId { get; set; }
 }
 
 public sealed class YeuCauManagementViewModel
@@ -734,8 +763,11 @@ public sealed class YeuCauDetailViewModel
     public string StatusType { get; set; } = "info";
     public int? CurrentEmployeeId { get; set; }
     public bool CurrentUserIsAdmin { get; set; }
+    public bool CanManageCheckinProxy { get; set; }
     public bool CanToggleCheckinDistanceConstraint { get; set; }
     public decimal? CheckinDistanceLimitMeters { get; set; }
+    public RequestRatingInfo? CustomerRating { get; set; }
+    public CustomerZaloProfileInfo? CustomerZaloProfile { get; set; }
 
     public bool IsEditMode => Form.Id.HasValue && Form.Id.Value > 0;
 

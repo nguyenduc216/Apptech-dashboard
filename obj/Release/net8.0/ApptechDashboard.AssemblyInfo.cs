@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ApptechDashboard")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+70dea4ba4711e1772e523ed9525e34ad54961f7d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+96eaf058b1f81555b0d0619cfb247ed2a8d9c5f6")]
 [assembly: System.Reflection.AssemblyProductAttribute("ApptechDashboard")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ApptechDashboard")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

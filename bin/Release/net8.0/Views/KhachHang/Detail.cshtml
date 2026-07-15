@@ -71,6 +71,19 @@
 
                 @if (canModifyCustomer)
                 {
+                @if (Model.IsEditMode)
+                {
+                    <button type="submit"
+                            class="secondary-button zalo-customer-link-button"
+                            asp-action="CreateZaloLink"
+                            asp-route-id="@Model.Form.Id"
+                            asp-route-keyword="@Model.Filter.Keyword"
+                            asp-route-page="@Model.Filter.Page"
+                            formnovalidate>
+                        <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                        <span>Tạo link quan tâm Zalo</span>
+                    </button>
+                }
                 <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
                     <span class="button-content">
                         <i class="fa-solid @(Model.IsEditMode ? "fa-floppy-disk" : "fa-plus")" aria-hidden="true"></i>
@@ -84,6 +97,45 @@
                 }
             </div>
         </article>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ZaloCustomerLink))
+        {
+            <article class="panel zalo-customer-link-panel" data-zalo-customer-link-panel>
+                <div class="zalo-customer-link-heading">
+                    <div>
+                        <h3>Link kết nối Zalo của khách hàng</h3>
+                        <p>Gửi link này để khách hàng mở Zalo OA. Link được gắn riêng với khách hàng hiện tại và hết hạn sau 30 ngày.</p>
+                    </div>
+                    <span class="zalo-link-status">
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                        Sẵn sàng gửi
+                    </span>
+                </div>
+                <div class="zalo-customer-link-row">
+                    <input type="text"
+                           value="@Model.ZaloCustomerLink"
+                           readonly
+                           aria-label="Link kết nối Zalo của khách hàng"
+                           data-zalo-customer-link />
+                    <button type="button" class="secondary-button" data-zalo-copy-link>
+                        <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                        <span>Sao chép</span>
+                    </button>
+                    <button type="button" class="secondary-button" data-zalo-share-link>
+                        <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                        <span>Gửi link</span>
+                    </button>
+                    <a class="primary-button"
+                       href="@Model.ZaloCustomerLink"
+                       target="_blank"
+                       rel="noopener">
+                        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                        <span>Mở link</span>
+                    </a>
+                </div>
+                <div class="zalo-customer-link-feedback" data-zalo-link-feedback aria-live="polite"></div>
+            </article>
+        }
 
         @if (summaryErrors.Length > 0)
         {
@@ -190,6 +242,17 @@
                             </span>
                             <span asp-validation-for="Form.ZaloID" class="login-field-error"></span>
                         </label>
+
+                        <div class="login-field">
+                            <span>Trang thai Zalo OA</span>
+                            <div class="zalo-profile-status-box @(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "is-empty" : "is-connected")">
+                                <i class="fa-solid @(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "fa-link-slash" : "fa-circle-check")" aria-hidden="true"></i>
+                                <div>
+                                    <strong>@(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "Chua ket noi Zalo" : "Da ket noi Zalo OA")</strong>
+                                    <span>@(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "Gui link/QR Zalo de khach quan tam OA va lay ID." : $"Zalo User ID: {Model.Form.ZaloID}")</span>
+                                </div>
+                            </div>
+                        </div>
 
                         <label class="login-field field-span-2 @(diaChiHasError ? "has-error" : "")">
                             <span>Địa chỉ khách hàng</span>
@@ -676,6 +739,28 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="" />
+    <style>
+        .zalo-customer-link-button { gap: 8px; }
+        .zalo-customer-link-panel { display: grid; gap: 14px; border-color: #9fdccc; background: #f4fcf9; }
+        .zalo-customer-link-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+        .zalo-customer-link-heading h3 { margin: 0 0 5px; color: #073f38; }
+        .zalo-customer-link-heading p { margin: 0; color: #55716d; }
+        .zalo-link-status { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: #087359; font-weight: 800; }
+        .zalo-customer-link-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; gap: 10px; }
+        .zalo-customer-link-row input { min-width: 0; min-height: 46px; padding: 0 13px; border: 1px solid #b9dcd3; border-radius: 7px; background: #fff; color: #164b44; font: inherit; }
+        .zalo-customer-link-feedback { min-height: 20px; color: #087359; font-weight: 700; font-size: 13px; }
+        .zalo-profile-status-box { min-height: 46px; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 1px solid #cfe5df; border-radius: 7px; background: #f5fbf9; color: #164b44; }
+        .zalo-profile-status-box.is-connected { border-color: #91d9c8; background: #edfdf8; }
+        .zalo-profile-status-box.is-empty { background: #f8fbfa; color: #607b76; }
+        .zalo-profile-status-box i { color: #0b806b; }
+        .zalo-profile-status-box span { display: block; margin-top: 3px; font-size: 13px; color: #607b76; overflow-wrap: anywhere; }
+        @@media (max-width: 760px) {
+            .zalo-customer-link-heading { flex-direction: column; }
+            .zalo-customer-link-row { grid-template-columns: 1fr 1fr; }
+            .zalo-customer-link-row input { grid-column: 1 / -1; }
+            .zalo-customer-link-row .primary-button { grid-column: 1 / -1; }
+        }
+    </style>
 }
 
 @section Scripts {
@@ -683,6 +768,63 @@
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
     <script>
+        (function () {
+            const panel = document.querySelector("[data-zalo-customer-link-panel]");
+            const input = panel?.querySelector("[data-zalo-customer-link]");
+            const copyButton = panel?.querySelector("[data-zalo-copy-link]");
+            const shareButton = panel?.querySelector("[data-zalo-share-link]");
+            const feedback = panel?.querySelector("[data-zalo-link-feedback]");
+            if (!(input instanceof HTMLInputElement)) {
+                return;
+            }
+
+            const showFeedback = (message) => {
+                if (feedback instanceof HTMLElement) {
+                    feedback.textContent = message;
+                }
+            };
+
+            copyButton?.addEventListener("click", async () => {
+                try {
+                    await navigator.clipboard.writeText(input.value);
+                    showFeedback("Đã sao chép link Zalo.");
+                } catch {
+                    input.select();
+                    document.execCommand("copy");
+                    showFeedback("Đã sao chép link Zalo.");
+                }
+            });
+
+            shareButton?.addEventListener("click", async () => {
+                const shareData = {
+                    title: "Kết nối Zalo OA",
+                    text: "Mời bạn mở link để quan tâm Zalo OA và nhận thông báo lịch làm việc.",
+                    url: input.value
+                };
+
+                if (navigator.share) {
+                    try {
+                        await navigator.share(shareData);
+                        showFeedback("Đã mở chức năng gửi link.");
+                    } catch (error) {
+                        if (error?.name !== "AbortError") {
+                            showFeedback("Không thể mở chức năng gửi link.");
+                        }
+                    }
+                    return;
+                }
+
+                try {
+                    await navigator.clipboard.writeText(input.value);
+                    showFeedback("Thiết bị không hỗ trợ chia sẻ. Link đã được sao chép.");
+                } catch {
+                    input.select();
+                    document.execCommand("copy");
+                    showFeedback("Thiết bị không hỗ trợ chia sẻ. Link đã được sao chép.");
+                }
+            });
+        })();
+
         (function () {
             const root = document.querySelector("[data-khach-hang-detail-root]");
             if (!(root instanceof HTMLFormElement)) {

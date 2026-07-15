@@ -76,7 +76,7 @@ public sealed class HangHoaPhanLoaiModel
 {
     public int? Id { get; set; }
 
-    [StringLength(250, ErrorMessage = "TÃªn phÃ¢n loáº¡i tá»‘i Ä‘a 250 kÃ½ tá»±.")]
+    [StringLength(250, ErrorMessage = "Tên phân loại tối đa 250 ký tự.")]
     public string? TenPhanLoai { get; set; }
 
     public bool TrangThaiSuDung { get; set; } = true;

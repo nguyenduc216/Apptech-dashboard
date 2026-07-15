@@ -2043,6 +2043,70 @@ body.menu-open {
     gap: 14px;
 }
 
+.attendance-settings-form {
+    display: grid;
+    gap: 16px;
+}
+
+.attendance-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.attendance-time-field {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    color: #244f49;
+    font-weight: 700;
+}
+
+.attendance-time-field input {
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border: 1px solid #c9ddd8;
+    border-radius: 7px;
+    background: #fff;
+    color: #123d32;
+    font: inherit;
+}
+
+.attendance-time-field input:focus {
+    border-color: #17b890;
+    outline: 3px solid rgba(23, 184, 144, 0.13);
+}
+
+.attendance-time-field small {
+    min-height: 18px;
+    color: #b53737;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.settings-status-message {
+    padding: 11px 13px;
+    border: 1px solid #cfe5df;
+    border-radius: 7px;
+    background: #f5fbf9;
+    color: #08735f;
+    font-weight: 700;
+}
+
+.settings-status-message.error {
+    border-color: #f3c4c4;
+    background: #fff2f2;
+    color: #b53737;
+}
+
+.settings-status-message.success {
+    border-color: #b9eadb;
+    background: #effbf6;
+    color: #08735f;
+}
+
 .settings-permission-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2334,12 +2398,20 @@ body.menu-open {
 }
 
 @media (max-width: 920px) {
+    .attendance-settings-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .settings-permission-grid {
         grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 620px) {
+    .attendance-settings-grid {
+        grid-template-columns: 1fr;
+    }
+
     .settings-header p {
         display: none;
     }

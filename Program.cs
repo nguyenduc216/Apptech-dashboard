@@ -61,6 +61,7 @@ builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IYeuCauService, YeuCauService>();
 builder.Services.AddScoped<IChamCongService, ChamCongService>();
 builder.Services.AddScoped<IChamCongReportService, ChamCongReportService>();
+builder.Services.AddScoped<IAttendanceSettingsService, AttendanceSettingsService>();
 builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();
@@ -91,6 +92,7 @@ using (var scope = app.Services.CreateScope())
     var permissionCatalogService = scope.ServiceProvider.GetRequiredService<IPermissionCatalogService>();
     await permissionCatalogService.EnsureYeuCauWorkEmployeePermissionsAsync();
     await permissionCatalogService.EnsureYeuCauCheckinDistancePermissionsAsync();
+    await permissionCatalogService.EnsureYeuCauCheckinProxyPermissionsAsync();
     await permissionCatalogService.EnsureCongViecReportPermissionsAsync();
     await permissionCatalogService.EnsureZaloManagementPermissionsAsync();
 }

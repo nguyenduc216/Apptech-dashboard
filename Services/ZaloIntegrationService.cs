@@ -68,6 +68,10 @@ public sealed class ZaloTokenRefreshWorker(
             {
                 break;
             }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogWarning("Zalo token refresh skipped: {Message}", ex.Message);
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Zalo token refresh worker failed.");
@@ -96,6 +100,7 @@ public sealed class ZaloIntegrationService(
     private const string CustomerTableName = "TblKhachHang";
     private const string RequestTableName = "TblYeuCau";
     private const string LocationTableName = "TblKhachHangDiaDiem";
+    private const string ConnectAcknowledgementMessage = "C\u1EA3m \u01A1n anh/ch\u1ECB \u0111\u00E3 k\u1EBFt n\u1ED1i t\u1EDBi zalo OA. Ch\u00FAng t\u00F4i \u0111\u00E3 ghi nh\u1EADn th\u00F4ng tin v\u00E0o h\u1EC7 th\u1ED1ng AppTech \u0111\u1EC3 h\u1ED7 tr\u1EE3 anh/ch\u1ECB t\u1ED1t h\u01A1n trong th\u1EDDi gian t\u1EDBi";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -145,6 +150,12 @@ public sealed class ZaloIntegrationService(
             return;
         }
 
+        if (IsInvalidRefreshTokenError(token.LastError))
+        {
+            _logger.LogWarning("Zalo token refresh is paused because the stored refresh token is invalid. Reconnect the Zalo OA to get a new token.");
+            return;
+        }
+
         await ForceRefreshTokenAsync(cancellationToken);
     }
 
@@ -189,7 +200,8 @@ public sealed class ZaloIntegrationService(
                 var refreshToken = GetJsonString(root, "refresh_token") ?? token.RefreshToken;
                 if (string.IsNullOrWhiteSpace(accessToken))
                 {
-                    throw new InvalidOperationException("Zalo refresh response missing access_token.");
+                    var errorMessage = BuildZaloTokenErrorMessage(root, responseJson);
+                    throw new InvalidOperationException(errorMessage);
                 }
 
                 var expiresAt = DateTime.UtcNow.AddHours(Math.Max(1, _zaloOptions.AccessTokenLifetimeHours));
@@ -433,6 +445,10 @@ public sealed class ZaloIntegrationService(
         var eventName = "unknown";
         string? userExternalId = null;
         string? zaloUserId = null;
+        string? messageText = null;
+        string? displayName = null;
+        string? avatarUrl = null;
+        string? phoneNumber = null;
         string? oaId = _zaloOptions.OaId;
         string? appId = _zaloOptions.AppId;
 
@@ -443,8 +459,18 @@ public sealed class ZaloIntegrationService(
             eventName = GetJsonString(root, "event_name") ?? GetJsonString(root, "event") ?? eventName;
             oaId = GetJsonString(root, "oa_id") ?? GetJsonString(root, "oaId") ?? oaId;
             appId = GetJsonString(root, "app_id") ?? GetJsonString(root, "appId") ?? appId;
-            userExternalId = FindJsonString(root, "user_external_id");
-            zaloUserId = FindJsonString(root, "user_id") ?? FindJsonString(root, "from_id");
+            userExternalId = FirstNotEmpty(FindJsonString(root, "user_external_id"), FindJsonString(root, "userExternalId"));
+            zaloUserId = FindZaloUserIdFromWebhook(root);
+            messageText = FindIncomingMessageText(root);
+            displayName = FirstNotEmpty(
+                FindNestedString(root, "sender", "display_name", "name", "user_name"),
+                FindJsonString(root, "display_name"),
+                FindJsonString(root, "user_name"));
+            avatarUrl = FirstNotEmpty(
+                FindNestedString(root, "sender", "avatar", "avatar_url"),
+                FindJsonString(root, "avatar_url"),
+                FindJsonString(root, "avatar"));
+            phoneNumber = FirstNotEmpty(FindJsonString(root, "phone"), FindJsonString(root, "phone_number"));
         }
         catch (JsonException ex)
         {
@@ -457,6 +483,16 @@ public sealed class ZaloIntegrationService(
             return new ZaloWebhookProcessResult(false, false, "Invalid signature");
         }
 
+        if (string.IsNullOrWhiteSpace(userExternalId) && !string.IsNullOrWhiteSpace(messageText))
+        {
+            userExternalId = await ResolveExternalIdFromMessageAsync(connection, messageText, cancellationToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(userExternalId) && !string.IsNullOrWhiteSpace(zaloUserId))
+        {
+            userExternalId = await ResolveRecentExternalIdAsync(connection, cancellationToken);
+        }
+
         if (!string.IsNullOrWhiteSpace(userExternalId) && !string.IsNullOrWhiteSpace(zaloUserId))
         {
             var source = eventName.Contains("widget", StringComparison.OrdinalIgnoreCase)
@@ -464,19 +500,292 @@ public sealed class ZaloIntegrationService(
                 : eventName.Contains("follow", StringComparison.OrdinalIgnoreCase)
                     ? "FollowOA"
                     : "Message";
+            var profile = await TryLoadZaloUserProfileAsync(zaloUserId, cancellationToken);
+            displayName = FirstNotEmpty(profile.DisplayName, displayName);
+            avatarUrl = FirstNotEmpty(profile.AvatarUrl, avatarUrl);
+            phoneNumber = FirstNotEmpty(profile.PhoneNumber, phoneNumber);
+
             await UpsertMappingFromExternalIdAsync(connection, userExternalId, zaloUserId, oaId, source, cancellationToken);
             await zaloRequestService.MapWebhookUserAsync(
                 userExternalId,
                 zaloUserId,
                 oaId,
                 source,
+                displayName,
+                avatarUrl,
+                phoneNumber,
                 cancellationToken);
+
+            var context = await ResolveCustomerContextByExternalIdAsync(connection, userExternalId, cancellationToken);
+            if (context is not null)
+            {
+                await SendDirectZaloMessageAsync(
+                    connection,
+                    context.CustomerId,
+                    context.BookingId,
+                    zaloUserId,
+                    ConnectAcknowledgementMessage,
+                    "ZaloConnectAcknowledgement",
+                    cancellationToken);
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(zaloUserId))
+        {
+            _logger.LogInformation(
+                "Zalo webhook {EventName} from {ZaloUserId} had no customer link context, so no customer was mapped.",
+                eventName,
+                zaloUserId);
         }
 
         await MarkWebhookProcessedAsync(connection, webhookId, cancellationToken);
         return new ZaloWebhookProcessResult(true, true, eventName);
     }
 
+    private async Task<string?> ResolveExternalIdFromMessageAsync(SqlConnection connection, string messageText, CancellationToken cancellationToken)
+    {
+        foreach (var candidate in ExtractMessageCandidates(messageText))
+        {
+            var externalId = await FindExternalIdByCandidateAsync(connection, candidate, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(externalId))
+            {
+                return externalId;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string?> FindExternalIdByCandidateAsync(SqlConnection connection, string candidate, CancellationToken cancellationToken)
+    {
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT TOP (1) UserExternalId
+                FROM [{LinkTableName}]
+                WHERE UserExternalId = @Candidate OR Token = @Candidate
+                ORDER BY CreatedAtUtc DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@Candidate", SqlDbType.NVarChar, 200) { Value = candidate });
+            var externalId = (await command.ExecuteScalarAsync(cancellationToken))?.ToString();
+            if (!string.IsNullOrWhiteSpace(externalId))
+            {
+                return externalId;
+            }
+        }
+
+        if (!await TableExistsAsync(connection, "TblZaloRequestLinks", cancellationToken))
+        {
+            return null;
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                SELECT TOP (1) UserExternalId
+                FROM [TblZaloRequestLinks]
+                WHERE UserExternalId = @Candidate OR Token = @Candidate
+                ORDER BY CreatedAtUtc DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@Candidate", SqlDbType.NVarChar, 200) { Value = candidate });
+            return (await command.ExecuteScalarAsync(cancellationToken))?.ToString();
+        }
+    }
+
+    private async Task<string?> ResolveRecentExternalIdAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        var candidates = new List<string>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT TOP (2) UserExternalId
+                FROM [{LinkTableName}]
+                WHERE LastClickedAtUtc >= DATEADD(MINUTE, -20, SYSUTCDATETIME())
+                  AND IsUsed = 0
+                  AND NULLIF(LTRIM(RTRIM(UserExternalId)), N'') IS NOT NULL
+                ORDER BY LastClickedAtUtc DESC
+                """;
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                candidates.Add(reader.GetString(0));
+            }
+        }
+
+        if (await TableExistsAsync(connection, "TblZaloRequestLinks", cancellationToken))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT TOP (2) UserExternalId
+                FROM [TblZaloRequestLinks]
+                WHERE LastOpenedAtUtc >= DATEADD(MINUTE, -20, SYSUTCDATETIME())
+                  AND Status IN (N'Created', N'Opened')
+                  AND NULLIF(LTRIM(RTRIM(UserExternalId)), N'') IS NOT NULL
+                ORDER BY LastOpenedAtUtc DESC
+                """;
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                candidates.Add(reader.GetString(0));
+            }
+        }
+
+        var uniqueCandidates = candidates.Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+        if (uniqueCandidates.Length == 1)
+        {
+            return uniqueCandidates[0];
+        }
+
+        if (uniqueCandidates.Length > 1)
+        {
+            _logger.LogWarning("Zalo webhook without user_external_id matched multiple recently opened links; skipping automatic customer mapping.");
+        }
+
+        return null;
+    }
+
+    private async Task<ZaloWebhookProfile> TryLoadZaloUserProfileAsync(string zaloUserId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(zaloUserId))
+        {
+            return ZaloWebhookProfile.Empty;
+        }
+
+        try
+        {
+            var accessToken = await GetValidAccessTokenAsync(cancellationToken);
+            var data = Uri.EscapeDataString(JsonSerializer.Serialize(new { user_id = zaloUserId.Trim() }, JsonOptions));
+            var client = _httpClientFactory.CreateClient("ZaloOA");
+            using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiUri($"/v3.0/oa/user/detail?data={data}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Zalo user profile lookup failed for {ZaloUserId}: {StatusCode} {Response}", zaloUserId, (int)response.StatusCode, responseJson);
+                return ZaloWebhookProfile.Empty;
+            }
+
+            using var document = JsonDocument.Parse(responseJson);
+            var root = document.RootElement;
+            return new ZaloWebhookProfile(
+                FirstNotEmpty(FindJsonString(root, "display_name"), FindJsonString(root, "name"), FindJsonString(root, "user_name")),
+                FirstNotEmpty(FindJsonString(root, "avatar"), FindJsonString(root, "avatar_url")),
+                FirstNotEmpty(FindJsonString(root, "phone"), FindJsonString(root, "phone_number")));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not load Zalo user profile for {ZaloUserId}.", zaloUserId);
+            return ZaloWebhookProfile.Empty;
+        }
+    }
+
+    private async Task<ZaloCustomerContext?> ResolveCustomerContextByExternalIdAsync(SqlConnection connection, string userExternalId, CancellationToken cancellationToken)
+    {
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT TOP (1) CustomerId, BookingId
+                FROM [{LinkTableName}]
+                WHERE UserExternalId = @UserExternalId
+                ORDER BY CreatedAtUtc DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@UserExternalId", SqlDbType.NVarChar, 200) { Value = userExternalId.Trim() });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return new ZaloCustomerContext(
+                    Convert.ToInt32(reader["CustomerId"]),
+                    reader["BookingId"] == DBNull.Value ? null : Convert.ToInt32(reader["BookingId"]));
+            }
+        }
+
+        if (!await TableExistsAsync(connection, "TblZaloRequestLinks", cancellationToken))
+        {
+            return null;
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                SELECT TOP (1) CustomerId, RequestId
+                FROM [TblZaloRequestLinks]
+                WHERE UserExternalId = @UserExternalId
+                ORDER BY CreatedAtUtc DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@UserExternalId", SqlDbType.NVarChar, 200) { Value = userExternalId.Trim() });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken) && reader["CustomerId"] != DBNull.Value)
+            {
+                return new ZaloCustomerContext(
+                    Convert.ToInt32(reader["CustomerId"]),
+                    reader["RequestId"] == DBNull.Value ? null : Convert.ToInt32(reader["RequestId"]));
+            }
+        }
+
+        return null;
+    }
+
+    private async Task SendDirectZaloMessageAsync(
+        SqlConnection connection,
+        int customerId,
+        int? bookingId,
+        string zaloUserId,
+        string message,
+        string messageType,
+        CancellationToken cancellationToken)
+    {
+        if (await HasSuccessfulMessageLogAsync(connection, customerId, zaloUserId, messageType, cancellationToken))
+        {
+            return;
+        }
+
+        var requestObject = new
+        {
+            recipient = new Dictionary<string, string?> { ["user_id"] = zaloUserId },
+            message = new { text = message }
+        };
+        var requestJson = JsonSerializer.Serialize(requestObject, JsonOptions);
+
+        try
+        {
+            var accessToken = await GetValidAccessTokenAsync(cancellationToken);
+            var client = _httpClientFactory.CreateClient("ZaloOA");
+            using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(_zaloOptions.TextMessageEndpoint));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            request.Content = new StringContent(requestJson, Encoding.UTF8);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            using var response = await client.SendAsync(request, cancellationToken);
+            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            await SaveMessageLogAsync(connection, customerId, bookingId, zaloUserId, null, messageType, requestJson, responseJson, response.IsSuccessStatusCode, response.IsSuccessStatusCode ? null : responseJson, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            await SaveMessageLogAsync(connection, customerId, bookingId, zaloUserId, null, messageType, requestJson, null, false, ex.Message, cancellationToken);
+            _logger.LogError(ex, "Failed to send Zalo direct message {MessageType} for customer {CustomerId}.", messageType, customerId);
+        }
+    }
+
+    private static async Task<bool> HasSuccessfulMessageLogAsync(
+        SqlConnection connection,
+        int customerId,
+        string zaloUserId,
+        string messageType,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [{MessageLogTableName}]
+            WHERE CustomerId = @CustomerId
+              AND ZaloUserId = @ZaloUserId
+              AND MessageType = @MessageType
+              AND IsSuccess = 1
+            """;
+        command.Parameters.Add(new SqlParameter("@CustomerId", SqlDbType.Int) { Value = customerId });
+        command.Parameters.Add(new SqlParameter("@ZaloUserId", SqlDbType.NVarChar, 200) { Value = zaloUserId.Trim() });
+        command.Parameters.Add(new SqlParameter("@MessageType", SqlDbType.NVarChar, 50) { Value = messageType });
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0) > 0;
+    }
     private async Task<ZaloSendResult> SendMessageAsync(
         ZaloBookingInfo booking,
         string message,
@@ -643,6 +952,24 @@ public sealed class ZaloIntegrationService(
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static bool IsInvalidRefreshTokenError(string? error)
+    {
+        return !string.IsNullOrWhiteSpace(error) &&
+            error.Contains("invalid refresh token", StringComparison.OrdinalIgnoreCase);
+    }
+    private static string BuildZaloTokenErrorMessage(JsonElement root, string responseJson)
+    {
+        var errorCode = FirstNotEmpty(GetJsonString(root, "error"), GetJsonString(root, "error_code"), GetJsonString(root, "code"));
+        var errorName = FirstNotEmpty(GetJsonString(root, "error_name"), GetJsonString(root, "error_type"));
+        var message = FirstNotEmpty(GetJsonString(root, "message"), GetJsonString(root, "error_description"), GetJsonString(root, "description"));
+        var detail = string.Join(" - ", new[] { errorCode, errorName, message }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        if (string.IsNullOrWhiteSpace(detail))
+        {
+            detail = TrimTo(responseJson, 1000) ?? "empty response";
+        }
+
+        return $"Zalo refresh response missing access_token. Response: {detail}";
+    }
     private async Task SaveTokenErrorAsync(SqlConnection connection, Guid id, string error, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -824,7 +1151,8 @@ public sealed class ZaloIntegrationService(
 
         if (string.IsNullOrWhiteSpace(_zaloOptions.OaSecretKey))
         {
-            return false;
+            _logger.LogWarning("Zalo webhook signature validation is enabled but OA Secret Key is missing. Accepting webhook without signature validation.");
+            return true;
         }
 
         if (string.IsNullOrWhiteSpace(signature))
@@ -1042,6 +1370,101 @@ public sealed class ZaloIntegrationService(
         return null;
     }
 
+    private static async Task<bool> TableExistsAsync(SqlConnection connection, string tableName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT CASE WHEN OBJECT_ID(@TableName, 'U') IS NULL THEN 0 ELSE 1 END";
+        command.Parameters.Add(new SqlParameter("@TableName", SqlDbType.NVarChar, 256) { Value = "dbo." + tableName });
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0) == 1;
+    }
+
+    private static string? FindZaloUserIdFromWebhook(JsonElement root)
+    {
+        return FirstNotEmpty(
+            FindNestedString(root, "sender", "id", "user_id", "from_id"),
+            FindNestedString(root, "from", "id", "user_id"),
+            FindJsonString(root, "user_id"),
+            FindJsonString(root, "from_id"),
+            FindJsonString(root, "sender_id"));
+    }
+
+    private static string? FindIncomingMessageText(JsonElement root)
+    {
+        return FirstNotEmpty(
+            FindNestedString(root, "message", "text", "content"),
+            FindNestedString(root, "text", "content"),
+            FindJsonString(root, "message_text"),
+            FindJsonString(root, "text"),
+            FindJsonString(root, "content"));
+    }
+
+    private static string? FindNestedString(JsonElement element, string objectName, params string[] propertyNames)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, objectName, StringComparison.OrdinalIgnoreCase) &&
+                    property.Value.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var propertyName in propertyNames)
+                    {
+                        var value = GetJsonString(property.Value, propertyName);
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
+                }
+
+                var child = FindNestedString(property.Value, objectName, propertyNames);
+                if (!string.IsNullOrWhiteSpace(child))
+                {
+                    return child;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var childElement in element.EnumerateArray())
+            {
+                var child = FindNestedString(childElement, objectName, propertyNames);
+                if (!string.IsNullOrWhiteSpace(child))
+                {
+                    return child;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> ExtractMessageCandidates(string messageText)
+    {
+        if (string.IsNullOrWhiteSpace(messageText))
+        {
+            return [];
+        }
+
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var separators = messageText.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : ' ').ToArray();
+        foreach (var token in new string(separators).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (token.Length >= 8)
+            {
+                candidates.Add(token);
+            }
+        }
+
+        var trimmed = messageText.Trim();
+        if (trimmed.Length >= 8 && trimmed.Length <= 300)
+        {
+            candidates.Add(trimmed);
+        }
+
+        return candidates.ToArray();
+    }
+
     private static object ToDbValue(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
@@ -1079,6 +1502,13 @@ public sealed class ZaloIntegrationService(
     {
         var ordinal = reader.GetOrdinal(column);
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
+    }
+
+    private sealed record ZaloCustomerContext(int CustomerId, int? BookingId);
+
+    private sealed record ZaloWebhookProfile(string? DisplayName, string? AvatarUrl, string? PhoneNumber)
+    {
+        public static ZaloWebhookProfile Empty { get; } = new(null, null, null);
     }
 
     private sealed record ZaloTokenRecord(

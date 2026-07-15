@@ -9,6 +9,7 @@ public interface IPermissionCatalogService
 {
     Task EnsureYeuCauWorkEmployeePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureYeuCauCheckinDistancePermissionsAsync(CancellationToken cancellationToken = default);
+    Task EnsureYeuCauCheckinProxyPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureCongViecReportPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default);
 }
@@ -21,6 +22,7 @@ public sealed class PermissionCatalogService(
     public const string AddWorkEmployeePermissionCode = "YeuCau_WorkEmployee_Insert";
     public const string DeleteWorkEmployeePermissionCode = "YeuCau_WorkEmployee_Delete";
     public const string ToggleCheckinDistancePermissionCode = "YeuCau_CheckinDistance_Update";
+    public const string CheckinProxyManagePermissionCode = "YeuCau_CheckinProxy_Manage";
     public const string WorkReportViewPermissionCode = "Report_Work_View";
     public const string ZaloManagementViewPermissionCode = "Zalo_Manage_View";
 
@@ -154,6 +156,64 @@ public sealed class PermissionCatalogService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to ensure YeuCau checkin distance permissions.");
+        }
+    }
+
+    public async Task EnsureYeuCauCheckinProxyPermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
+                ? _connectionString
+                : _sqlOptions.BuildConnectionString();
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                DECLARE @FunctionId int;
+
+                SELECT TOP (1) @FunctionId = ID
+                FROM [TblChucNang]
+                WHERE MaChucNang IN (N'YeuCau', N'YeuCau_Index', N'YeuCau_Manage')
+                   OR URL LIKE N'%YeuCau%'
+                ORDER BY
+                    CASE
+                        WHEN MaChucNang = N'YeuCau' THEN 0
+                        WHEN URL LIKE N'%YeuCau%' THEN 1
+                        ELSE 2
+                    END,
+                    ID;
+
+                IF @FunctionId IS NULL
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, TenChucNang, MieuTa, URL, ThuTuHienThi, TrangThaiSuDung)
+                    VALUES (N'YeuCau', N'Yeu cau', N'Quan ly phieu yeu cau', N'/YeuCau', N'30', 1);
+
+                    SET @FunctionId = CONVERT(int, SCOPE_IDENTITY());
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @PermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, @PermissionName, @PermissionCode, @PermissionDescription);
+                END;
+                """;
+            command.Parameters.Add(new SqlParameter("@PermissionCode", SqlDbType.NVarChar, 250) { Value = CheckinProxyManagePermissionCode });
+            command.Parameters.Add(new SqlParameter("@PermissionName", SqlDbType.NVarChar, 250) { Value = "Checkin/out lam ho" });
+            command.Parameters.Add(new SqlParameter("@PermissionDescription", SqlDbType.NVarChar, 500) { Value = "Cho phep xem toan bo lich su checkin/out trong cong viec va tao checkin/out lam ho nhan vien." });
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure YeuCau checkin proxy permissions.");
         }
     }
 

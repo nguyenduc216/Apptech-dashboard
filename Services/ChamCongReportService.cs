@@ -27,14 +27,22 @@ public sealed class ChamCongReportService(
     private const string CheckinHistoryTableName = "TblCheckinHistory";
     private const string SystemConfigTableName = "TblCauHinhHeThong";
     private const string ChamCongType = "ChamCong";
+    private const string CompanyAttendancePredicate = "(CheckInType = @CheckInType OR (CheckInType IS NULL AND IDYeuCau IS NULL))";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly ILogger<ChamCongReportService> _logger = logger;
 
-    private sealed record AttendanceSchedule(TimeSpan Begin1, TimeSpan End1, TimeSpan Begin2, TimeSpan End2);
-    private sealed record AttendanceShift(TimeSpan Begin, TimeSpan End);
+    private sealed record AttendanceSchedule(TimeSpan Begin1, TimeSpan End1, TimeSpan Begin2, TimeSpan End2, int LateGraceMinutes1, int LateGraceMinutes2);
+    private sealed record AttendanceShift(TimeSpan Begin, TimeSpan End, int LateGraceMinutes);
     private sealed record AttendanceReportCheckin(int EmployeeId, DateTime CheckinTime, DateTime? CheckoutTime);
+    private static readonly AttendanceSchedule DefaultAttendanceSchedule = new(
+        new TimeSpan(7, 30, 0),
+        new TimeSpan(11, 30, 0),
+        new TimeSpan(13, 0, 0),
+        new TimeSpan(17, 0, 0),
+        10,
+        10);
     private sealed record AttendanceReportMetrics(
         Dictionary<int, Dictionary<int, decimal>> HoursByEmployeeDay,
         Dictionary<int, Dictionary<int, int>> LateEarlyMinutesByEmployeeDay,
@@ -250,7 +258,7 @@ public sealed class ChamCongReportService(
                 GhiChuNhanVien,
                 GhiChuCheckOut
             FROM [{CheckinHistoryTableName}]
-            WHERE CheckInType = @CheckInType
+            WHERE {CompanyAttendancePredicate}
               AND ThoiDiem >= @DateFrom
               AND ThoiDiem < @DateTo
               AND IDNhanVien IS NOT NULL
@@ -369,7 +377,8 @@ public sealed class ChamCongReportService(
         var shift = ResolveAttendanceShift(item.CheckinTime.TimeOfDay, schedule);
         var begin = item.CheckinTime.Date.Add(shift.Begin);
         var end = item.CheckinTime.Date.Add(shift.End);
-        var effectiveStart = item.CheckinTime <= begin ? begin : item.CheckinTime;
+        var allowedBegin = begin.AddMinutes(shift.LateGraceMinutes);
+        var effectiveStart = item.CheckinTime <= allowedBegin ? begin : item.CheckinTime;
         var effectiveEnd = item.CheckoutTime.Value <= end ? item.CheckoutTime.Value : end;
 
         return effectiveEnd > effectiveStart
@@ -387,8 +396,9 @@ public sealed class ChamCongReportService(
         var shift = ResolveAttendanceShift(item.CheckinTime.TimeOfDay, schedule);
         var begin = item.CheckinTime.Date.Add(shift.Begin);
         var end = item.CheckinTime.Date.Add(shift.End);
-        var lateMinutes = item.CheckinTime > begin
-            ? Convert.ToDecimal((item.CheckinTime - begin).TotalMinutes)
+        var allowedBegin = begin.AddMinutes(shift.LateGraceMinutes);
+        var lateMinutes = item.CheckinTime > allowedBegin
+            ? Convert.ToDecimal((item.CheckinTime - allowedBegin).TotalMinutes)
             : 0;
         var earlyMinutes = item.CheckoutTime.Value < end
             ? Convert.ToDecimal((end - item.CheckoutTime.Value).TotalMinutes)
@@ -399,9 +409,9 @@ public sealed class ChamCongReportService(
 
     private static AttendanceShift ResolveAttendanceShift(TimeSpan checkinTime, AttendanceSchedule schedule)
     {
-        return checkinTime < schedule.Begin2
-            ? new AttendanceShift(schedule.Begin1, schedule.End1)
-            : new AttendanceShift(schedule.Begin2, schedule.End2);
+        return checkinTime <= schedule.End1
+            ? new AttendanceShift(schedule.Begin1, schedule.End1, schedule.LateGraceMinutes1)
+            : new AttendanceShift(schedule.Begin2, schedule.End2, schedule.LateGraceMinutes2);
     }
 
     private static async Task<AttendanceSchedule?> GetAttendanceScheduleAsync(
@@ -412,13 +422,15 @@ public sealed class ChamCongReportService(
         command.CommandText = $"""
             SELECT MaCauHinh, GiaTri
             FROM [{SystemConfigTableName}]
-            WHERE MaCauHinh IN (N'Begin_1', N'End_1', N'Begin_2', N'End_2')
+            WHERE MaCauHinh IN (N'Begin_1', N'End_1', N'Begin_2', N'End_2', N'LateGraceMinutes_1', N'LateGraceMinutes_2')
             """;
 
         TimeSpan? begin1 = null;
         TimeSpan? end1 = null;
         TimeSpan? begin2 = null;
         TimeSpan? end2 = null;
+        var lateGraceMinutes1 = DefaultAttendanceSchedule.LateGraceMinutes1;
+        var lateGraceMinutes2 = DefaultAttendanceSchedule.LateGraceMinutes2;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -443,12 +455,18 @@ public sealed class ChamCongReportService(
                 case "End_2":
                     end2 = value.Value;
                     break;
+                case "LateGraceMinutes_1":
+                    lateGraceMinutes1 = ParseNullableInt(GetNullableString(reader, "GiaTri")) ?? lateGraceMinutes1;
+                    break;
+                case "LateGraceMinutes_2":
+                    lateGraceMinutes2 = ParseNullableInt(GetNullableString(reader, "GiaTri")) ?? lateGraceMinutes2;
+                    break;
             }
         }
 
         return begin1.HasValue && end1.HasValue && begin2.HasValue && end2.HasValue
-            ? new AttendanceSchedule(begin1.Value, end1.Value, begin2.Value, end2.Value)
-            : null;
+            ? new AttendanceSchedule(begin1.Value, end1.Value, begin2.Value, end2.Value, lateGraceMinutes1, lateGraceMinutes2)
+            : DefaultAttendanceSchedule;
     }
 
     private static decimal RoundMinutesToHalfHour(decimal totalMinutes)
@@ -549,5 +567,12 @@ public sealed class ChamCongReportService(
             string typedString when decimal.TryParse(typedString, out var parsed) => parsed,
             _ => null
         };
+    }
+
+    private static int? ParseNullableInt(string? value)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 240)
+            : null;
     }
 }

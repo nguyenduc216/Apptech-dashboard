@@ -243,6 +243,17 @@
                             <span asp-validation-for="Form.ZaloID" class="login-field-error"></span>
                         </label>
 
+                        <div class="login-field">
+                            <span>Trang thai Zalo OA</span>
+                            <div class="zalo-profile-status-box @(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "is-empty" : "is-connected")">
+                                <i class="fa-solid @(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "fa-link-slash" : "fa-circle-check")" aria-hidden="true"></i>
+                                <div>
+                                    <strong>@(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "Chua ket noi Zalo" : "Da ket noi Zalo OA")</strong>
+                                    <span>@(string.IsNullOrWhiteSpace(Model.Form.ZaloID) ? "Gui link/QR Zalo de khach quan tam OA va lay ID." : $"Zalo User ID: {Model.Form.ZaloID}")</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <label class="login-field field-span-2 @(diaChiHasError ? "has-error" : "")">
                             <span>Địa chỉ khách hàng</span>
                             <span class="login-textarea-shell">
@@ -738,6 +749,11 @@
         .zalo-customer-link-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; gap: 10px; }
         .zalo-customer-link-row input { min-width: 0; min-height: 46px; padding: 0 13px; border: 1px solid #b9dcd3; border-radius: 7px; background: #fff; color: #164b44; font: inherit; }
         .zalo-customer-link-feedback { min-height: 20px; color: #087359; font-weight: 700; font-size: 13px; }
+        .zalo-profile-status-box { min-height: 46px; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 1px solid #cfe5df; border-radius: 7px; background: #f5fbf9; color: #164b44; }
+        .zalo-profile-status-box.is-connected { border-color: #91d9c8; background: #edfdf8; }
+        .zalo-profile-status-box.is-empty { background: #f8fbfa; color: #607b76; }
+        .zalo-profile-status-box i { color: #0b806b; }
+        .zalo-profile-status-box span { display: block; margin-top: 3px; font-size: 13px; color: #607b76; overflow-wrap: anywhere; }
         @@media (max-width: 760px) {
             .zalo-customer-link-heading { flex-direction: column; }
             .zalo-customer-link-row { grid-template-columns: 1fr 1fr; }

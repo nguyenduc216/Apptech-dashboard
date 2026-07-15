@@ -1,6 +1,7 @@
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\ApptechDashboard.exe
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\appsettings.Database.json
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\appsettings.json
+D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\appsettings.Production.json
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\ApptechDashboard.dll
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\ApptechDashboard.deps.json
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\publish\iis\ApptechDashboard.runtimeconfig.json

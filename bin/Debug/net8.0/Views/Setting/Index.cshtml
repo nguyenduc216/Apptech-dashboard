@@ -1,9 +1,69 @@
+@model AttendanceSettingsViewModel
 @{
     ViewData["Title"] = "Cài đặt";
     ViewData["Breadcrumb"] = "Trang chủ / Cài đặt";
 }
 
 <section class="settings-page" data-browser-settings>
+    <article class="panel settings-panel">
+        <div class="panel-header settings-header">
+            <div>
+                <h3>Cấu hình giờ chấm công</h3>
+                <p>Thiết lập 4 mốc giờ làm việc để tính giờ công, đi trễ và về sớm.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+        {
+            <div class="settings-status-message @Model.StatusType">@Model.StatusMessage</div>
+        }
+
+        <form method="post" asp-action="SaveAttendanceSchedule" class="attendance-settings-form">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="login-field-error"></div>
+
+            <div class="attendance-settings-grid">
+                <label class="attendance-time-field">
+                    <span>Bắt đầu sáng</span>
+                    <input asp-for="Schedule.MorningStart" type="time" />
+                    <small asp-validation-for="Schedule.MorningStart"></small>
+                </label>
+                <label class="attendance-time-field">
+                    <span>Kết thúc sáng</span>
+                    <input asp-for="Schedule.MorningEnd" type="time" />
+                    <small asp-validation-for="Schedule.MorningEnd"></small>
+                </label>
+                <label class="attendance-time-field">
+                    <span>Cho phép trễ sáng (phút)</span>
+                    <input asp-for="Schedule.MorningLateGraceMinutes" type="number" min="0" max="240" step="1" inputmode="numeric" />
+                    <small asp-validation-for="Schedule.MorningLateGraceMinutes"></small>
+                </label>
+                <label class="attendance-time-field">
+                    <span>Bắt đầu chiều</span>
+                    <input asp-for="Schedule.AfternoonStart" type="time" />
+                    <small asp-validation-for="Schedule.AfternoonStart"></small>
+                </label>
+                <label class="attendance-time-field">
+                    <span>Kết thúc chiều</span>
+                    <input asp-for="Schedule.AfternoonEnd" type="time" />
+                    <small asp-validation-for="Schedule.AfternoonEnd"></small>
+                </label>
+                <label class="attendance-time-field">
+                    <span>Cho phép trễ chiều (phút)</span>
+                    <input asp-for="Schedule.AfternoonLateGraceMinutes" type="number" min="0" max="240" step="1" inputmode="numeric" />
+                    <small asp-validation-for="Schedule.AfternoonLateGraceMinutes"></small>
+                </label>
+            </div>
+
+            <div class="settings-permission-actions">
+                <button type="submit" class="primary-button">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                    <span>Lưu giờ chấm công</span>
+                </button>
+            </div>
+        </form>
+    </article>
+
     <article class="panel settings-panel">
         <div class="panel-header settings-header">
             <div>

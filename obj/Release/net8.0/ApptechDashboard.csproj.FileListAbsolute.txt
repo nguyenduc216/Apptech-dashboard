@@ -282,3 +282,6 @@ D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\obj\Release\net
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Release\net8.0\wwwroot\uploads\checkin\checkin-1b70306ed2f94f7fa7530496962f5576-20260612123807814.jpg
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Release\net8.0\wwwroot\uploads\checkin\checkin-52931febfd6a414191f7327edc3aa65e-20260612123748632.jpg
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Release\net8.0\wwwroot\uploads\checkin\checkin-a4a86cef3ddd4ed9b1c41aae5f1b5b33-20260612125337654.jpg
+D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Release\net8.0\appsettings.Production.json
+D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Release\net8.0\Views\Zalo\Index.cshtml
+D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Release\net8.0\wwwroot\uploads\checkin\checkin-aead2050ece942398bfb406fd61e1883-20260625023917285.jpg

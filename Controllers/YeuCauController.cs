@@ -15,6 +15,7 @@ public class YeuCauController(
     IYeuCauService yeuCauService,
     IKhachHangService khachHangService,
     IZaloMessageService zaloMessageService,
+    IZaloRequestService zaloRequestService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService,
     IWebHostEnvironment webHostEnvironment) : Controller
@@ -36,6 +37,7 @@ public class YeuCauController(
     private readonly IYeuCauService _yeuCauService = yeuCauService;
     private readonly IKhachHangService _khachHangService = khachHangService;
     private readonly IZaloMessageService _zaloMessageService = zaloMessageService;
+    private readonly IZaloRequestService _zaloRequestService = zaloRequestService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
@@ -413,8 +415,9 @@ public class YeuCauController(
         model.IDDiaDiem = request.IDDiaDiem;
 
         var isAdmin = await IsCurrentUserAdminAsync(HttpContext.RequestAborted);
+        var canManageCheckinProxy = isAdmin || await CanManageCheckinProxyAsync(HttpContext.RequestAborted);
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
-        if (!isAdmin)
+        if (!canManageCheckinProxy)
         {
             if (!currentEmployeeId.HasValue ||
                 !await _yeuCauService.IsEmployeeAssignedToRequestAsync(model.IDYeuCau, currentEmployeeId.Value, HttpContext.RequestAborted))
@@ -437,11 +440,17 @@ public class YeuCauController(
 
         var now = DateTime.Now;
         var thoiDiem = model.ThoiDiem ?? now;
-        if (thoiDiem < now.AddMinutes(-15) || thoiDiem > now.AddMinutes(1))
+        if (!canManageCheckinProxy && (thoiDiem < now.AddMinutes(-15) || thoiDiem > now.AddMinutes(1)))
         {
             return BadRequest(new { message = "Thời điểm checkin chỉ được nằm trong 15 phút trước thời điểm hiện tại." });
         }
         model.ThoiDiem = thoiDiem;
+        if (canManageCheckinProxy && model.IDNhanVien != currentEmployeeId)
+        {
+            model.IsProxyAction = true;
+            model.ProxyActionBy = GetCurrentAuditUser();
+            model.ProxyActionAccountId = GetCurrentAccountId();
+        }
 
         if (!model.LatAddress.HasValue || !model.LongAddress.HasValue)
         {
@@ -511,8 +520,9 @@ public class YeuCauController(
         }
 
         var isAdmin = await IsCurrentUserAdminAsync(HttpContext.RequestAborted);
+        var canManageCheckinProxy = isAdmin || await CanManageCheckinProxyAsync(HttpContext.RequestAborted);
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
-        if (!isAdmin)
+        if (!canManageCheckinProxy)
         {
             if (!currentEmployeeId.HasValue ||
                 !await _yeuCauService.IsEmployeeAssignedToRequestAsync(model.IDYeuCau, currentEmployeeId.Value, HttpContext.RequestAborted))
@@ -530,11 +540,17 @@ public class YeuCauController(
 
         var now = DateTime.Now;
         var thoiDiem = model.ThoiDiemCheckOut ?? now;
-        if (thoiDiem < now.AddMinutes(-15) || thoiDiem > now.AddMinutes(1))
+        if (!canManageCheckinProxy && (thoiDiem < now.AddMinutes(-15) || thoiDiem > now.AddMinutes(1)))
         {
             return BadRequest(new { message = "Thoi diem checkout chi duoc nam trong 15 phut truoc thoi diem hien tai." });
         }
         model.ThoiDiemCheckOut = thoiDiem;
+        if (canManageCheckinProxy && model.IDNhanVien != currentEmployeeId)
+        {
+            model.IsProxyAction = true;
+            model.ProxyActionBy = GetCurrentAuditUser();
+            model.ProxyActionAccountId = GetCurrentAccountId();
+        }
 
         if (!model.LatAddressCheckOut.HasValue || !model.LongAddressCheckOut.HasValue)
         {
@@ -722,6 +738,9 @@ public class YeuCauController(
             query.ExecutionDateTo,
             effectiveAssigneeKeyword,
             normalizedWorkStatus,
+            query.HasRating,
+            query.RatingScore,
+            query.ZaloConnected,
             assignedEmployeeId,
             query.Page,
             DefaultPageSize,
@@ -739,6 +758,9 @@ public class YeuCauController(
                 ExecutionDateTo = query.ExecutionDateTo,
                 AssigneeKeyword = isAdmin ? query.AssigneeKeyword : currentEmployeeOption?.DisplayText,
                 WorkStatusFilter = normalizedWorkStatus,
+                HasRating = query.HasRating,
+                RatingScore = query.RatingScore,
+                ZaloConnected = query.ZaloConnected,
                 Page = currentPage,
                 PageSize = pageSize
             },
@@ -781,11 +803,19 @@ public class YeuCauController(
 
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(cancellationToken);
         var isAdmin = await IsCurrentUserAdminAsync(cancellationToken);
+        var canManageCheckinProxy = isAdmin || await CanManageCheckinProxyAsync(cancellationToken);
         var canToggleCheckinDistanceConstraint = await CanToggleCheckinDistanceConstraintAsync(cancellationToken);
         if (!form.Id.HasValue && !canToggleCheckinDistanceConstraint)
         {
             form.CheckinTheoKhoangCach = false;
         }
+
+        var customerRating = form.Id.HasValue && form.Id.Value > 0
+            ? await _zaloRequestService.GetRequestRatingAsync(form.Id.Value, cancellationToken)
+            : new RequestRatingInfo();
+        var customerZaloProfile = form.IDKhachHang.HasValue && form.IDKhachHang.Value > 0
+            ? await _zaloRequestService.GetCustomerZaloProfileAsync(form.IDKhachHang.Value, cancellationToken)
+            : new CustomerZaloProfileInfo();
 
         return new YeuCauDetailViewModel
         {
@@ -807,8 +837,11 @@ public class YeuCauController(
             GeneratedCode = generatedCode,
             CurrentEmployeeId = currentEmployeeId,
             CurrentUserIsAdmin = isAdmin,
+            CanManageCheckinProxy = canManageCheckinProxy,
             CanToggleCheckinDistanceConstraint = canToggleCheckinDistanceConstraint,
             CheckinDistanceLimitMeters = checkinDistanceLimitMeters,
+            CustomerRating = customerRating,
+            CustomerZaloProfile = customerZaloProfile,
             StatusMessage = TempData["StatusMessage"]?.ToString(),
             StatusType = TempData["StatusType"]?.ToString() ?? "info"
         };
@@ -1357,6 +1390,25 @@ public class YeuCauController(
             string.Equals(
                 permission.PermissionCode,
                 PermissionCatalogService.ToggleCheckinDistancePermissionCode,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<bool> CanManageCheckinProxyAsync(CancellationToken cancellationToken)
+    {
+        if (await IsCurrentUserAdminAsync(cancellationToken))
+        {
+            return true;
+        }
+
+        var permissions = await UserPermissionSession.GetOrLoadAsync(
+            HttpContext,
+            _userPermissionService,
+            cancellationToken);
+
+        return permissions.Any(permission =>
+            string.Equals(
+                permission.PermissionCode,
+                PermissionCatalogService.CheckinProxyManagePermissionCode,
                 StringComparison.OrdinalIgnoreCase));
     }
 

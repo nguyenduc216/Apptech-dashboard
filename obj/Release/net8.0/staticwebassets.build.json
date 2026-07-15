@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "lP+cQtR16Sm0ZEjz+ObOObucOjFZdnwauVfcyJ3PlG0=",
+  "Hash": "tUo2fF2eEVhxIMlv9Xcxx3fRY6exNCNu9eAaZ3qKI40=",
   "Source": "ApptechDashboard",
   "BasePath": "_content/ApptechDashboard",
   "Mode": "Default",
@@ -946,6 +946,25 @@
       "CopyToOutputDirectory": "PreserveNewest",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\uploads\\checkin\\checkin-a4a86cef3ddd4ed9b1c41aae5f1b5b33-20260612125337654.jpg"
+    },
+    {
+      "Identity": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\Apptech-dashboard\\wwwroot\\uploads\\checkin\\checkin-aead2050ece942398bfb406fd61e1883-20260625023917285.jpg",
+      "SourceId": "ApptechDashboard",
+      "SourceType": "Discovered",
+      "ContentRoot": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\Apptech-dashboard\\wwwroot\\",
+      "BasePath": "_content/ApptechDashboard",
+      "RelativePath": "uploads/checkin/checkin-aead2050ece942398bfb406fd61e1883-20260625023917285.jpg",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "PreserveNewest",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\uploads\\checkin\\checkin-aead2050ece942398bfb406fd61e1883-20260625023917285.jpg"
     },
     {
       "Identity": "D:\\Working\\T.A\\Tech\\Projects\\apptech-dashboard\\Apptech-dashboard\\wwwroot\\uploads\\hang-hoa\\.gitkeep",

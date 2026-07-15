@@ -100,6 +100,47 @@
                         </span>
                     </label>
 
+                    <label class="master-data-filter-field" for="hasRating">
+                        <span>Trang thai danh gia</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-star-half-stroke" aria-hidden="true"></i>
+                            <select id="hasRating" name="hasRating">
+                                <option value="">Tat ca</option>
+                                <option value="true" selected="@(Model.Filter.HasRating == true ? "selected" : null)">Da danh gia</option>
+                                <option value="false" selected="@(Model.Filter.HasRating == false ? "selected" : null)">Chua danh gia</option>
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+
+                    <label class="master-data-filter-field" for="ratingScore">
+                        <span>So sao</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-star" aria-hidden="true"></i>
+                            <select id="ratingScore" name="ratingScore">
+                                <option value="">Tat ca so sao</option>
+                                @for (var score = 5; score >= 1; score--)
+                                {
+                                    <option value="@score" selected="@(Model.Filter.RatingScore == score ? "selected" : null)">@score sao</option>
+                                }
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+
+                    <label class="master-data-filter-field" for="zaloConnected">
+                        <span>Ket noi Zalo</span>
+                        <span class="login-input-shell select-shell">
+                            <i class="fa-solid fa-comments" aria-hidden="true"></i>
+                            <select id="zaloConnected" name="zaloConnected">
+                                <option value="">Tat ca</option>
+                                <option value="true" selected="@(Model.Filter.ZaloConnected == true ? "selected" : null)">Da ket noi Zalo</option>
+                                <option value="false" selected="@(Model.Filter.ZaloConnected == false ? "selected" : null)">Chua ket noi Zalo</option>
+                            </select>
+                            <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                        </span>
+                    </label>
+
                     <label class="master-data-filter-field" for="requestDateFrom">
                         <span>Ngày yêu cầu từ</span>
                         <span class="login-input-shell">
@@ -191,6 +232,8 @@
                         <th>Ngày hết hạn</th>
                         <th>Phụ trách</th>
                         <th>Trạng thái</th>
+                        <th>Danh gia</th>
+                        <th>Zalo</th>
                         <th class="actions-col">Thao tác</th>
                     </tr>
                 </thead>
@@ -198,7 +241,7 @@
                     @if (Model.Items.Count == 0)
                     {
                         <tr>
-                            <td colspan="9" class="master-data-empty">Không có dữ liệu phù hợp.</td>
+                            <td colspan="11" class="master-data-empty">Không có dữ liệu phù hợp.</td>
                         </tr>
                     }
                     else
@@ -256,6 +299,26 @@
                                     <span class="status-pill yeu-cau-status @item.TrangThaiCssClass">
                                         @item.TrangThaiHienThi
                                     </span>
+                                </td>
+                                <td>
+                                    @if (item.HasCustomerRating)
+                                    {
+                                        <span class="status-pill @(item.CustomerRatingScore <= 2 ? "cancelled" : item.CustomerRatingScore >= 4 ? "completed" : "in-progress")">
+                                            <i class="fa-solid fa-star" aria-hidden="true"></i>
+                                            @item.CustomerRatingDisplay
+                                        </span>
+                                        <div class="yeu-cau-secondary-text">@(item.CustomerRatingSubmittedAt?.ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill pending">Chua danh gia</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="status-pill @(item.ZaloConnected ? "completed" : "pending")">
+                                        @(item.ZaloConnected ? "Da ket noi" : "Chua ket noi")
+                                    </span>
+                                    <div class="yeu-cau-secondary-text">@(string.IsNullOrWhiteSpace(item.ZaloDisplayName) ? (item.ZaloPhoneNumber ?? "-") : item.ZaloDisplayName)</div>
                                 </td>
                                 <td class="actions-col">
                                     <div class="master-data-actions">

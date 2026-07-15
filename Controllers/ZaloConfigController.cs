@@ -24,6 +24,8 @@ public sealed class ZaloConfigController(IZaloSettingsService settingsService) :
             appSecretConfigured = IsConfigured(options.AppSecret),
             oaIdConfigured = IsConfigured(options.OaId),
             oaSecretKeyConfigured = IsConfigured(options.OaSecretKey),
+            enableSignatureValidation = options.EnableSignatureValidation,
+            webhookSignatureCanValidate = !options.EnableSignatureValidation || IsConfigured(options.OaSecretKey),
             source = settingsService.Source,
             oauthRedirectUri = options.OAuthRedirectUri,
             webhookUrl

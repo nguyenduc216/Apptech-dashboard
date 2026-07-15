@@ -20,6 +20,7 @@
     var selectedLocation = Model.SelectedLocation;
     var selectedLocationLabel = selectedLocation?.DisplayLabel ?? string.Empty;
     var invariantCulture = CultureInfo.InvariantCulture;
+    var viCulture = CultureInfo.GetCultureInfo("vi-VN");
     var selectedLongValue = selectedLocation?.LongAddress?.ToString(invariantCulture) ?? string.Empty;
     var selectedLatValue = selectedLocation?.LatAddress?.ToString(invariantCulture) ?? string.Empty;
     var activeTab = string.IsNullOrWhiteSpace(Model.Form.ActiveTab) || Model.Form.ActiveTab == "khach-hang" ? "thong-tin" : Model.Form.ActiveTab;
@@ -47,18 +48,19 @@
     var checkinDistanceLimitValue = Model.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? string.Empty;
     var hasCheckinDistanceLimit = Model.CheckinDistanceLimitMeters.HasValue && Model.CheckinDistanceLimitMeters.Value > 0;
     var canToggleCheckinDistanceConstraint = Model.CanToggleCheckinDistanceConstraint;
+    var canManageCheckinProxy = Model.CanManageCheckinProxy;
     var checkinByDistanceValue = (hasCheckinDistanceLimit && Model.Form.CheckinTheoKhoangCach).ToString().ToLowerInvariant();
     var defaultCheckinEmployeeId = Model.CurrentEmployeeId.HasValue && assignedCheckinEmployees.Any(employee => employee.NhanVienId == Model.CurrentEmployeeId)
         ? Model.CurrentEmployeeId
         : assignedCheckinEmployees.FirstOrDefault()?.NhanVienId;
     var pendingCheckout = Model.Checkins
         .Where(item => item.IsOpen)
-        .Where(item => Model.CurrentUserIsAdmin || (Model.CurrentEmployeeId.HasValue && item.IDNhanVien == Model.CurrentEmployeeId))
+        .Where(item => canManageCheckinProxy || (Model.CurrentEmployeeId.HasValue && item.IDNhanVien == Model.CurrentEmployeeId))
         .OrderByDescending(item => item.ThoiDiem)
         .ThenByDescending(item => item.Id)
         .FirstOrDefault();
     var canUpdateLocationCoordinates = Model.IsEditMode &&
-        (Model.CurrentUserIsAdmin || (Model.CurrentEmployeeId.HasValue && assignedCheckinEmployees.Any(employee => employee.NhanVienId == Model.CurrentEmployeeId)));
+        (canManageCheckinProxy || (Model.CurrentEmployeeId.HasValue && assignedCheckinEmployees.Any(employee => employee.NhanVienId == Model.CurrentEmployeeId)));
     var selectedLocationHasCoordinates = selectedLocation?.LatAddress.HasValue == true && selectedLocation?.LongAddress.HasValue == true;
     var workOptionsJson = JsonSerializer.Serialize(Model.WorkOptions.Select(option => new
     {
@@ -111,11 +113,15 @@
           data-location-coordinate-url="@Url.Action("UpdateLocationCoordinates", "YeuCau")"
           data-location-coordinate-draft-url="@Url.Action("UpdateDraftLocationCoordinates", "YeuCau")"
           data-checkin-delete-url="@Url.Action("DeleteCheckin", "YeuCau")"
+          data-zalo-request-id="@Model.Form.Id"
+          data-zalo-request-link-url="/api/zalo/request-links"
+          data-zalo-request-status-base="/api/zalo/request-links"
           data-current-employee-id="@currentEmployeeIdValue"
           data-current-user="@currentAuditUser"
           data-checkin-distance-limit="@checkinDistanceLimitValue"
           data-checkin-by-distance="@checkinByDistanceValue"
-          data-is-admin="@Model.CurrentUserIsAdmin.ToString().ToLowerInvariant()">
+          data-is-admin="@Model.CurrentUserIsAdmin.ToString().ToLowerInvariant()"
+          data-can-manage-checkin-proxy="@canManageCheckinProxy.ToString().ToLowerInvariant()">
         @Html.AntiForgeryToken()
 
         <input asp-for="Form.Id" type="hidden" />
@@ -161,6 +167,16 @@
                     <span class="yeu-cau-back-mobile">Về danh sách</span>
                 </a>
 
+                @if (Model.IsEditMode)
+                {
+                    <button type="button"
+                            class="secondary-button"
+                            data-zalo-qr-open>
+                        <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                        <span>Gửi lịch Zalo</span>
+                    </button>
+                }
+
                 <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
                     <span class="button-content">
                         <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
@@ -185,6 +201,85 @@
                     }
                 </div>
             </div>
+        }
+
+        @if (Model.IsEditMode)
+        {
+            var rating = Model.CustomerRating;
+            var zaloProfile = Model.CustomerZaloProfile;
+            <article class="panel yeu-cau-zalo-rating-panel">
+                <div class="yeu-cau-zalo-rating-card @(rating?.HasRating == true && rating.RatingScore <= 2 ? "is-warning" : null)">
+                    <div class="yeu-cau-zalo-rating-heading">
+                        <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-star" aria-hidden="true"></i></span>
+                        <div>
+                            <h3>Danh gia cua khach hang</h3>
+                            <p>@(rating?.HasRating == true ? "Khach hang da gui danh gia chat luong cong viec." : "Khach hang chua danh gia phieu nay.")</p>
+                        </div>
+                    </div>
+                    @if (rating?.HasRating == true)
+                    {
+                        <div class="yeu-cau-rating-score" aria-label="Diem danh gia">
+                            @for (var score = 1; score <= 5; score++)
+                            {
+                                <i class="fa-solid fa-star @(score <= rating.RatingScore ? "is-active" : null)" aria-hidden="true"></i>
+                            }
+                            <strong>@rating.RatingScore/5</strong>
+                        </div>
+                        <dl class="yeu-cau-zalo-rating-meta">
+                            <div><dt>Thoi gian</dt><dd>@(rating.SubmittedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
+                            <div><dt>Nguon</dt><dd>@(string.IsNullOrWhiteSpace(rating.Source) ? "ZaloQr" : rating.Source)</dd></div>
+                            <div><dt>Ghi chu</dt><dd>@(string.IsNullOrWhiteSpace(rating.Note) ? "-" : rating.Note)</dd></div>
+                            <div><dt>Nhan xet</dt><dd>@(string.IsNullOrWhiteSpace(rating.CustomerComment) ? "-" : rating.CustomerComment)</dd></div>
+                        </dl>
+                        @if (rating.Items.Count > 0)
+                        {
+                            <div class="yeu-cau-rating-item-list">
+                                @foreach (var item in rating.Items)
+                                {
+                                    <div class="yeu-cau-rating-item">
+                                        <strong>@item.WorkName</strong>
+                                        <span>@item.RatingScore/5</span>
+                                        <small>@(string.IsNullOrWhiteSpace(item.Note) ? "-" : item.Note)</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button" class="secondary-button" data-zalo-qr-open>
+                            <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                            <span>Gui QR danh gia Zalo</span>
+                        </button>
+                    }
+                </div>
+
+                <div class="yeu-cau-zalo-rating-card">
+                    <div class="yeu-cau-zalo-rating-heading">
+                        <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
+                        <div>
+                            <h3>Thong tin Zalo</h3>
+                            <p>@(zaloProfile?.Connected == true ? "Da ket noi Zalo OA." : "Chua ket noi Zalo OA.")</p>
+                        </div>
+                    </div>
+                    <span class="status-pill @(zaloProfile?.Connected == true ? "completed" : "pending")">
+                        @(zaloProfile?.Connected == true ? "Da ket noi Zalo OA" : "Chua ket noi Zalo")
+                    </span>
+                    @if (zaloProfile?.Connected == true)
+                    {
+                        <dl class="yeu-cau-zalo-rating-meta">
+                            <div><dt>Zalo User ID</dt><dd>@zaloProfile.ZaloUserId</dd></div>
+                            <div><dt>Ten Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloDisplayName) ? "-" : zaloProfile.ZaloDisplayName)</dd></div>
+                            <div><dt>So dien thoai Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloPhoneNumber) ? "-" : zaloProfile.ZaloPhoneNumber)</dd></div>
+                            <div><dt>Lan tuong tac gan nhat</dt><dd>@(zaloProfile.LastInteractionAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
+                        </dl>
+                    }
+                    else
+                    {
+                        <p class="yeu-cau-zalo-rating-hint">Gui QR Zalo de khach ket noi va danh gia. Neu khach da co Zalo ID, QR se vao thang trang danh gia.</p>
+                    }
+                </div>
+            </article>
         }
 
         <article class="panel khach-hang-detail-panel">
@@ -1005,6 +1100,10 @@
                                                             {
                                                                 <p>@checkin.GhiChuNhanVien</p>
                                                             }
+                                                            @if (!string.IsNullOrWhiteSpace(checkin.ProxyCheckInBy))
+                                                            {
+                                                                <span class="yeu-cau-checkin-proxy"><i class="fa-solid fa-user-shield" aria-hidden="true"></i>Lam ho boi @checkin.ProxyCheckInBy luc @(checkin.ProxyCheckInAt?.ToString("dd/MM/yyyy HH:mm") ?? "--:--")</span>
+                                                            }
                                                         </div>
                                                     </section>
                                                     <section class="yeu-cau-checkin-line @(checkin.ThoiDiemCheckOut.HasValue ? "is-checkout-complete" : "is-checkout-pending")">
@@ -1037,10 +1136,25 @@
                                                             else
                                                             {
                                                                 <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Ch&#432;a checkout</strong>
+                                                                @if (canManageCheckinProxy)
+                                                                {
+                                                                    <button type="button"
+                                                                            class="secondary-button"
+                                                                            data-checkout-open
+                                                                            data-checkin-id="@checkin.Id"
+                                                                            data-checkin-employee-id="@(checkin.IDNhanVien?.ToString(invariantCulture) ?? "")">
+                                                                        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                                                                        <span>Checkout lam ho</span>
+                                                                    </button>
+                                                                }
                                                             }
                                                             @if (!string.IsNullOrWhiteSpace(checkin.GhiChuCheckOut))
                                                             {
                                                                 <p>@checkin.GhiChuCheckOut</p>
+                                                            }
+                                                            @if (!string.IsNullOrWhiteSpace(checkin.ProxyCheckOutBy))
+                                                            {
+                                                                <span class="yeu-cau-checkin-proxy"><i class="fa-solid fa-user-shield" aria-hidden="true"></i>Checkout lam ho boi @checkin.ProxyCheckOutBy luc @(checkin.ProxyCheckOutAt?.ToString("dd/MM/yyyy HH:mm") ?? "--:--")</span>
                                                             }
                                                         </div>
                                                     </section>
@@ -1341,7 +1455,7 @@
                     </div>
 
                     <div class="account-form-grid">
-                        @if (Model.CurrentUserIsAdmin)
+                        @if (canManageCheckinProxy)
                         {
                             <label class="login-field">
                                 <span>Nh&#226;n vi&#234;n checkin</span>
@@ -1361,6 +1475,13 @@
                                 </span>
                             </label>
                         }
+                        <label class="login-field @(canManageCheckinProxy ? null : "is-hidden")" data-checkin-time-shell>
+                            <span data-checkin-time-label>Thoi gian checkin</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                                <input type="datetime-local" data-checkin-time @(canManageCheckinProxy ? null : "readonly") />
+                            </span>
+                        </label>
                     </div>
 
                     <label class="login-field">
@@ -1620,6 +1741,52 @@
                 </div>
             </section>
         </div>
+
+        <div class="crud-modal-shell zalo-qr-modal-shell" data-zalo-qr-shell hidden>
+            <div class="crud-modal-backdrop" aria-hidden="true" data-zalo-qr-close></div>
+            <section class="crud-modal zalo-qr-modal" role="dialog" aria-modal="true" aria-labelledby="zalo-qr-title">
+                <div class="crud-modal-header">
+                    <div class="crud-modal-heading">
+                        <h2 id="zalo-qr-title">Quét QR bằng Zalo</h2>
+                        <p class="crud-modal-subtitle">Khách hàng quét mã để xem lịch, quan tâm OA và đánh giá công việc.</p>
+                    </div>
+                    <button type="button" class="menu-nav-button crud-close-button" aria-label="Đóng popup QR" data-zalo-qr-close>
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="zalo-qr-body">
+                    <div class="zalo-qr-image-shell">
+                        <div class="zalo-qr-loading" data-zalo-qr-loading>
+                            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                            <span>Đang tạo mã QR...</span>
+                        </div>
+                        <img data-zalo-qr-image alt="Mã QR lịch Zalo" hidden />
+                    </div>
+                    <div class="zalo-qr-details">
+                        <div class="zalo-qr-status">
+                            <span>Trạng thái</span>
+                            <strong data-zalo-qr-status>Chưa quét</strong>
+                        </div>
+                        <label>
+                            <span>Link gửi khách hàng</span>
+                            <input type="text" readonly data-zalo-qr-url />
+                        </label>
+                        <div class="zalo-qr-actions">
+                            <button type="button" class="secondary-button" data-zalo-qr-copy>
+                                <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                                <span>Copy link</span>
+                            </button>
+                            <a class="primary-button" href="#" target="_blank" rel="noopener" data-zalo-qr-open-link>
+                                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                <span>Mở link</span>
+                            </a>
+                            <button type="button" class="secondary-button" data-zalo-qr-close>Đóng</button>
+                        </div>
+                        <div class="zalo-qr-message" data-zalo-qr-message aria-live="polite"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
     </form>
 </section>
 
@@ -1627,6 +1794,48 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin="" />
+    <style>
+        .zalo-qr-modal { width: min(720px, calc(100% - 24px)); }
+        .zalo-qr-body { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 22px; padding: 22px; }
+        .zalo-qr-image-shell { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid #cfe5df; border-radius: 8px; background: #f3faf8; overflow: hidden; }
+        .zalo-qr-image-shell img { display: block; width: 100%; height: 100%; object-fit: contain; padding: 10px; background: #fff; }
+        .zalo-qr-loading { display: grid; justify-items: center; gap: 10px; color: #397068; font-weight: 700; }
+        .zalo-qr-loading i { font-size: 28px; color: #0b8c74; }
+        .zalo-qr-details { display: grid; align-content: start; gap: 15px; }
+        .zalo-qr-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px; border: 1px solid #cfe5df; border-radius: 7px; background: #f5fbf9; }
+        .zalo-qr-status span { color: #607b76; }
+        .zalo-qr-status strong { color: #08735f; }
+        .zalo-qr-details label { display: grid; gap: 7px; color: #244f49; font-weight: 700; }
+        .zalo-qr-details input { width: 100%; min-height: 44px; padding: 0 11px; border: 1px solid #c9ddd8; border-radius: 7px; background: #fff; color: #164b44; font: inherit; }
+        .zalo-qr-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+        .zalo-qr-message { min-height: 22px; color: #08735f; font-weight: 700; font-size: 13px; }
+        .zalo-qr-message.error { color: #b53737; }
+        .yeu-cau-zalo-rating-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 16px; }
+        .yeu-cau-zalo-rating-card { display: grid; align-content: start; gap: 13px; padding: 16px; border: 1px solid #cfe5df; border-radius: 8px; background: #f8fcfb; }
+        .yeu-cau-zalo-rating-card.is-warning { border-color: #f1b5a8; background: #fff8f5; }
+        .yeu-cau-zalo-rating-heading { display: flex; gap: 12px; align-items: flex-start; }
+        .yeu-cau-zalo-rating-heading h3 { margin: 0 0 4px; color: #073f38; }
+        .yeu-cau-zalo-rating-heading p { margin: 0; color: #607b76; }
+        .yeu-cau-zalo-rating-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #dcf5ee; color: #0b806b; flex: 0 0 auto; }
+        .yeu-cau-rating-score { display: flex; align-items: center; gap: 5px; color: #cfd8d5; font-size: 18px; }
+        .yeu-cau-rating-score .is-active { color: #f1b51c; }
+        .yeu-cau-rating-score strong { margin-left: 8px; color: #073f38; font-size: 16px; }
+        .yeu-cau-zalo-rating-meta { display: grid; gap: 8px; margin: 0; }
+        .yeu-cau-zalo-rating-meta div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; }
+        .yeu-cau-zalo-rating-meta dt { color: #607b76; }
+        .yeu-cau-zalo-rating-meta dd { margin: 0; color: #123f38; font-weight: 700; overflow-wrap: anywhere; }
+        .yeu-cau-rating-item-list { display: grid; gap: 8px; }
+        .yeu-cau-rating-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px; border: 1px solid #d9e9e5; border-radius: 7px; background: #fff; }
+        .yeu-cau-rating-item small { grid-column: 1 / -1; color: #607b76; }
+        .yeu-cau-zalo-rating-hint { margin: 0; color: #607b76; line-height: 1.45; }
+        @@media (max-width: 680px) {
+            .zalo-qr-body { grid-template-columns: 1fr; padding: 16px; }
+            .zalo-qr-image-shell { width: min(280px, 100%); justify-self: center; }
+            .zalo-qr-actions > * { flex: 1 1 calc(50% - 9px); }
+            .yeu-cau-zalo-rating-panel { grid-template-columns: 1fr; }
+            .yeu-cau-zalo-rating-meta div { grid-template-columns: 1fr; gap: 2px; }
+        }
+    </style>
 }
 
 @section Scripts {
@@ -1639,6 +1848,157 @@
             if (!(root instanceof HTMLFormElement)) {
                 return;
             }
+
+            const zaloQrOpenButtons = root.querySelectorAll("[data-zalo-qr-open]");
+            const zaloQrShell = root.querySelector("[data-zalo-qr-shell]");
+            const zaloQrCloseButtons = zaloQrShell?.querySelectorAll("[data-zalo-qr-close]") ?? [];
+            const zaloQrImage = zaloQrShell?.querySelector("[data-zalo-qr-image]");
+            const zaloQrLoading = zaloQrShell?.querySelector("[data-zalo-qr-loading]");
+            const zaloQrStatus = zaloQrShell?.querySelector("[data-zalo-qr-status]");
+            const zaloQrUrl = zaloQrShell?.querySelector("[data-zalo-qr-url]");
+            const zaloQrCopyButton = zaloQrShell?.querySelector("[data-zalo-qr-copy]");
+            const zaloQrOpenLink = zaloQrShell?.querySelector("[data-zalo-qr-open-link]");
+            const zaloQrMessage = zaloQrShell?.querySelector("[data-zalo-qr-message]");
+            let zaloQrPollTimer = 0;
+            let zaloQrToken = "";
+
+            const setZaloQrMessage = (message, isError = false) => {
+                if (!(zaloQrMessage instanceof HTMLElement)) {
+                    return;
+                }
+
+                zaloQrMessage.textContent = message;
+                zaloQrMessage.classList.toggle("error", isError);
+            };
+
+            const zaloStatusLabels = {
+                Created: "Chưa quét",
+                Opened: "Đã quét",
+                ZaloConnected: "Đã kết nối Zalo",
+                Rated: "Đã đánh giá",
+                Expired: "Đã hết hạn"
+            };
+
+            const updateZaloQrStatus = (status) => {
+                if (zaloQrStatus instanceof HTMLElement) {
+                    zaloQrStatus.textContent = zaloStatusLabels[status] || status || "Chưa quét";
+                }
+            };
+
+            const stopZaloQrPolling = () => {
+                if (zaloQrPollTimer) {
+                    window.clearInterval(zaloQrPollTimer);
+                    zaloQrPollTimer = 0;
+                }
+            };
+
+            const pollZaloQrStatus = async () => {
+                if (!zaloQrToken) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${root.dataset.zaloRequestStatusBase}/${encodeURIComponent(zaloQrToken)}/status`, {
+                        headers: { "Accept": "application/json" }
+                    });
+                    if (!response.ok) {
+                        return;
+                    }
+
+                    const data = await response.json();
+                    updateZaloQrStatus(data.status);
+                    if (data.rated || data.status === "Expired") {
+                        stopZaloQrPolling();
+                    }
+                } catch {
+                    // Polling will retry automatically.
+                }
+            };
+
+            const closeZaloQr = () => {
+                stopZaloQrPolling();
+                if (zaloQrShell instanceof HTMLElement) {
+                    zaloQrShell.hidden = true;
+                }
+            };
+
+            const openZaloQr = async () => {
+                if (!(zaloQrShell instanceof HTMLElement)) {
+                    return;
+                }
+
+                zaloQrShell.hidden = false;
+                zaloQrToken = "";
+                updateZaloQrStatus("Created");
+                setZaloQrMessage("");
+                if (zaloQrLoading instanceof HTMLElement) {
+                    zaloQrLoading.hidden = false;
+                }
+                if (zaloQrImage instanceof HTMLImageElement) {
+                    zaloQrImage.hidden = true;
+                    zaloQrImage.removeAttribute("src");
+                }
+
+                try {
+                    const requestId = Number(root.dataset.zaloRequestId || 0);
+                    const response = await fetch(root.dataset.zaloRequestLinkUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({ requestId })
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || "Không thể tạo mã QR.");
+                    }
+
+                    zaloQrToken = data.token;
+                    if (zaloQrImage instanceof HTMLImageElement) {
+                        zaloQrImage.src = data.qrImageBase64;
+                        zaloQrImage.hidden = false;
+                    }
+                    if (zaloQrLoading instanceof HTMLElement) {
+                        zaloQrLoading.hidden = true;
+                    }
+                    if (zaloQrUrl instanceof HTMLInputElement) {
+                        zaloQrUrl.value = data.qrUrl;
+                    }
+                    if (zaloQrOpenLink instanceof HTMLAnchorElement) {
+                        zaloQrOpenLink.href = data.qrUrl;
+                    }
+                    updateZaloQrStatus(data.status);
+                    if (data.zaloConnected) {
+                        setZaloQrMessage("Khach hang da ket noi Zalo OA. Khi quet QR se vao thang trang danh gia.");
+                    } else {
+                        setZaloQrMessage("Khach hang chua ket noi Zalo OA. QR se hien buoc huong dan ket noi truoc khi danh gia.");
+                    }
+                    zaloQrPollTimer = window.setInterval(pollZaloQrStatus, 4000);
+                } catch (error) {
+                    if (zaloQrLoading instanceof HTMLElement) {
+                        zaloQrLoading.hidden = true;
+                    }
+                    setZaloQrMessage(error?.message || "Không thể tạo mã QR.", true);
+                }
+            };
+
+            zaloQrOpenButtons.forEach(button => button.addEventListener("click", () => void openZaloQr()));
+            zaloQrCloseButtons.forEach(button => button.addEventListener("click", closeZaloQr));
+            zaloQrCopyButton?.addEventListener("click", async () => {
+                if (!(zaloQrUrl instanceof HTMLInputElement) || !zaloQrUrl.value) {
+                    return;
+                }
+
+                try {
+                    await navigator.clipboard.writeText(zaloQrUrl.value);
+                    setZaloQrMessage("Đã sao chép link.");
+                } catch {
+                    zaloQrUrl.select();
+                    document.execCommand("copy");
+                    setZaloQrMessage("Đã sao chép link.");
+                }
+            });
 
             const searchUrl = root.dataset.searchUrl;
             const customerSearchUrl = root.dataset.customerSearchUrl;
@@ -1657,6 +2017,7 @@
             const checkinDistanceLimitMeters = Number.parseFloat(root.dataset.checkinDistanceLimit || "");
             const checkinByDistance = root.dataset.checkinByDistance === "true";
             const isAdmin = root.dataset.isAdmin === "true";
+            const canManageCheckinProxy = root.dataset.canManageCheckinProxy === "true";
             const activeTabInput = root.querySelector("[data-active-tab-input]");
             const tabButtons = Array.from(root.querySelectorAll("[data-tab-button]"));
             const tabPanels = Array.from(root.querySelectorAll("[data-tab-panel]"));
@@ -1748,6 +2109,7 @@
             const checkinLongInput = root.querySelector("input[data-checkin-long]");
             const checkinAddress = root.querySelector("[data-checkin-current-address]");
             const checkinTimeInput = root.querySelector("[data-checkin-time]");
+            const checkinTimeLabel = root.querySelector("[data-checkin-time-label]");
             const checkinNoteInput = root.querySelector("[data-checkin-note]");
             const checkinNoteLabel = root.querySelector("[data-checkin-note-label]");
             const checkinEmployeeSelect = root.querySelector("[data-checkin-employee]");

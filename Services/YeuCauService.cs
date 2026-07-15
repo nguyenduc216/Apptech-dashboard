@@ -19,6 +19,9 @@ public interface IYeuCauService
         DateTime? executionDateTo,
         string? assigneeKeyword,
         string? workStatusFilter,
+        bool? hasRating,
+        int? ratingScore,
+        bool? zaloConnected,
         int? assignedEmployeeId,
         int page,
         int pageSize,
@@ -136,6 +139,9 @@ public sealed class YeuCauService(
         DateTime? executionDateTo,
         string? assigneeKeyword,
         string? workStatusFilter,
+        bool? hasRating,
+        int? ratingScore,
+        bool? zaloConnected,
         int? assignedEmployeeId,
         int page,
         int pageSize,
@@ -148,6 +154,7 @@ public sealed class YeuCauService(
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
+            await EnsureZaloRatingSummarySchemaAsync(connection, cancellationToken);
             var normalizedKeyword = NormalizeKeyword(keyword);
             var normalizedAssigneeKeyword = NormalizeKeyword(assigneeKeyword);
             var normalizedStatus = NormalizeStatus(statusFilter);
@@ -162,6 +169,9 @@ public sealed class YeuCauService(
                 executionDateTo,
                 normalizedAssigneeKeyword,
                 normalizedWorkStatus,
+                hasRating,
+                ratingScore,
+                zaloConnected,
                 assignedEmployeeId);
 
             await using var countCommand = connection.CreateCommand();
@@ -170,9 +180,22 @@ public sealed class YeuCauService(
                 FROM [{TableName}] AS yc
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
                 LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
+                OUTER APPLY (
+                    SELECT TOP (1) r.RatingScore, r.SubmittedAtUtc
+                    FROM [TblRequestWorkRatings] AS r
+                    WHERE r.RequestId = yc.ID
+                    ORDER BY r.SubmittedAtUtc DESC, r.CreatedAtUtc DESC
+                ) AS ratingStats
+                OUTER APPLY (
+                    SELECT TOP (1) p.ZaloDisplayName, COALESCE(p.ZaloPhoneNumber, p.PhoneNumber) AS ZaloPhoneNumber, p.ZaloUserId
+                    FROM [TblCustomerZaloProfiles] AS p
+                    WHERE p.CustomerId = yc.IDKhachHang
+                      AND NULLIF(LTRIM(RTRIM(p.ZaloUserId)), N'') IS NOT NULL
+                    ORDER BY p.UpdatedAtUtc DESC, p.CreatedAtUtc DESC
+                ) AS zaloStats
                 WHERE {whereClause}
                 """;
-            AddFilterParameters(countCommand, normalizedKeyword, statusValues, requestDateFrom, requestDateTo, executionDateFrom, executionDateTo, normalizedAssigneeKeyword, assignedEmployeeId);
+            AddFilterParameters(countCommand, normalizedKeyword, statusValues, requestDateFrom, requestDateTo, executionDateFrom, executionDateTo, normalizedAssigneeKeyword, ratingScore, assignedEmployeeId);
 
             var totalCount = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken) ?? 0);
             var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -206,7 +229,13 @@ public sealed class YeuCauService(
                     dd.LongAddress,
                     dd.LatAddress,
                     ISNULL(workStats.SoCongViec, 0) AS SoCongViec,
-                    ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh
+                    ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh,
+                    ratingStats.RatingScore AS CustomerRatingScore,
+                    ratingStats.SubmittedAtUtc AS CustomerRatingSubmittedAt,
+                    CAST(CASE WHEN ratingStats.RatingScore IS NULL THEN 0 ELSE 1 END AS bit) AS HasCustomerRating,
+                    CAST(CASE WHEN zaloStats.ZaloUserId IS NULL THEN 0 ELSE 1 END AS bit) AS ZaloConnected,
+                    zaloStats.ZaloDisplayName,
+                    zaloStats.ZaloPhoneNumber
                 FROM [{TableName}] AS yc
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
                 LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
@@ -217,11 +246,24 @@ public sealed class YeuCauService(
                     FROM [{WorkTableName}] AS ycvc
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
+                OUTER APPLY (
+                    SELECT TOP (1) r.RatingScore, r.SubmittedAtUtc
+                    FROM [TblRequestWorkRatings] AS r
+                    WHERE r.RequestId = yc.ID
+                    ORDER BY r.SubmittedAtUtc DESC, r.CreatedAtUtc DESC
+                ) AS ratingStats
+                OUTER APPLY (
+                    SELECT TOP (1) p.ZaloDisplayName, COALESCE(p.ZaloPhoneNumber, p.PhoneNumber) AS ZaloPhoneNumber, p.ZaloUserId
+                    FROM [TblCustomerZaloProfiles] AS p
+                    WHERE p.CustomerId = yc.IDKhachHang
+                      AND NULLIF(LTRIM(RTRIM(p.ZaloUserId)), N'') IS NOT NULL
+                    ORDER BY p.UpdatedAtUtc DESC, p.CreatedAtUtc DESC
+                ) AS zaloStats
                 WHERE {whereClause}
                 ORDER BY ISNULL(yc.NgayYeuCau, yc.Created_Date) DESC, yc.ID DESC
                 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
                 """;
-            AddFilterParameters(listCommand, normalizedKeyword, statusValues, requestDateFrom, requestDateTo, executionDateFrom, executionDateTo, normalizedAssigneeKeyword, assignedEmployeeId);
+            AddFilterParameters(listCommand, normalizedKeyword, statusValues, requestDateFrom, requestDateTo, executionDateFrom, executionDateTo, normalizedAssigneeKeyword, ratingScore, assignedEmployeeId);
             listCommand.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
             listCommand.Parameters.Add(new SqlParameter("@Offset", SqlDbType.Int) { Value = offset });
             listCommand.Parameters.Add(new SqlParameter("@PageSize", SqlDbType.Int) { Value = pageSize });
@@ -253,6 +295,7 @@ public sealed class YeuCauService(
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
+            await EnsureZaloRatingSummarySchemaAsync(connection, cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 SELECT TOP (1)
@@ -280,7 +323,13 @@ public sealed class YeuCauService(
                     dd.LongAddress,
                     dd.LatAddress,
                     ISNULL(workStats.SoCongViec, 0) AS SoCongViec,
-                    ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh
+                    ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh,
+                    ratingStats.RatingScore AS CustomerRatingScore,
+                    ratingStats.SubmittedAtUtc AS CustomerRatingSubmittedAt,
+                    CAST(CASE WHEN ratingStats.RatingScore IS NULL THEN 0 ELSE 1 END AS bit) AS HasCustomerRating,
+                    CAST(CASE WHEN zaloStats.ZaloUserId IS NULL THEN 0 ELSE 1 END AS bit) AS ZaloConnected,
+                    zaloStats.ZaloDisplayName,
+                    zaloStats.ZaloPhoneNumber
                 FROM [{TableName}] AS yc
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
                 LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
@@ -291,6 +340,19 @@ public sealed class YeuCauService(
                     FROM [{WorkTableName}] AS ycvc
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
+                OUTER APPLY (
+                    SELECT TOP (1) r.RatingScore, r.SubmittedAtUtc
+                    FROM [TblRequestWorkRatings] AS r
+                    WHERE r.RequestId = yc.ID
+                    ORDER BY r.SubmittedAtUtc DESC, r.CreatedAtUtc DESC
+                ) AS ratingStats
+                OUTER APPLY (
+                    SELECT TOP (1) p.ZaloDisplayName, COALESCE(p.ZaloPhoneNumber, p.PhoneNumber) AS ZaloPhoneNumber, p.ZaloUserId
+                    FROM [TblCustomerZaloProfiles] AS p
+                    WHERE p.CustomerId = yc.IDKhachHang
+                      AND NULLIF(LTRIM(RTRIM(p.ZaloUserId)), N'') IS NOT NULL
+                    ORDER BY p.UpdatedAtUtc DESC, p.CreatedAtUtc DESC
+                ) AS zaloStats
                 WHERE yc.ID = @Id
                 """;
             command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
@@ -318,6 +380,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureCheckinHistoryProxyColumnsAsync(connection, cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 SELECT
@@ -967,7 +1030,12 @@ public sealed class YeuCauService(
                     ch.ImgPath,
                     ch.ImgPathCheckOut,
                     ch.GhiChuNhanVien,
-                    ch.GhiChuCheckOut
+                    ch.GhiChuCheckOut,
+                    CAST(ISNULL(ch.IsProxyAction, 0) AS bit) AS IsProxyAction,
+                    ch.ProxyCheckInBy,
+                    ch.ProxyCheckInAt,
+                    ch.ProxyCheckOutBy,
+                    ch.ProxyCheckOutAt
                 FROM [{CheckinHistoryTableName}] AS ch
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = ch.IDKhachHang
                 LEFT JOIN [{EmployeeTableName}] AS nv ON nv.ID = ch.IDNhanVien
@@ -1003,7 +1071,12 @@ public sealed class YeuCauService(
                     ImgPath = GetNullableString(reader, "ImgPath"),
                     ImgPathCheckOut = GetNullableString(reader, "ImgPathCheckOut"),
                     GhiChuNhanVien = GetNullableString(reader, "GhiChuNhanVien"),
-                    GhiChuCheckOut = GetNullableString(reader, "GhiChuCheckOut")
+                    GhiChuCheckOut = GetNullableString(reader, "GhiChuCheckOut"),
+                    IsProxyAction = GetNullableBoolean(reader, "IsProxyAction") ?? false,
+                    ProxyCheckInBy = GetNullableString(reader, "ProxyCheckInBy"),
+                    ProxyCheckInAt = GetNullableDateTime(reader, "ProxyCheckInAt"),
+                    ProxyCheckOutBy = GetNullableString(reader, "ProxyCheckOutBy"),
+                    ProxyCheckOutAt = GetNullableDateTime(reader, "ProxyCheckOutAt")
                 });
             }
 
@@ -1099,6 +1172,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureCheckinHistoryProxyColumnsAsync(connection, cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
             await using (var openCheckinCommand = connection.CreateCommand())
@@ -1135,7 +1209,11 @@ public sealed class YeuCauService(
                     LongAddress,
                     LatAddress,
                     ImgPath,
-                    GhiChuNhanVien
+                    GhiChuNhanVien,
+                    IsProxyAction,
+                    ProxyCheckInBy,
+                    ProxyCheckInAt,
+                    ProxyCheckInAccountId
                 )
                 VALUES (
                     @IDKhachHang,
@@ -1147,7 +1225,11 @@ public sealed class YeuCauService(
                     @LongAddress,
                     @LatAddress,
                     @ImgPath,
-                    @GhiChuNhanVien
+                    @GhiChuNhanVien,
+                    @IsProxyAction,
+                    @ProxyCheckInBy,
+                    @ProxyCheckInAt,
+                    @ProxyCheckInAccountId
                 );
 
                 SELECT CAST(SCOPE_IDENTITY() AS int);
@@ -1162,6 +1244,10 @@ public sealed class YeuCauService(
             command.Parameters.Add(new SqlParameter("@LatAddress", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = ToDbValue(model.LatAddress) });
             command.Parameters.Add(new SqlParameter("@ImgPath", SqlDbType.NVarChar, 500) { Value = ToDbValue(model.ImgPath) });
             command.Parameters.Add(new SqlParameter("@GhiChuNhanVien", SqlDbType.NVarChar, 1000) { Value = ToDbValue(model.GhiChuNhanVien) });
+            command.Parameters.Add(new SqlParameter("@IsProxyAction", SqlDbType.Bit) { Value = model.IsProxyAction });
+            command.Parameters.Add(new SqlParameter("@ProxyCheckInBy", SqlDbType.NVarChar, 250) { Value = model.IsProxyAction ? ToDbValue(model.ProxyActionBy ?? currentUser) : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@ProxyCheckInAt", SqlDbType.DateTime) { Value = model.IsProxyAction ? DateTime.Now : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@ProxyCheckInAccountId", SqlDbType.UniqueIdentifier) { Value = model.IsProxyAction ? ToDbValue(model.ProxyActionAccountId) : DBNull.Value });
 
             var id = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
             await transaction.CommitAsync(cancellationToken);
@@ -1197,6 +1283,7 @@ public sealed class YeuCauService(
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureCheckinHistoryProxyColumnsAsync(connection, cancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 UPDATE [{CheckinHistoryTableName}]
@@ -1205,7 +1292,11 @@ public sealed class YeuCauService(
                     LongAddressCheckOut = @LongAddressCheckOut,
                     LatAddressCheckOut = @LatAddressCheckOut,
                     ImgPathCheckOut = @ImgPathCheckOut,
-                    GhiChuCheckOut = @GhiChuCheckOut
+                    GhiChuCheckOut = @GhiChuCheckOut,
+                    IsProxyAction = CASE WHEN @IsProxyAction = 1 THEN 1 ELSE ISNULL(IsProxyAction, 0) END,
+                    ProxyCheckOutBy = CASE WHEN @IsProxyAction = 1 THEN @ProxyCheckOutBy ELSE ProxyCheckOutBy END,
+                    ProxyCheckOutAt = CASE WHEN @IsProxyAction = 1 THEN @ProxyCheckOutAt ELSE ProxyCheckOutAt END,
+                    ProxyCheckOutAccountId = CASE WHEN @IsProxyAction = 1 THEN @ProxyCheckOutAccountId ELSE ProxyCheckOutAccountId END
                 WHERE ID = @Id
                   AND IDYeuCau = @IDYeuCau
                   AND IDNhanVien = @IDNhanVien
@@ -1221,6 +1312,10 @@ public sealed class YeuCauService(
             command.Parameters.Add(new SqlParameter("@LatAddressCheckOut", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = ToDbValue(model.LatAddressCheckOut) });
             command.Parameters.Add(new SqlParameter("@ImgPathCheckOut", SqlDbType.NVarChar, 500) { Value = ToDbValue(model.ImgPathCheckOut) });
             command.Parameters.Add(new SqlParameter("@GhiChuCheckOut", SqlDbType.NVarChar, 1000) { Value = ToDbValue(model.GhiChuCheckOut) });
+            command.Parameters.Add(new SqlParameter("@IsProxyAction", SqlDbType.Bit) { Value = model.IsProxyAction });
+            command.Parameters.Add(new SqlParameter("@ProxyCheckOutBy", SqlDbType.NVarChar, 250) { Value = model.IsProxyAction ? ToDbValue(model.ProxyActionBy ?? currentUser) : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@ProxyCheckOutAt", SqlDbType.DateTime) { Value = model.IsProxyAction ? DateTime.Now : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@ProxyCheckOutAccountId", SqlDbType.UniqueIdentifier) { Value = model.IsProxyAction ? ToDbValue(model.ProxyActionAccountId) : DBNull.Value });
 
             var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
             return affectedRows > 0
@@ -2679,7 +2774,13 @@ public sealed class YeuCauService(
             UpdatedBy = GetNullableString(reader, "Updated_By"),
             UpdatedDate = GetNullableDateTime(reader, "Updated_Date"),
             SoCongViec = GetNullableInt32(reader, "SoCongViec") ?? 0,
-            SoCongViecHoanThanh = GetNullableInt32(reader, "SoCongViecHoanThanh") ?? 0
+            SoCongViecHoanThanh = GetNullableInt32(reader, "SoCongViecHoanThanh") ?? 0,
+            HasCustomerRating = GetNullableBoolean(reader, "HasCustomerRating") ?? false,
+            CustomerRatingScore = GetNullableInt32(reader, "CustomerRatingScore"),
+            CustomerRatingSubmittedAt = GetNullableDateTime(reader, "CustomerRatingSubmittedAt"),
+            ZaloConnected = GetNullableBoolean(reader, "ZaloConnected") ?? false,
+            ZaloDisplayName = GetNullableString(reader, "ZaloDisplayName"),
+            ZaloPhoneNumber = GetNullableString(reader, "ZaloPhoneNumber")
         };
     }
 
@@ -2708,6 +2809,9 @@ public sealed class YeuCauService(
         DateTime? executionDateTo,
         string? assigneeKeyword,
         string? workStatusFilter,
+        bool? hasRating,
+        int? ratingScore,
+        bool? zaloConnected,
         int? assignedEmployeeId)
     {
         var filters = new List<string> { "1 = 1" };
@@ -2797,6 +2901,25 @@ public sealed class YeuCauService(
                       AND assignedEmployee.IDNhanVien = @AssignedEmployeeId
                 )
                 """);
+        }
+
+        if (hasRating.HasValue)
+        {
+            filters.Add(hasRating.Value
+                ? "ratingStats.RatingScore IS NOT NULL"
+                : "ratingStats.RatingScore IS NULL");
+        }
+
+        if (ratingScore.HasValue && ratingScore.Value is >= 1 and <= 5)
+        {
+            filters.Add("ratingStats.RatingScore = @RatingScoreFilter");
+        }
+
+        if (zaloConnected.HasValue)
+        {
+            filters.Add(zaloConnected.Value
+                ? "zaloStats.ZaloUserId IS NOT NULL"
+                : "zaloStats.ZaloUserId IS NULL");
         }
 
         if (string.Equals(workStatusFilter, YeuCauCongViecTrangThaiFilter.HoanThanh, StringComparison.OrdinalIgnoreCase))
@@ -2892,6 +3015,7 @@ public sealed class YeuCauService(
         DateTime? executionDateFrom,
         DateTime? executionDateTo,
         string? assigneeKeyword,
+        int? ratingScore,
         int? assignedEmployeeId)
     {
         if (!string.IsNullOrWhiteSpace(keyword))
@@ -2944,6 +3068,11 @@ public sealed class YeuCauService(
             {
                 Value = $"%{NormalizeSearchPattern(assigneeKeyword)}%"
             });
+        }
+
+        if (ratingScore.HasValue && ratingScore.Value is >= 1 and <= 5)
+        {
+            command.Parameters.Add(new SqlParameter("@RatingScoreFilter", SqlDbType.Int) { Value = ratingScore.Value });
         }
 
         if (assignedEmployeeId.HasValue && assignedEmployeeId.Value > 0)
@@ -3010,6 +3139,66 @@ public sealed class YeuCauService(
         await EnsureWorkImageMetadataColumnsAsync(connection, cancellationToken);
     }
 
+    private static async Task EnsureZaloRatingSummarySchemaAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            IF OBJECT_ID('dbo.TblRequestWorkRatings', 'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[TblRequestWorkRatings] (
+                    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                    RequestId INT NOT NULL,
+                    CustomerId INT NULL,
+                    ZaloUserId NVARCHAR(200) NULL,
+                    Token NVARCHAR(200) NOT NULL,
+                    RatingScore INT NOT NULL,
+                    Note NVARCHAR(1000) NULL,
+                    CustomerComment NVARCHAR(2000) NULL,
+                    SubmittedAtUtc DATETIME2 NOT NULL,
+                    CreatedAtUtc DATETIME2 NOT NULL,
+                    UpdatedAtUtc DATETIME2 NULL,
+                    Source NVARCHAR(80) NOT NULL DEFAULT N'ZaloQr'
+                );
+                CREATE UNIQUE INDEX UX_TblRequestWorkRatings_Token ON [dbo].[TblRequestWorkRatings](Token);
+                CREATE INDEX IX_TblRequestWorkRatings_Request ON [dbo].[TblRequestWorkRatings](RequestId);
+            END;
+
+            IF OBJECT_ID('dbo.TblCustomerZaloProfiles', 'U') IS NULL
+            BEGIN
+                CREATE TABLE [dbo].[TblCustomerZaloProfiles] (
+                    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                    CustomerId INT NULL,
+                    RequestId INT NULL,
+                    ZaloUserId NVARCHAR(200) NOT NULL,
+                    ZaloDisplayName NVARCHAR(250) NULL,
+                    ZaloAvatarUrl NVARCHAR(1000) NULL,
+                    PhoneNumber NVARCHAR(50) NULL,
+                    ZaloPhoneNumber NVARCHAR(50) NULL,
+                    OaId NVARCHAR(100) NOT NULL,
+                    IsFollowingOa BIT NULL,
+                    ConnectedAtUtc DATETIME2 NULL,
+                    LastInteractionAtUtc DATETIME2 NULL,
+                    Source NVARCHAR(80) NOT NULL,
+                    CreatedAtUtc DATETIME2 NOT NULL,
+                    UpdatedAtUtc DATETIME2 NULL
+                );
+                CREATE UNIQUE INDEX UX_TblCustomerZaloProfiles_UserOa ON [dbo].[TblCustomerZaloProfiles](ZaloUserId, OaId);
+                CREATE INDEX IX_TblCustomerZaloProfiles_Customer ON [dbo].[TblCustomerZaloProfiles](CustomerId);
+            END;
+
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'ZaloPhoneNumber') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD ZaloPhoneNumber NVARCHAR(50) NULL;
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'PhoneNumber') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD PhoneNumber NVARCHAR(50) NULL;
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'ZaloDisplayName') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD ZaloDisplayName NVARCHAR(250) NULL;
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'ZaloAvatarUrl') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD ZaloAvatarUrl NVARCHAR(1000) NULL;
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'IsFollowingOa') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD IsFollowingOa BIT NULL;
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'ConnectedAtUtc') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD ConnectedAtUtc DATETIME2 NULL;
+            IF COL_LENGTH('dbo.TblCustomerZaloProfiles', 'LastInteractionAtUtc') IS NULL ALTER TABLE [dbo].[TblCustomerZaloProfiles] ADD LastInteractionAtUtc DATETIME2 NULL;
+            IF COL_LENGTH('dbo.TblRequestWorkRatings', 'UpdatedAtUtc') IS NULL ALTER TABLE [dbo].[TblRequestWorkRatings] ADD UpdatedAtUtc DATETIME2 NULL;
+            IF COL_LENGTH('dbo.TblRequestWorkRatings', 'Source') IS NULL ALTER TABLE [dbo].[TblRequestWorkRatings] ADD Source NVARCHAR(80) NOT NULL CONSTRAINT DF_TblRequestWorkRatings_Source_Summary DEFAULT N'ZaloQr';
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task EnsureWorkImageMetadataColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -3032,6 +3221,48 @@ public sealed class YeuCauService(
             IF COL_LENGTH('dbo.{WorkImageTableName}', 'IDTaiKhoanNguoiDung') IS NULL
             BEGIN
                 ALTER TABLE [dbo].[{WorkImageTableName}] ADD [IDTaiKhoanNguoiDung] UNIQUEIDENTIFIER NULL;
+            END;
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task EnsureCheckinHistoryProxyColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'IsProxyAction') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [IsProxyAction] BIT NOT NULL CONSTRAINT DF_TblCheckinHistory_IsProxyAction DEFAULT(0);
+            END;
+
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'ProxyCheckInBy') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [ProxyCheckInBy] NVARCHAR(250) NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'ProxyCheckInAt') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [ProxyCheckInAt] DATETIME NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'ProxyCheckInAccountId') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [ProxyCheckInAccountId] UNIQUEIDENTIFIER NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'ProxyCheckOutBy') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [ProxyCheckOutBy] NVARCHAR(250) NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'ProxyCheckOutAt') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [ProxyCheckOutAt] DATETIME NULL;
+            END;
+
+            IF COL_LENGTH('dbo.{CheckinHistoryTableName}', 'ProxyCheckOutAccountId') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{CheckinHistoryTableName}] ADD [ProxyCheckOutAccountId] UNIQUEIDENTIFIER NULL;
             END;
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);

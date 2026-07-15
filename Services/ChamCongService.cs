@@ -48,13 +48,22 @@ public sealed class ChamCongService(
     private const string LocationTableName = "TblKhachHangDiaDiem";
     private const string SystemConfigTableName = "TblCauHinhHeThong";
     private const string ChamCongType = "ChamCong";
+    private const string CompanyAttendancePredicate = "(CheckInType = @CheckInType OR (CheckInType IS NULL AND IDYeuCau IS NULL))";
+    private const string CompanyAttendancePredicateWithAlias = "(ch.CheckInType = @CheckInType OR (ch.CheckInType IS NULL AND ch.IDYeuCau IS NULL))";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly ILogger<ChamCongService> _logger = logger;
 
-    private sealed record AttendanceSchedule(TimeSpan Begin1, TimeSpan End1, TimeSpan Begin2, TimeSpan End2);
-    private sealed record AttendanceShift(TimeSpan Begin, TimeSpan End);
+    private sealed record AttendanceSchedule(TimeSpan Begin1, TimeSpan End1, TimeSpan Begin2, TimeSpan End2, int LateGraceMinutes1, int LateGraceMinutes2);
+    private sealed record AttendanceShift(TimeSpan Begin, TimeSpan End, int LateGraceMinutes);
+    private static readonly AttendanceSchedule DefaultAttendanceSchedule = new(
+        new TimeSpan(7, 30, 0),
+        new TimeSpan(11, 30, 0),
+        new TimeSpan(13, 0, 0),
+        new TimeSpan(17, 0, 0),
+        10,
+        10);
 
     public async Task<IReadOnlyList<ChamCongLocationOption>> GetApptechLocationsAsync(CancellationToken cancellationToken = default)
     {
@@ -140,11 +149,13 @@ public sealed class ChamCongService(
 
             command.CommandText = BuildHistorySelect("""
                 WHERE ch.IDNhanVien IN ({0})
-                  AND ch.CheckInType = @CheckInType
+                  AND {1}
                   AND ch.ThoiDiem >= @DateFrom
                   AND ch.ThoiDiem < DATEADD(day, 1, @DateFrom)
                 ORDER BY ch.ThoiDiem ASC, ch.ID ASC
-                """.Replace("{0}", string.Join(", ", employeeFilters)));
+                """
+                .Replace("{0}", string.Join(", ", employeeFilters))
+                .Replace("{1}", CompanyAttendancePredicateWithAlias));
             command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
             command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = date.Date });
 
@@ -379,7 +390,7 @@ public sealed class ChamCongService(
                     GhiChuCheckOut = @GhiChuCheckOut
                 WHERE ID = @Id
                   AND IDNhanVien = @IDNhanVien
-                  AND CheckInType = @CheckInType
+                  AND {CompanyAttendancePredicate}
                   AND ThoiDiem IS NOT NULL
                   AND ThoiDiemCheckOut IS NULL
                   AND @ThoiDiemCheckOut >= ThoiDiem
@@ -419,11 +430,13 @@ public sealed class ChamCongService(
             : "";
         command.CommandText = BuildHistorySelect("""
             WHERE ch.IDNhanVien = @IDNhanVien
-              AND ch.CheckInType = @CheckInType
+              AND {0}
               AND ch.ThoiDiemCheckOut IS NULL
-              {0}
+              {1}
             ORDER BY ch.ThoiDiem DESC, ch.ID DESC
-            """.Replace("{0}", dateFilter), top: "TOP (1)");
+            """
+            .Replace("{0}", CompanyAttendancePredicateWithAlias)
+            .Replace("{1}", dateFilter), top: "TOP (1)");
         command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
         command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
         if (date.HasValue)
@@ -445,9 +458,10 @@ public sealed class ChamCongService(
         command.CommandText = BuildHistorySelect("""
             WHERE ch.ID = @Id
               AND ch.IDNhanVien = @IDNhanVien
-              AND ch.CheckInType = @CheckInType
+              AND {0}
               AND ch.ThoiDiemCheckOut IS NULL
-            """, top: "TOP (1)");
+            """
+            .Replace("{0}", CompanyAttendancePredicateWithAlias), top: "TOP (1)");
         command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
         command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
         command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
@@ -516,7 +530,7 @@ public sealed class ChamCongService(
             var checkinShift = ResolveCheckinShift(item.ThoiDiem?.TimeOfDay, schedule);
             item.IsCheckinViolation = checkinShift is not null &&
                 item.ThoiDiem.HasValue &&
-                item.ThoiDiem.Value.TimeOfDay > checkinShift.Begin;
+                item.ThoiDiem.Value.TimeOfDay > checkinShift.Begin.Add(TimeSpan.FromMinutes(checkinShift.LateGraceMinutes));
 
             var checkoutEnd = ResolveCheckoutEnd(item.ThoiDiemCheckOut?.TimeOfDay, schedule);
             item.IsCheckoutViolation = checkoutEnd.HasValue &&
@@ -533,13 +547,15 @@ public sealed class ChamCongService(
         command.CommandText = $"""
             SELECT MaCauHinh, GiaTri
             FROM [{SystemConfigTableName}]
-            WHERE MaCauHinh IN (N'Begin_1', N'End_1', N'Begin_2', N'End_2')
+            WHERE MaCauHinh IN (N'Begin_1', N'End_1', N'Begin_2', N'End_2', N'LateGraceMinutes_1', N'LateGraceMinutes_2')
             """;
 
         TimeSpan? begin1 = null;
         TimeSpan? end1 = null;
         TimeSpan? begin2 = null;
         TimeSpan? end2 = null;
+        var lateGraceMinutes1 = DefaultAttendanceSchedule.LateGraceMinutes1;
+        var lateGraceMinutes2 = DefaultAttendanceSchedule.LateGraceMinutes2;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -564,12 +580,18 @@ public sealed class ChamCongService(
                 case "End_2":
                     end2 = value.Value;
                     break;
+                case "LateGraceMinutes_1":
+                    lateGraceMinutes1 = ParseNullableInt(GetNullableString(reader, "GiaTri")) ?? lateGraceMinutes1;
+                    break;
+                case "LateGraceMinutes_2":
+                    lateGraceMinutes2 = ParseNullableInt(GetNullableString(reader, "GiaTri")) ?? lateGraceMinutes2;
+                    break;
             }
         }
 
         return begin1.HasValue && end1.HasValue && begin2.HasValue && end2.HasValue
-            ? new AttendanceSchedule(begin1.Value, end1.Value, begin2.Value, end2.Value)
-            : null;
+            ? new AttendanceSchedule(begin1.Value, end1.Value, begin2.Value, end2.Value, lateGraceMinutes1, lateGraceMinutes2)
+            : DefaultAttendanceSchedule;
     }
 
     private static AttendanceShift? ResolveCheckinShift(TimeSpan? checkinTime, AttendanceSchedule schedule)
@@ -579,9 +601,9 @@ public sealed class ChamCongService(
             return null;
         }
 
-        return checkinTime.Value < schedule.Begin2
-            ? new AttendanceShift(schedule.Begin1, schedule.End1)
-            : new AttendanceShift(schedule.Begin2, schedule.End2);
+        return checkinTime.Value <= schedule.End1
+            ? new AttendanceShift(schedule.Begin1, schedule.End1, schedule.LateGraceMinutes1)
+            : new AttendanceShift(schedule.Begin2, schedule.End2, schedule.LateGraceMinutes2);
     }
 
     private static TimeSpan? ResolveCheckoutEnd(TimeSpan? checkoutTime, AttendanceSchedule schedule)
@@ -683,7 +705,7 @@ public sealed class ChamCongService(
             SELECT TOP (1) 1
             FROM [{CheckinHistoryTableName}] WITH (UPDLOCK, HOLDLOCK)
             WHERE IDNhanVien = @IDNhanVien
-              AND CheckInType = @CheckInType
+              AND {CompanyAttendancePredicate}
               AND ThoiDiem >= @DateFrom
               AND ThoiDiem < DATEADD(day, 1, @DateFrom)
               AND ThoiDiemCheckOut IS NULL
@@ -865,6 +887,13 @@ public sealed class ChamCongService(
             string typedString when decimal.TryParse(typedString, NumberStyles.Number, CultureInfo.CurrentCulture, out var cultureParsed) => cultureParsed,
             _ => null
         };
+    }
+
+    private static int? ParseNullableInt(string? value)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 240)
+            : null;
     }
 
     private static object ToDbValue(object? value)

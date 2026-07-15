@@ -1,0 +1,292 @@
+@model ZaloManagementViewModel
+@{
+    ViewData["Title"] = "Quan ly Zalo OA";
+    ViewData["Breadcrumb"] = "Trang chu / He thong / Quan ly Zalo OA";
+    var statusMessage = TempData["StatusMessage"]?.ToString();
+    var statusType = TempData["StatusType"]?.ToString() ?? "info";
+    var tokenClass = Model.AccessTokenExpiresAtUtc.HasValue && (Model.MinutesUntilExpiry ?? 0) > 120
+        ? "success"
+        : Model.AccessTokenExpiresAtUtc.HasValue ? "warning" : "danger";
+}
+
+<section class="master-data-page zalo-management-page">
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="page-alert @statusType">
+            <i class="fa-solid @(statusType == "success" ? "fa-circle-check" : "fa-circle-exclamation")" aria-hidden="true"></i>
+            <span>@statusMessage</span>
+        </div>
+    }
+
+    <article class="panel zalo-hero">
+        <div>
+            <div class="master-data-eyebrow">Zalo Official Account</div>
+            <h2>Quan ly ket noi Zalo OA</h2>
+            <p>Theo doi cau hinh OA, token, webhook va lich su gui tin nhan tu phieu yeu cau cong viec.</p>
+        </div>
+        <div class="zalo-hero-actions">
+            <a class="primary-button" href="/api/zalo/oauth/start">
+                <i class="fa-solid fa-link" aria-hidden="true"></i>
+                <span>Ket noi OA</span>
+            </a>
+            <form method="post" asp-action="RefreshToken">
+                @Html.AntiForgeryToken()
+                <button class="secondary-button" type="submit">
+                    <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                    <span>Refresh token</span>
+                </button>
+            </form>
+        </div>
+    </article>
+
+    <div class="zalo-stat-grid">
+        <article class="zalo-stat-card @tokenClass">
+            <span>Trang thai token</span>
+            <strong>@(Model.AccessTokenExpiresAtUtc.HasValue ? "Da ket noi" : "Chua co token")</strong>
+            <small>@(Model.MinutesUntilExpiry.HasValue ? $"{Model.MinutesUntilExpiry} phut nua het han" : "Can ket noi OA lan dau")</small>
+        </article>
+        <article class="zalo-stat-card">
+            <span>OA ID</span>
+            <strong>@(string.IsNullOrWhiteSpace(Model.OaId) ? "Chua cau hinh" : Model.OaId)</strong>
+            <small>Doc tu appsettings hoac bien moi truong</small>
+        </article>
+        <article class="zalo-stat-card">
+            <span>Webhook</span>
+            <strong>@(Model.HasOaSecretKey ? "Co secret verify" : "Thieu secret")</strong>
+            <small>@Model.WebhookUrl</small>
+        </article>
+        <article class="zalo-stat-card">
+            <span>Tin nhan gan nhat</span>
+            <strong>@Model.MessageLogs.Count</strong>
+            <small>20 log moi nhat</small>
+        </article>
+    </div>
+
+    <article class="panel zalo-config-panel">
+        <div class="master-data-section-header">
+            <div>
+                <h3>Nhap thong tin cau hinh</h3>
+                <p>Secret duoc ma hoa khi luu. De trong secret neu ban khong muon thay doi.</p>
+            </div>
+        </div>
+        <form method="post" asp-action="SaveSettings" class="zalo-settings-form">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="page-alert error"></div>
+            <div class="zalo-form-grid">
+                <label class="zalo-field">
+                    <span>App ID</span>
+                    <input asp-for="Settings.AppId" autocomplete="off" placeholder="Nhap App ID" />
+                    <small asp-validation-for="Settings.AppId"></small>
+                </label>
+                <label class="zalo-field">
+                    <span>OA ID</span>
+                    <input asp-for="Settings.OaId" autocomplete="off" placeholder="Nhap OA ID" />
+                    <small asp-validation-for="Settings.OaId"></small>
+                </label>
+                <label class="zalo-field">
+                    <span>App Secret <em>@(Model.HasAppSecret ? "Da cau hinh" : "Chua cau hinh")</em></span>
+                    <input asp-for="Settings.AppSecret" type="password" autocomplete="new-password" placeholder="De trong neu khong thay doi" />
+                </label>
+                <label class="zalo-field">
+                    <span>OA Secret Key <em>@(Model.HasOaSecretKey ? "Da cau hinh" : "Chua cau hinh")</em></span>
+                    <input asp-for="Settings.OaSecretKey" type="password" autocomplete="new-password" placeholder="De trong neu khong thay doi" />
+                </label>
+                <label class="zalo-field zalo-wide">
+                    <span>OAuth Callback URL</span>
+                    <input asp-for="Settings.OAuthRedirectUri" placeholder="https://ten-mien/api/zalo/oauth/callback" />
+                    <small asp-validation-for="Settings.OAuthRedirectUri"></small>
+                </label>
+                <label class="zalo-field zalo-wide">
+                    <span>Public Base URL</span>
+                    <input asp-for="Settings.PublicBaseUrl" placeholder="https://ten-mien-cong-khai" />
+                    <small asp-validation-for="Settings.PublicBaseUrl"></small>
+                </label>
+                <label class="zalo-field">
+                    <span>API Base URL</span>
+                    <input asp-for="Settings.ApiBaseUrl" />
+                    <small asp-validation-for="Settings.ApiBaseUrl"></small>
+                </label>
+                <label class="zalo-field">
+                    <span>OAuth Base URL</span>
+                    <input asp-for="Settings.OAuthBaseUrl" />
+                    <small asp-validation-for="Settings.OAuthBaseUrl"></small>
+                </label>
+                <label class="zalo-field">
+                    <span>Token endpoint</span>
+                    <input asp-for="Settings.TokenEndpoint" />
+                </label>
+                <label class="zalo-field">
+                    <span>OAuth authorize path</span>
+                    <input asp-for="Settings.OAuthAuthorizePath" />
+                </label>
+                <label class="zalo-field zalo-wide">
+                    <span>Text message endpoint</span>
+                    <input asp-for="Settings.TextMessageEndpoint" />
+                </label>
+                <label class="zalo-field">
+                    <span>Refresh truoc khi het han (phut)</span>
+                    <input asp-for="Settings.RefreshBeforeExpiryMinutes" type="number" min="1" max="1440" />
+                    <small asp-validation-for="Settings.RefreshBeforeExpiryMinutes"></small>
+                </label>
+                <label class="zalo-field">
+                    <span>Thoi han access token (gio)</span>
+                    <input asp-for="Settings.AccessTokenLifetimeHours" type="number" min="1" max="168" />
+                    <small asp-validation-for="Settings.AccessTokenLifetimeHours"></small>
+                </label>
+                <label class="zalo-switch-field">
+                    <input asp-for="Settings.EnableSignatureValidation" type="checkbox" />
+                    <span class="zalo-switch" aria-hidden="true"></span>
+                    <span>Kiem tra chu ky webhook</span>
+                </label>
+            </div>
+            <div class="zalo-form-footer">
+                <div>
+                    <span>Token expires UTC: <strong>@(Model.AccessTokenExpiresAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</strong></span>
+                    <span>Last refresh UTC: <strong>@(Model.LastRefreshSuccessAtUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</strong></span>
+                </div>
+                <button class="primary-button" type="submit">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                    <span>Luu cau hinh</span>
+                </button>
+            </div>
+        </form>
+        @if (!string.IsNullOrWhiteSpace(Model.LastError))
+        {
+            <div class="page-alert error zalo-inline-alert">
+                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                <span>@Model.LastError</span>
+            </div>
+        }
+    </article>
+
+    <div class="zalo-log-grid">
+        <article class="panel">
+            <div class="master-data-section-header">
+                <div>
+                    <h3>Message logs</h3>
+                    <p>Lich su goi API gui tin Zalo OA.</p>
+                </div>
+            </div>
+            <div class="master-data-table-wrapper">
+                <table class="master-data-table">
+                    <thead>
+                        <tr>
+                            <th>Thoi gian UTC</th>
+                            <th>Loai</th>
+                            <th>Khach</th>
+                            <th>Trang thai</th>
+                            <th>Loi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @if (Model.MessageLogs.Count == 0)
+                    {
+                        <tr><td colspan="5" class="master-data-empty">Chua co log gui tin.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model.MessageLogs)
+                        {
+                            <tr>
+                                <td>@item.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@item.MessageType</td>
+                                <td>@(item.CustomerId?.ToString() ?? "-")</td>
+                                <td><span class="zalo-status-pill @(item.IsSuccess ? "success" : "danger")">@(item.IsSuccess ? "OK" : "Loi")</span></td>
+                                <td>@(string.IsNullOrWhiteSpace(item.ErrorMessage) ? "-" : item.ErrorMessage)</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="panel">
+            <div class="master-data-section-header">
+                <div>
+                    <h3>Webhook events</h3>
+                    <p>Su kien Zalo OA he thong da nhan.</p>
+                </div>
+            </div>
+            <div class="master-data-table-wrapper">
+                <table class="master-data-table">
+                    <thead>
+                        <tr>
+                            <th>Thoi gian UTC</th>
+                            <th>Event</th>
+                            <th>Signature</th>
+                            <th>Processed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @if (Model.WebhookEvents.Count == 0)
+                    {
+                        <tr><td colspan="4" class="master-data-empty">Chua co webhook event.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var item in Model.WebhookEvents)
+                        {
+                            <tr>
+                                <td>@item.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@item.EventName</td>
+                                <td><span class="zalo-status-pill @(item.IsSignatureValid ? "success" : "danger")">@(item.IsSignatureValid ? "Hop le" : "Sai")</span></td>
+                                <td>@(item.ProcessedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+</section>
+
+<style>
+    .zalo-management-page { display: grid; gap: 18px; }
+    .zalo-hero { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .zalo-hero h2 { margin: 4px 0 8px; }
+    .zalo-hero p { margin: 0; color: #55716d; }
+    .zalo-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .zalo-hero-actions form { margin: 0; }
+    .zalo-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .zalo-stat-card { display: grid; gap: 6px; min-height: 116px; padding: 16px; border: 1px solid #c9e6df; border-radius: 8px; background: linear-gradient(180deg,#fff,#f1fbf8); }
+    .zalo-stat-card span, .zalo-config-grid span { color: #5f7874; font-weight: 700; font-size: 13px; }
+    .zalo-stat-card strong { font-size: 21px; color: #063b35; }
+    .zalo-stat-card small { color: #5f7874; word-break: break-word; }
+    .zalo-stat-card.success { border-color: #2ac79f; }
+    .zalo-stat-card.warning { border-color: #f2b84b; }
+    .zalo-stat-card.danger { border-color: #e06464; }
+    .zalo-config-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .zalo-config-grid div { display: grid; gap: 5px; min-width: 0; padding: 12px; border: 1px solid #d8ebe6; border-radius: 8px; background: #fbfffd; }
+    .zalo-config-grid strong { color: #073f38; word-break: break-word; }
+    .zalo-settings-form { display: grid; gap: 16px; }
+    .zalo-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .zalo-field { display: grid; gap: 7px; min-width: 0; color: #244f49; font-weight: 700; }
+    .zalo-field > span { display: flex; justify-content: space-between; gap: 8px; }
+    .zalo-field em { color: #65817d; font-size: 12px; font-style: normal; font-weight: 600; }
+    .zalo-field input { width: 100%; min-height: 46px; box-sizing: border-box; padding: 0 13px; border: 1px solid #cfe2de; border-radius: 7px; background: #fff; color: #073f38; font: inherit; font-weight: 500; }
+    .zalo-field input:focus { border-color: #17b890; outline: 3px solid rgba(23,184,144,.13); }
+    .zalo-field small { color: #b33434; font-size: 12px; }
+    .zalo-wide { grid-column: span 2; }
+    .zalo-switch-field { display: flex; align-items: center; gap: 10px; min-height: 46px; color: #244f49; font-weight: 700; cursor: pointer; }
+    .zalo-switch-field input { position: absolute; opacity: 0; pointer-events: none; }
+    .zalo-switch { position: relative; width: 44px; height: 24px; flex: 0 0 auto; border-radius: 999px; background: #b9cbc7; transition: background .2s; }
+    .zalo-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2); transition: transform .2s; }
+    .zalo-switch-field input:checked + .zalo-switch { background: #17b890; }
+    .zalo-switch-field input:checked + .zalo-switch::after { transform: translateX(20px); }
+    .zalo-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 14px; border-top: 1px solid #deece9; }
+    .zalo-form-footer > div { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #5f7874; font-size: 13px; }
+    .zalo-log-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+    .zalo-status-pill { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; font-weight: 800; font-size: 12px; }
+    .zalo-status-pill.success { background: #dcf8ee; color: #087359; }
+    .zalo-status-pill.danger { background: #ffe7e7; color: #ad3030; }
+    .zalo-inline-alert { margin-top: 14px; }
+    @@media (max-width: 960px) {
+        .zalo-hero { align-items: stretch; flex-direction: column; }
+        .zalo-stat-grid, .zalo-config-grid, .zalo-log-grid, .zalo-form-grid { grid-template-columns: 1fr; }
+        .zalo-wide { grid-column: auto; }
+        .zalo-form-footer { align-items: stretch; flex-direction: column; }
+        .zalo-form-footer .primary-button { width: 100%; }
+    }
+</style>

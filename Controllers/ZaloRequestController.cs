@@ -34,7 +34,15 @@ public sealed class ZaloRequestController(
                 qrUrl = result.QrUrl,
                 qrImageBase64 = result.QrImageBase64,
                 status = result.Status,
-                expiresAtUtc = result.ExpiresAtUtc
+                expiresAtUtc = result.ExpiresAtUtc,
+                customerName = result.CustomerName,
+                phoneNumber = result.PhoneNumber,
+                zaloConnected = result.ZaloConnected,
+                zaloDisplayName = result.ZaloDisplayName,
+                zaloPhoneNumber = result.ZaloPhoneNumber,
+                rated = result.Rated,
+                ratingScore = result.RatingScore,
+                ratingSubmittedAtUtc = result.RatingSubmittedAtUtc
             });
     }
 
@@ -51,9 +59,59 @@ public sealed class ZaloRequestController(
                 status = status.Status,
                 openCount = status.OpenCount,
                 zaloConnected = status.ZaloConnected,
+                zaloDisplayName = status.ZaloDisplayName,
+                zaloPhoneNumber = status.ZaloPhoneNumber,
                 rated = status.Rated,
-                lastOpenedAtUtc = status.LastOpenedAtUtc
+                ratingScore = status.RatingScore,
+                ratingSubmittedAtUtc = status.RatingSubmittedAtUtc,
+                lastOpenedAtUtc = status.LastOpenedAtUtc,
+                expiresAtUtc = status.ExpiresAtUtc
             });
+    }
+
+    [Authorize]
+    [HttpGet("api/customers/{customerId:int}/zalo-profile")]
+    public async Task<IActionResult> CustomerZaloProfile(int customerId, CancellationToken cancellationToken)
+    {
+        var profile = await requestService.GetCustomerZaloProfileAsync(customerId, cancellationToken);
+        return Ok(profile.Connected
+            ? new
+            {
+                connected = true,
+                zaloUserId = profile.ZaloUserId,
+                zaloDisplayName = profile.ZaloDisplayName,
+                zaloAvatarUrl = profile.ZaloAvatarUrl,
+                zaloPhoneNumber = profile.ZaloPhoneNumber,
+                isFollowingOa = profile.IsFollowingOa,
+                connectedAtUtc = profile.ConnectedAtUtc,
+                lastInteractionAtUtc = profile.LastInteractionAtUtc
+            }
+            : new { connected = false });
+    }
+
+    [Authorize]
+    [HttpGet("api/requests/{requestId:int}/rating")]
+    public async Task<IActionResult> RequestRating(int requestId, CancellationToken cancellationToken)
+    {
+        var rating = await requestService.GetRequestRatingAsync(requestId, cancellationToken);
+        return Ok(rating.HasRating
+            ? new
+            {
+                hasRating = true,
+                ratingScore = rating.RatingScore,
+                note = rating.Note,
+                customerComment = rating.CustomerComment,
+                submittedAtUtc = rating.SubmittedAtUtc,
+                source = rating.Source,
+                items = rating.Items.Select(item => new
+                {
+                    item.RequestWorkItemId,
+                    item.WorkName,
+                    item.RatingScore,
+                    item.Note
+                })
+            }
+            : new { hasRating = false });
     }
 
     [AllowAnonymous]
@@ -61,6 +119,11 @@ public sealed class ZaloRequestController(
     public async Task<IActionResult> Landing(string token, CancellationToken cancellationToken)
     {
         var model = await requestService.OpenAsync(token, cancellationToken);
+        if (model?.ZaloConnected == true && !model.IsRated)
+        {
+            return Redirect($"/zalo/request/{Uri.EscapeDataString(token)}/rating");
+        }
+
         return Content(model is null ? RenderInvalid() : RenderLanding(model), "text/html; charset=utf-8");
     }
 
@@ -133,6 +196,9 @@ public sealed class ZaloRequestController(
                     .actions{display:grid;gap:10px;padding:22px}.button{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px;border-radius:7px;text-decoration:none;font-weight:700}
                     .follow{background:#087d69;color:#fff}.rating{border:1px solid #087d69;color:#087d69;background:#fff}.hint{margin:0;color:#58736e;line-height:1.5;font-size:14px}
                     code{display:block;margin-top:10px;padding:10px;background:#eff7f5;border-radius:6px;overflow-wrap:anywhere;color:#28645b}
+                    .verify-code{font-size:18px;font-weight:700}
+                    .copy-code{min-height:42px;margin-top:10px;border:1px solid #9fdccc;border-radius:7px;background:#fff;color:#08735f;font:inherit;font-weight:700;cursor:pointer}
+                    .copy-status{min-height:20px;margin-top:8px;color:#08735f;font-weight:700;font-size:13px}
                     @media(max-width:520px){.info{grid-template-columns:1fr}main{margin:12px auto}header,section,.actions{padding:18px}}
                 </style>
             </head>
@@ -151,11 +217,30 @@ public sealed class ZaloRequestController(
                         <p class="hint">Khách hàng cần chủ động quan tâm hoặc tương tác với OA. Sau khi Zalo gửi webhook hợp lệ, hệ thống mới cập nhật được Zalo ID.</p>
                         <code>Mã liên kết: {{{Encode(model.UserExternalId)}}}</code>
                     </section>
+                    <section>
+                        <h2>Ma xac nhan Zalo</h2>
+                        <p class="hint">Neu anh/chi da quan tam OA, hay sao chep ma nay va gui vao khung chat Zalo OA de he thong ghi nhan thong tin Zalo.</p>
+                        <code class="verify-code" data-verify-code="{{{Encode(model.Token)}}}">{{{Encode(model.Token)}}}</code>
+                        <button class="copy-code" type="button" data-copy-code>Sao chep ma xac nhan</button>
+                        <div class="copy-status" data-copy-status aria-live="polite"></div>
+                    </section>
                     <div class="actions">
                         <a class="button follow" href="{{{followUrl}}}" target="_blank" rel="noopener">Quan tâm Zalo OA để nhận thông báo</a>
                         <a class="button rating" href="/zalo/request/{{{Uri.EscapeDataString(model.Token)}}}/rating">Tiếp tục đánh giá</a>
                     </div>
                 </main>
+                <script>
+                    const code = document.querySelector("[data-verify-code]")?.dataset.verifyCode || "";
+                    const status = document.querySelector("[data-copy-status]");
+                    document.querySelector("[data-copy-code]")?.addEventListener("click", async () => {
+                        try {
+                            await navigator.clipboard.writeText(code);
+                            status.textContent = "Da sao chep ma. Hay dan ma vao chat Zalo OA.";
+                        } catch {
+                            status.textContent = "Hay sao chep ma hien thi phia tren va gui vao Zalo OA.";
+                        }
+                    });
+                </script>
             </body>
             </html>
             """;

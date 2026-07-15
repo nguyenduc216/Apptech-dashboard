@@ -333,12 +333,12 @@ public sealed class HangHoaService(
 
             return newId > 0
                 ? (true, null, newId)
-                : (false, "KhÃ´ng thá»ƒ thÃªm má»›i hÃ ng hÃ³a.", null);
+                : (false, "Không thể thêm mới hàng hóa.", null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create TblHangHoa.");
-            return (false, "KhÃ´ng thá»ƒ thÃªm má»›i hÃ ng hÃ³a lÃºc nÃ y.", null);
+            return (false, "Không thể thêm mới hàng hóa lúc này.", null);
         }
     }
 
@@ -349,7 +349,7 @@ public sealed class HangHoaService(
     {
         if (model.Id is null or <= 0)
         {
-            return (false, "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c hÃ ng hÃ³a cáº§n cáº­p nháº­t.");
+            return (false, "Không xác định được hàng hóa cần cập nhật.");
         }
 
         try
@@ -392,12 +392,12 @@ public sealed class HangHoaService(
 
             return affectedRows > 0
                 ? (true, null)
-                : (false, "KhÃ´ng tÃ¬m tháº¥y hÃ ng hÃ³a Ä‘á»ƒ cáº­p nháº­t.");
+                : (false, "Không tìm thấy hàng hóa để cập nhật.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update TblHangHoa {Id}.", model.Id);
-            return (false, "KhÃ´ng thá»ƒ cáº­p nháº­t hÃ ng hÃ³a lÃºc nÃ y.");
+            return (false, "Không thể cập nhật hàng hóa lúc này.");
         }
     }
 
@@ -405,7 +405,7 @@ public sealed class HangHoaService(
     {
         if (id <= 0)
         {
-            return (false, "KhÃ´ng xÃ¡c Ä‘á»‹nh Ä‘Æ°á»£c hÃ ng hÃ³a cáº§n xÃ³a.");
+            return (false, "Không xác định được hàng hóa cần xóa.");
         }
 
         try
@@ -427,12 +427,12 @@ public sealed class HangHoaService(
             var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
             return affectedRows > 0
                 ? (true, null)
-                : (false, "KhÃ´ng tÃ¬m tháº¥y hÃ ng hÃ³a Ä‘á»ƒ xÃ³a.");
+                : (false, "Không tìm thấy hàng hóa để xóa.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to delete TblHangHoa {Id}.", id);
-            return (false, "KhÃ´ng thá»ƒ xÃ³a hÃ ng hÃ³a lÃºc nÃ y.");
+            return (false, "Không thể xóa hàng hóa lúc này.");
         }
     }
 
@@ -1206,7 +1206,7 @@ public sealed class HangHoaService(
         }
 
         var existingId = await command.ExecuteScalarAsync(cancellationToken);
-        return existingId is null ? null : "TÃªn hÃ ng hÃ³a Ä‘Ã£ tá»“n táº¡i.";
+        return existingId is null ? null : "Tên hàng hóa đã tồn tại.";
     }
 
     private static async Task<(Dictionary<string, List<HangHoaImportExistingItem>> ByCode, Dictionary<string, List<HangHoaImportExistingItem>> ByName)> LoadHangHoaImportLookupAsync(
@@ -1481,7 +1481,7 @@ public sealed class HangHoaService(
         var newId = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
         if (newId <= 0)
         {
-            throw new InvalidOperationException("KhÃ´ng thá»ƒ táº¡o má»›i Ä‘Æ¡n vá»‹ tÃ­nh khi import hÃ ng hÃ³a.");
+            throw new InvalidOperationException("Không thể tạo mới đơn vị tính khi import hàng hóa.");
         }
 
         return newId;

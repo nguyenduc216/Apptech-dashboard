@@ -357,7 +357,7 @@ public class HangHoaController(
         {
             if (model.PhanLoai[index].TenPhanLoai?.Length > 250)
             {
-                ModelState.AddModelError($"Form.PhanLoai[{index}].TenPhanLoai", "TÃªn phÃ¢n loáº¡i tá»‘i Ä‘a 250 kÃ½ tá»±.");
+                ModelState.AddModelError($"Form.PhanLoai[{index}].TenPhanLoai", "Tên phân loại tối đa 250 ký tự.");
             }
         }
     }

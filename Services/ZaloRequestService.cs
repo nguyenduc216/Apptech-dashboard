@@ -14,6 +14,8 @@ public interface IZaloRequestService
     Task<ZaloRequestLinkStatus?> GetStatusAsync(string token, CancellationToken cancellationToken = default);
     Task<ZaloRequestLandingView?> OpenAsync(string token, CancellationToken cancellationToken = default);
     Task<ZaloRequestLandingView?> GetRatingViewAsync(string token, CancellationToken cancellationToken = default);
+    Task<CustomerZaloProfileInfo> GetCustomerZaloProfileAsync(int customerId, CancellationToken cancellationToken = default);
+    Task<RequestRatingInfo> GetRequestRatingAsync(int requestId, CancellationToken cancellationToken = default);
     Task<(ZaloRequestRatingResult? Result, string? Error)> SubmitRatingAsync(
         ZaloRequestRatingSubmit request,
         CancellationToken cancellationToken = default);
@@ -22,6 +24,9 @@ public interface IZaloRequestService
         string zaloUserId,
         string? oaId,
         string source,
+        string? displayName,
+        string? avatarUrl,
+        string? phoneNumber,
         CancellationToken cancellationToken = default);
 }
 
@@ -52,7 +57,7 @@ public sealed class ZaloRequestService(
         var existing = await LoadActiveLinkByRequestAsync(connection, requestId, cancellationToken);
         if (existing is not null)
         {
-            return BuildLinkResult(existing.Token, existing.Status, existing.ExpiresAtUtc);
+            return await BuildLinkResultAsync(connection, existing, requestInfo, cancellationToken);
         }
 
         var token = SecureToken();
@@ -79,7 +84,8 @@ public sealed class ZaloRequestService(
         command.Parameters.Add(new SqlParameter("@ExpiresAtUtc", SqlDbType.DateTime2) { Value = expiresAt });
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        return BuildLinkResult(token, "Created", expiresAt);
+        var link = new RequestLinkRecord(requestId, requestInfo.CustomerId, token, externalId, "Created", expiresAt);
+        return await BuildLinkResultAsync(connection, link, requestInfo, cancellationToken);
     }
 
     public async Task<ZaloRequestLinkStatus?> GetStatusAsync(string token, CancellationToken cancellationToken = default)
@@ -88,9 +94,32 @@ public sealed class ZaloRequestService(
         await EnsureSchemaAsync(connection, cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
-            SELECT TOP (1) Status, OpenCount, LastOpenedAtUtc, ExpiresAtUtc
-            FROM [{LinkTable}]
-            WHERE Token = @Token
+            SELECT TOP (1)
+                link.RequestId,
+                link.CustomerId,
+                link.Status,
+                link.OpenCount,
+                link.LastOpenedAtUtc,
+                link.ExpiresAtUtc,
+                profile.ZaloDisplayName,
+                COALESCE(profile.ZaloPhoneNumber, profile.PhoneNumber) AS ZaloPhoneNumber,
+                rating.RatingScore,
+                rating.SubmittedAtUtc AS RatingSubmittedAtUtc
+            FROM [{LinkTable}] link
+            OUTER APPLY (
+                SELECT TOP (1) ZaloDisplayName, ZaloPhoneNumber, PhoneNumber
+                FROM [{ProfileTable}] p
+                WHERE p.CustomerId = link.CustomerId
+                  AND NULLIF(LTRIM(RTRIM(p.ZaloUserId)), N'') IS NOT NULL
+                ORDER BY p.UpdatedAtUtc DESC, p.CreatedAtUtc DESC
+            ) profile
+            OUTER APPLY (
+                SELECT TOP (1) RatingScore, SubmittedAtUtc
+                FROM [{RatingTable}] r
+                WHERE r.RequestId = link.RequestId
+                ORDER BY r.SubmittedAtUtc DESC
+            ) rating
+            WHERE link.Token = @Token
             """;
         command.Parameters.Add(new SqlParameter("@Token", SqlDbType.NVarChar, 200) { Value = token.Trim() });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -106,12 +135,23 @@ public sealed class ZaloRequestService(
             status = "Expired";
         }
 
+        var ratingScore = reader["RatingScore"] == DBNull.Value ? null : (int?)Convert.ToInt32(reader["RatingScore"]);
+        var ratingSubmittedAt = GetDateTime(reader, "RatingSubmittedAtUtc");
+        var zaloConnected = !string.IsNullOrWhiteSpace(GetString(reader, "ZaloDisplayName")) ||
+            !string.IsNullOrWhiteSpace(GetString(reader, "ZaloPhoneNumber")) ||
+            status is "ZaloConnected" or "Rated";
+
         return new ZaloRequestLinkStatus(
             status,
             Convert.ToInt32(reader["OpenCount"]),
-            status is "ZaloConnected" or "Rated",
-            status == "Rated",
-            GetDateTime(reader, "LastOpenedAtUtc"));
+            zaloConnected,
+            status == "Rated" || ratingScore.HasValue,
+            GetDateTime(reader, "LastOpenedAtUtc"),
+            expiresAt,
+            GetString(reader, "ZaloDisplayName"),
+            GetString(reader, "ZaloPhoneNumber"),
+            ratingScore,
+            ratingSubmittedAt);
     }
 
     public async Task<ZaloRequestLandingView?> OpenAsync(string token, CancellationToken cancellationToken = default)
@@ -139,7 +179,45 @@ public sealed class ZaloRequestService(
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        return await LoadLandingAsync(connection, link, cancellationToken);
+        var landing = await LoadLandingAsync(connection, link, cancellationToken);
+        if (landing.ZaloConnected)
+        {
+            landing.IsRated = link.Status == "Rated";
+        }
+
+        return landing;
+    }
+
+    public async Task<CustomerZaloProfileInfo> GetCustomerZaloProfileAsync(int customerId, CancellationToken cancellationToken = default)
+    {
+        if (customerId <= 0)
+        {
+            return new CustomerZaloProfileInfo();
+        }
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await EnsureSchemaAsync(connection, cancellationToken);
+        return await LoadCustomerZaloProfileAsync(connection, customerId, cancellationToken) ?? new CustomerZaloProfileInfo
+        {
+            CustomerId = customerId,
+            Connected = false
+        };
+    }
+
+    public async Task<RequestRatingInfo> GetRequestRatingAsync(int requestId, CancellationToken cancellationToken = default)
+    {
+        if (requestId <= 0)
+        {
+            return new RequestRatingInfo();
+        }
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await EnsureSchemaAsync(connection, cancellationToken);
+        return await LoadRequestRatingAsync(connection, requestId, cancellationToken) ?? new RequestRatingInfo
+        {
+            RequestId = requestId,
+            HasRating = false
+        };
     }
 
     public async Task<ZaloRequestLandingView?> GetRatingViewAsync(string token, CancellationToken cancellationToken = default)
@@ -190,11 +268,11 @@ public sealed class ZaloRequestService(
                 command.CommandText = $"""
                     INSERT INTO [{RatingTable}] (
                         Id, RequestId, CustomerId, ZaloUserId, Token, RatingScore,
-                        Note, CustomerComment, SubmittedAtUtc, CreatedAtUtc
+                        Note, CustomerComment, SubmittedAtUtc, CreatedAtUtc, UpdatedAtUtc, Source
                     )
                     VALUES (
                         @Id, @RequestId, @CustomerId, @ZaloUserId, @Token, @RatingScore,
-                        @Note, @CustomerComment, SYSUTCDATETIME(), SYSUTCDATETIME()
+                        @Note, @CustomerComment, SYSUTCDATETIME(), SYSUTCDATETIME(), NULL, N'ZaloQr'
                     )
                     """;
                 command.Parameters.Add(new SqlParameter("@Id", SqlDbType.UniqueIdentifier) { Value = ratingId });
@@ -214,9 +292,9 @@ public sealed class ZaloRequestService(
                 itemCommand.Transaction = transaction;
                 itemCommand.CommandText = $"""
                     INSERT INTO [{RatingItemTable}] (
-                        Id, RatingId, RequestWorkItemId, WorkName, RatingScore, Note
+                        Id, RatingId, RequestWorkItemId, WorkName, RatingScore, Note, CreatedAtUtc
                     )
-                    VALUES (NEWID(), @RatingId, @RequestWorkItemId, @WorkName, @RatingScore, @Note)
+                    VALUES (NEWID(), @RatingId, @RequestWorkItemId, @WorkName, @RatingScore, @Note, SYSUTCDATETIME())
                     """;
                 itemCommand.Parameters.Add(new SqlParameter("@RatingId", SqlDbType.UniqueIdentifier) { Value = ratingId });
                 itemCommand.Parameters.Add(new SqlParameter("@RequestWorkItemId", SqlDbType.Int) { Value = item.RequestWorkItemId.HasValue ? item.RequestWorkItemId.Value : DBNull.Value });
@@ -254,6 +332,9 @@ public sealed class ZaloRequestService(
         string zaloUserId,
         string? oaId,
         string source,
+        string? displayName,
+        string? avatarUrl,
+        string? phoneNumber,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userExternalId) || string.IsNullOrWhiteSpace(zaloUserId))
@@ -270,18 +351,27 @@ public sealed class ZaloRequestService(
         }
 
         await using var command = connection.CreateCommand();
+        var isFollowing = !string.Equals(source, "user_unfollow_oa", StringComparison.OrdinalIgnoreCase);
         command.CommandText = $"""
             MERGE [{ProfileTable}] AS target
             USING (SELECT @ZaloUserId AS ZaloUserId, @OaId AS OaId) AS source
                 ON target.ZaloUserId = source.ZaloUserId AND target.OaId = source.OaId
             WHEN MATCHED THEN UPDATE SET
                 CustomerId = @CustomerId, RequestId = @RequestId, Source = @Source,
+                ZaloDisplayName = COALESCE(@ZaloDisplayName, ZaloDisplayName),
+                ZaloAvatarUrl = COALESCE(@ZaloAvatarUrl, ZaloAvatarUrl),
+                ZaloPhoneNumber = COALESCE(@ZaloPhoneNumber, ZaloPhoneNumber),
+                IsFollowingOa = @IsFollowingOa,
+                LastInteractionAtUtc = SYSUTCDATETIME(),
                 UpdatedAtUtc = SYSUTCDATETIME()
             WHEN NOT MATCHED THEN INSERT (
-                Id, CustomerId, RequestId, ZaloUserId, OaId, Source, CreatedAtUtc, UpdatedAtUtc
+                Id, CustomerId, RequestId, ZaloUserId, OaId, Source,
+                ZaloDisplayName, ZaloAvatarUrl, ZaloPhoneNumber, IsFollowingOa,
+                ConnectedAtUtc, LastInteractionAtUtc, CreatedAtUtc, UpdatedAtUtc
             ) VALUES (
                 NEWID(), @CustomerId, @RequestId, @ZaloUserId, @OaId, @Source,
-                SYSUTCDATETIME(), SYSUTCDATETIME()
+                @ZaloDisplayName, @ZaloAvatarUrl, @ZaloPhoneNumber, @IsFollowingOa,
+                SYSUTCDATETIME(), SYSUTCDATETIME(), SYSUTCDATETIME(), SYSUTCDATETIME()
             );
 
             UPDATE [{LinkTable}]
@@ -299,21 +389,41 @@ public sealed class ZaloRequestService(
         command.Parameters.Add(new SqlParameter("@UserExternalId", SqlDbType.NVarChar, 200) { Value = userExternalId.Trim() });
         command.Parameters.Add(new SqlParameter("@OaId", SqlDbType.NVarChar, 100) { Value = string.IsNullOrWhiteSpace(oaId) ? "default" : oaId.Trim() });
         command.Parameters.Add(new SqlParameter("@Source", SqlDbType.NVarChar, 80) { Value = source });
+        AddString(command, "@ZaloDisplayName", displayName);
+        AddString(command, "@ZaloAvatarUrl", avatarUrl);
+        AddString(command, "@ZaloPhoneNumber", phoneNumber);
+        command.Parameters.Add(new SqlParameter("@IsFollowingOa", SqlDbType.Bit) { Value = isFollowing });
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private ZaloRequestLinkResult BuildLinkResult(string token, string status, DateTime expiresAtUtc)
+    private async Task<ZaloRequestLinkResult> BuildLinkResultAsync(
+        SqlConnection connection,
+        RequestLinkRecord link,
+        RequestRecord request,
+        CancellationToken cancellationToken)
     {
-        var url = BuildPublicUrl($"/zalo/request/{token}");
+        var url = BuildPublicUrl($"/zalo/request/{link.Token}");
         using var generator = new QRCodeGenerator();
         using var data = generator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
         var png = new PngByteQRCode(data).GetGraphic(8);
+        var profile = link.CustomerId.HasValue
+            ? await LoadCustomerZaloProfileAsync(connection, link.CustomerId.Value, cancellationToken)
+            : null;
+        var rating = await LoadRequestRatingAsync(connection, link.RequestId, cancellationToken);
         return new ZaloRequestLinkResult(
-            token,
+            link.Token,
             url,
             $"data:image/png;base64,{Convert.ToBase64String(png)}",
-            status,
-            expiresAtUtc);
+            link.Status,
+            link.ExpiresAtUtc,
+            profile?.Connected == true,
+            profile?.ZaloDisplayName,
+            profile?.ZaloPhoneNumber,
+            rating?.HasRating == true,
+            rating?.RatingScore,
+            rating?.SubmittedAtUtc,
+            request.CustomerName,
+            request.PhoneNumber);
     }
 
     private async Task<ZaloRequestLandingView> LoadLandingAsync(
@@ -323,6 +433,10 @@ public sealed class ZaloRequestService(
     {
         var request = await LoadRequestAsync(connection, link.RequestId, cancellationToken)
             ?? new RequestRecord(link.RequestId, null, $"YC-{link.RequestId}", "Khách hàng", null, null);
+        var profile = request.CustomerId.HasValue
+            ? await LoadCustomerZaloProfileAsync(connection, request.CustomerId.Value, cancellationToken)
+            : null;
+        var rating = await LoadRequestRatingAsync(connection, link.RequestId, cancellationToken);
         var works = await LoadWorksAsync(connection, link.RequestId, cancellationToken);
         return new ZaloRequestLandingView
         {
@@ -333,7 +447,10 @@ public sealed class ZaloRequestService(
             PhoneNumber = request.PhoneNumber,
             ExecutionDate = request.ExecutionDate,
             OaId = zaloSettings.Current.OaId,
-            IsRated = link.Status == "Rated",
+            IsRated = link.Status == "Rated" || rating?.HasRating == true,
+            ZaloConnected = profile?.Connected == true,
+            ZaloDisplayName = profile?.ZaloDisplayName,
+            ZaloPhoneNumber = profile?.ZaloPhoneNumber,
             Works = works
         };
     }
@@ -468,6 +585,123 @@ public sealed class ZaloRequestService(
         return (await command.ExecuteScalarAsync(cancellationToken))?.ToString();
     }
 
+    private static async Task<CustomerZaloProfileInfo?> LoadCustomerZaloProfileAsync(
+        SqlConnection connection,
+        int customerId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT TOP (1)
+                CustomerId,
+                ZaloUserId,
+                ZaloDisplayName,
+                ZaloAvatarUrl,
+                COALESCE(ZaloPhoneNumber, PhoneNumber) AS ZaloPhoneNumber,
+                IsFollowingOa,
+                ConnectedAtUtc,
+                LastInteractionAtUtc,
+                Source
+            FROM [{ProfileTable}]
+            WHERE CustomerId = @CustomerId
+              AND NULLIF(LTRIM(RTRIM(ZaloUserId)), N'') IS NOT NULL
+            ORDER BY UpdatedAtUtc DESC, CreatedAtUtc DESC
+            """;
+        command.Parameters.Add(new SqlParameter("@CustomerId", SqlDbType.Int) { Value = customerId });
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new CustomerZaloProfileInfo
+        {
+            Connected = true,
+            CustomerId = reader["CustomerId"] == DBNull.Value ? null : Convert.ToInt32(reader["CustomerId"]),
+            ZaloUserId = GetString(reader, "ZaloUserId"),
+            ZaloDisplayName = GetString(reader, "ZaloDisplayName"),
+            ZaloAvatarUrl = GetString(reader, "ZaloAvatarUrl"),
+            ZaloPhoneNumber = GetString(reader, "ZaloPhoneNumber"),
+            IsFollowingOa = reader["IsFollowingOa"] == DBNull.Value ? null : Convert.ToBoolean(reader["IsFollowingOa"]),
+            ConnectedAtUtc = GetDateTime(reader, "ConnectedAtUtc"),
+            LastInteractionAtUtc = GetDateTime(reader, "LastInteractionAtUtc"),
+            Source = GetString(reader, "Source")
+        };
+    }
+
+    private static async Task<RequestRatingInfo?> LoadRequestRatingAsync(
+        SqlConnection connection,
+        int requestId,
+        CancellationToken cancellationToken)
+    {
+        Guid ratingId;
+        var rating = new RequestRatingInfo();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                SELECT TOP (1)
+                    Id,
+                    RequestId,
+                    CustomerId,
+                    RatingScore,
+                    Note,
+                    CustomerComment,
+                    SubmittedAtUtc,
+                    Source
+                FROM [{RatingTable}]
+                WHERE RequestId = @RequestId
+                ORDER BY SubmittedAtUtc DESC, CreatedAtUtc DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@RequestId", SqlDbType.Int) { Value = requestId });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return null;
+            }
+
+            ratingId = (Guid)reader["Id"];
+            rating = new RequestRatingInfo
+            {
+                HasRating = true,
+                RatingId = ratingId,
+                RequestId = Convert.ToInt32(reader["RequestId"]),
+                CustomerId = reader["CustomerId"] == DBNull.Value ? null : Convert.ToInt32(reader["CustomerId"]),
+                RatingScore = Convert.ToInt32(reader["RatingScore"]),
+                Note = GetString(reader, "Note"),
+                CustomerComment = GetString(reader, "CustomerComment"),
+                SubmittedAtUtc = GetDateTime(reader, "SubmittedAtUtc"),
+                Source = GetString(reader, "Source") ?? "ZaloQr"
+            };
+        }
+
+        await using (var itemCommand = connection.CreateCommand())
+        {
+            itemCommand.CommandText = $"""
+                SELECT RequestWorkItemId, WorkName, RatingScore, Note
+                FROM [{RatingItemTable}]
+                WHERE RatingId = @RatingId
+                ORDER BY WorkName
+                """;
+            itemCommand.Parameters.Add(new SqlParameter("@RatingId", SqlDbType.UniqueIdentifier) { Value = ratingId });
+            var items = new List<RequestRatingItemInfo>();
+            await using var itemReader = await itemCommand.ExecuteReaderAsync(cancellationToken);
+            while (await itemReader.ReadAsync(cancellationToken))
+            {
+                items.Add(new RequestRatingItemInfo
+                {
+                    RequestWorkItemId = itemReader["RequestWorkItemId"] == DBNull.Value ? null : Convert.ToInt32(itemReader["RequestWorkItemId"]),
+                    WorkName = GetString(itemReader, "WorkName") ?? string.Empty,
+                    RatingScore = Convert.ToInt32(itemReader["RatingScore"]),
+                    Note = GetString(itemReader, "Note")
+                });
+            }
+
+            rating.Items = items;
+        }
+
+        return rating;
+    }
+
     private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
@@ -514,12 +748,26 @@ public sealed class ZaloRequestService(
                     ZaloDisplayName NVARCHAR(250) NULL,
                     ZaloAvatarUrl NVARCHAR(1000) NULL,
                     PhoneNumber NVARCHAR(50) NULL,
+                    ZaloPhoneNumber NVARCHAR(50) NULL,
                     OaId NVARCHAR(100) NOT NULL,
+                    IsFollowingOa BIT NULL,
+                    ConnectedAtUtc DATETIME2 NULL,
+                    LastInteractionAtUtc DATETIME2 NULL,
                     Source NVARCHAR(80) NOT NULL,
                     CreatedAtUtc DATETIME2 NOT NULL,
                     UpdatedAtUtc DATETIME2 NULL
                 );
                 CREATE UNIQUE INDEX UX_TblCustomerZaloProfiles_UserOa ON [dbo].[{ProfileTable}](ZaloUserId, OaId);
+            END;
+            ELSE
+            BEGIN
+                IF COL_LENGTH('dbo.{ProfileTable}', 'ZaloDisplayName') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD ZaloDisplayName NVARCHAR(250) NULL;
+                IF COL_LENGTH('dbo.{ProfileTable}', 'ZaloAvatarUrl') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD ZaloAvatarUrl NVARCHAR(1000) NULL;
+                IF COL_LENGTH('dbo.{ProfileTable}', 'PhoneNumber') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD PhoneNumber NVARCHAR(50) NULL;
+                IF COL_LENGTH('dbo.{ProfileTable}', 'ZaloPhoneNumber') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD ZaloPhoneNumber NVARCHAR(50) NULL;
+                IF COL_LENGTH('dbo.{ProfileTable}', 'IsFollowingOa') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD IsFollowingOa BIT NULL;
+                IF COL_LENGTH('dbo.{ProfileTable}', 'ConnectedAtUtc') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD ConnectedAtUtc DATETIME2 NULL;
+                IF COL_LENGTH('dbo.{ProfileTable}', 'LastInteractionAtUtc') IS NULL ALTER TABLE [dbo].[{ProfileTable}] ADD LastInteractionAtUtc DATETIME2 NULL;
             END;
 
             IF OBJECT_ID('dbo.{RatingTable}', 'U') IS NULL
@@ -534,9 +782,16 @@ public sealed class ZaloRequestService(
                     Note NVARCHAR(1000) NULL,
                     CustomerComment NVARCHAR(2000) NULL,
                     SubmittedAtUtc DATETIME2 NOT NULL,
-                    CreatedAtUtc DATETIME2 NOT NULL
+                    CreatedAtUtc DATETIME2 NOT NULL,
+                    UpdatedAtUtc DATETIME2 NULL,
+                    Source NVARCHAR(80) NOT NULL DEFAULT N'ZaloQr'
                 );
                 CREATE UNIQUE INDEX UX_TblRequestWorkRatings_Token ON [dbo].[{RatingTable}](Token);
+            END;
+            ELSE
+            BEGIN
+                IF COL_LENGTH('dbo.{RatingTable}', 'UpdatedAtUtc') IS NULL ALTER TABLE [dbo].[{RatingTable}] ADD UpdatedAtUtc DATETIME2 NULL;
+                IF COL_LENGTH('dbo.{RatingTable}', 'Source') IS NULL ALTER TABLE [dbo].[{RatingTable}] ADD Source NVARCHAR(80) NOT NULL CONSTRAINT DF_{RatingTable}_Source DEFAULT N'ZaloQr';
             END;
 
             IF OBJECT_ID('dbo.{RatingItemTable}', 'U') IS NULL
@@ -547,8 +802,13 @@ public sealed class ZaloRequestService(
                     RequestWorkItemId INT NULL,
                     WorkName NVARCHAR(500) NOT NULL,
                     RatingScore INT NOT NULL,
-                    Note NVARCHAR(1000) NULL
+                    Note NVARCHAR(1000) NULL,
+                    CreatedAtUtc DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
                 );
+            END;
+            ELSE
+            BEGIN
+                IF COL_LENGTH('dbo.{RatingItemTable}', 'CreatedAtUtc') IS NULL ALTER TABLE [dbo].[{RatingItemTable}] ADD CreatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_{RatingItemTable}_Created DEFAULT SYSUTCDATETIME();
             END;
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);

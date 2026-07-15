@@ -65,6 +65,7 @@ public sealed class CustomerLinkController(
     private static string RenderConnectPage(ZaloCustomerLinkView link, ZaloOptions options)
     {
         var oaId = System.Net.WebUtility.HtmlEncode(options.OaId ?? string.Empty);
+        var verifyCode = System.Net.WebUtility.HtmlEncode(link.Token);
         var userExternalId = System.Net.WebUtility.HtmlEncode(link.UserExternalId);
         var customerName = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(link.CustomerName) ? "quy khach" : link.CustomerName);
         var followHref = string.IsNullOrWhiteSpace(options.OaId)
@@ -83,18 +84,38 @@ public sealed class CustomerLinkController(
                     main{width:min(560px,calc(100% - 32px));background:#fff;border-radius:18px;padding:28px;box-shadow:0 18px 45px rgba(4,58,54,.18)}
                     h1{font-size:26px;margin:0 0 12px}
                     p{line-height:1.55;color:#2a615b}
-                    a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 18px;border-radius:12px;background:#15b894;color:#fff;text-decoration:none;font-weight:700}
-                    code{display:block;padding:12px;border-radius:10px;background:#eff8f6;color:#0b6158;overflow:auto}
+                    .actions{display:grid;gap:10px;margin-top:18px}
+                    a,button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 18px;border:0;border-radius:12px;background:#15b894;color:#fff;text-decoration:none;font:inherit;font-weight:700;cursor:pointer}
+                    button{background:#fff;color:#08735f;border:1px solid #9fdccc}
+                    code{display:block;padding:12px;border-radius:10px;background:#eff8f6;color:#0b6158;overflow:auto;font-size:18px;font-weight:700;letter-spacing:.03em}
+                    small{display:block;margin-top:8px;color:#5a746f;line-height:1.45}
+                    .status{min-height:22px;margin-top:10px;color:#08735f;font-weight:700}
                 </style>
             </head>
             <body>
                 <main>
                     <h1>Ket noi Zalo voi cong ty</h1>
-                    <p>Xin chao <strong>{{customerName}}</strong>. Bam nut ben duoi de quan tam OA va nhan thong bao lich lam viec.</p>
-                    <p><a href="{{followHref}}" target="_blank" rel="noopener">Mo Zalo OA</a></p>
-                    <p>Khi chen Widget Cap tuong tac cua Zalo vao trang nay, hay truyen user_external_id sau de webhook map dung khach hang:</p>
-                    <code data-oa-id="{{oaId}}">{{userExternalId}}</code>
+                    <p>Xin chao <strong>{{customerName}}</strong>. Neu anh/chi da quan tam Zalo OA, chi can sao chep ma xac nhan ben duoi va nhan vao khung chat OA.</p>
+                    <code data-verify-code="{{verifyCode}}" data-oa-id="{{oaId}}" data-user-external-id="{{userExternalId}}">{{verifyCode}}</code>
+                    <small>He thong se doc ma nay tu webhook Zalo de ghi nhan dung khach hang va luu Zalo User ID.</small>
+                    <div class="actions">
+                        <button type="button" data-copy-code>Sao chep ma xac nhan</button>
+                        <a href="{{followHref}}" target="_blank" rel="noopener">Mo Zalo OA de gui ma</a>
+                    </div>
+                    <div class="status" data-copy-status aria-live="polite"></div>
                 </main>
+                <script>
+                    const code = document.querySelector("[data-verify-code]")?.dataset.verifyCode || "";
+                    const status = document.querySelector("[data-copy-status]");
+                    document.querySelector("[data-copy-code]")?.addEventListener("click", async () => {
+                        try {
+                            await navigator.clipboard.writeText(code);
+                            status.textContent = "Da sao chep ma. Hay dan ma vao chat Zalo OA.";
+                        } catch {
+                            status.textContent = "Hay sao chep ma hien thi phia tren va gui vao Zalo OA.";
+                        }
+                    });
+                </script>
             </body>
             </html>
             """;
