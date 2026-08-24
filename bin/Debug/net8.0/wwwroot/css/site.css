@@ -1451,6 +1451,128 @@ body.menu-open {
     flex: 1 1 220px;
 }
 
+.purchase-attendance-button {
+    min-height: 48px;
+    min-width: 190px;
+    flex: 1 1 190px;
+    gap: 8px;
+}
+
+.purchase-attendance-button.is-active {
+    border-color: rgba(231, 155, 61, 0.35);
+    background: rgba(231, 155, 61, 0.12);
+    color: #7b4c12;
+}
+
+.purchase-attendance-fields {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(231, 155, 61, 0.24);
+    border-radius: 9px;
+    background: rgba(255, 250, 241, 0.9);
+}
+
+.purchase-attendance-label {
+    display: block;
+    margin-bottom: 8px;
+    color: #3f5f55;
+    font-weight: 800;
+    font-size: 0.92rem;
+}
+
+.purchase-attendance-chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.purchase-attendance-chip {
+    cursor: pointer;
+}
+
+.purchase-attendance-chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.purchase-attendance-chip span {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(20, 57, 47, 0.12);
+    background: #fff;
+    color: #315c51;
+    font-weight: 700;
+    font-size: 0.88rem;
+}
+
+.purchase-attendance-chip input:checked + span {
+    border-color: rgba(12, 179, 134, 0.38);
+    background: rgba(12, 179, 134, 0.13);
+    color: #0a6652;
+}
+
+.purchase-attendance-quick {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    color: #315c51;
+}
+
+.purchase-attendance-quick input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--teal-500);
+    margin-top: 2px;
+}
+
+.purchase-attendance-quick span {
+    display: grid;
+    gap: 2px;
+}
+
+.purchase-attendance-quick small {
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.purchase-attendance-speech {
+    width: max-content;
+    min-height: 40px;
+    padding-inline: 14px;
+    gap: 8px;
+}
+
+.purchase-attendance-speech.is-listening {
+    border-color: rgba(216, 93, 93, 0.36);
+    background: rgba(216, 93, 93, 0.1);
+    color: #a02d2d;
+}
+
+.purchase-attendance-note {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: #58746b;
+    line-height: 1.45;
+}
+
+.cham-cong-attendance-line.is-purchase-event {
+    border-color: rgba(231, 155, 61, 0.24);
+    background: rgba(255, 250, 241, 0.86);
+}
+
+.cham-cong-attendance-line.is-purchase-event .cham-cong-entry-meta {
+    background: rgba(231, 155, 61, 0.16);
+    color: #7b4c12;
+}
+
 .cham-cong-location-hidden {
     display: none !important;
 }
@@ -3194,6 +3316,20 @@ body.report-fullscreen-open {
     gap: 8px;
     align-content: start;
     min-width: 0;
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(10, 161, 125, 0.45) transparent;
+}
+
+.cham-cong-split::-webkit-scrollbar {
+    width: 6px;
+}
+
+.cham-cong-split::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(10, 161, 125, 0.45);
 }
 
 .cham-cong-split > strong:not(.cham-cong-employee-name),
@@ -3212,14 +3348,163 @@ body.report-fullscreen-open {
     font-weight: 900;
 }
 
+.cham-cong-entry-heading {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.cham-cong-entry-heading strong,
+.cham-cong-entry-heading a {
+    color: #063f35;
+    font-size: 0.98rem;
+    font-weight: 900;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+}
+
+.cham-cong-entry-heading a:hover,
+.cham-cong-entry-heading a:focus {
+    color: #0b78bd;
+    text-decoration: underline;
+    outline: none;
+}
+
+.cham-cong-entry-heading a:focus-visible {
+    outline: 2px solid rgba(11, 120, 189, 0.35);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.cham-cong-entry-heading span {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.cham-cong-entry-meta,
+.cham-cong-request-chip {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 2px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #2f7563;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.25;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+.cham-cong-request-chip {
+    color: #0b78bd;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.cham-cong-request-chip:hover,
+.cham-cong-request-chip:focus-visible {
+    color: #084f7e;
+    outline: none;
+}
+
+.cham-cong-request-chip:focus-visible {
+    box-shadow: 0 0 0 2px rgba(11, 120, 189, 0.22);
+    border-radius: 4px;
+}
+
+.cham-cong-request-summary-modal {
+    max-width: min(620px, calc(100vw - 24px));
+}
+
+.cham-cong-request-summary-body {
+    display: grid;
+    gap: 16px;
+}
+
+.cham-cong-request-summary-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.cham-cong-request-summary-list > div {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr);
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(10, 74, 61, 0.1);
+}
+
+.cham-cong-request-summary-list dt {
+    color: var(--text-muted);
+    font-weight: 800;
+}
+
+.cham-cong-request-summary-list dd {
+    margin: 0;
+    color: var(--navy-800);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.cham-cong-request-work-list {
+    display: grid;
+    gap: 8px;
+}
+
+.cham-cong-request-work-list ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--navy-800);
+}
+
+.cham-cong-entry-heading small {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.cham-cong-history-session {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: stretch;
+    padding: 8px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.cham-cong-history-session.is-customer-checkin {
+    border-color: rgba(31, 143, 209, 0.32);
+    background: rgba(31, 143, 209, 0.08);
+}
+
+.cham-cong-timeline-item.has-customer-checkin {
+    border-color: rgba(31, 143, 209, 0.34);
+}
+
+.cham-cong-timeline-item.has-customer-checkin .cham-cong-dot {
+    background: #1f8fd1;
+    box-shadow: 0 0 0 4px rgba(31, 143, 209, 0.14);
+}
+
 .cham-cong-attendance-line {
     display: grid;
     grid-template-columns: 58px minmax(0, 1fr);
     gap: 8px;
     align-items: center;
-    height: 72px;
+    height: auto;
     min-height: 72px;
-    max-height: 72px;
+    max-height: none;
     padding: 6px 8px;
     border-radius: 8px;
     border: 1px solid rgba(10, 74, 61, 0.12);
@@ -3311,6 +3596,26 @@ body.report-fullscreen-open {
 .cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-attendance-violation .cham-cong-entry-content > strong,
 .cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-attendance-violation .cham-cong-entry-content > strong i {
     color: #9a4b00;
+}
+
+.cham-cong-attendance-line.is-customer-event,
+.cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-customer-event,
+.cham-cong-attendance-line.is-customer-event.is-checkin,
+.cham-cong-attendance-line.is-customer-event.is-checkout-complete {
+    border-color: rgba(37, 99, 235, 0.42);
+    background: rgba(219, 234, 254, 0.9);
+    color: #1e3a8a;
+}
+
+.cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong,
+.cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong i,
+.cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong,
+.cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong i {
+    color: #1d4ed8;
+}
+
+.cham-cong-attendance-line.is-customer-event .cham-cong-request-chip {
+    color: #1e40af;
 }
 
 .cham-cong-entry {
@@ -3652,6 +3957,10 @@ body.report-fullscreen-open {
         width: 100%;
         scroll-snap-align: start;
         scroll-snap-stop: always;
+    }
+
+    .cham-cong-history-session {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -11063,5 +11372,25 @@ body.report-fullscreen-open {
         min-height: 44px !important;
         padding-inline: 8px !important;
         font-size: 0.88rem !important;
+    }
+
+    .purchase-attendance-fields {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .purchase-attendance-chip-grid {
+        gap: 6px;
+    }
+
+    .purchase-attendance-chip span {
+        min-height: 34px;
+        padding: 6px 9px;
+        font-size: 0.82rem;
+    }
+
+    .purchase-attendance-speech {
+        width: 100%;
+        justify-content: center;
     }
 }

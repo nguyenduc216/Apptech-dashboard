@@ -1451,6 +1451,128 @@ body.menu-open {
     flex: 1 1 220px;
 }
 
+.purchase-attendance-button {
+    min-height: 48px;
+    min-width: 190px;
+    flex: 1 1 190px;
+    gap: 8px;
+}
+
+.purchase-attendance-button.is-active {
+    border-color: rgba(231, 155, 61, 0.35);
+    background: rgba(231, 155, 61, 0.12);
+    color: #7b4c12;
+}
+
+.purchase-attendance-fields {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(231, 155, 61, 0.24);
+    border-radius: 9px;
+    background: rgba(255, 250, 241, 0.9);
+}
+
+.purchase-attendance-label {
+    display: block;
+    margin-bottom: 8px;
+    color: #3f5f55;
+    font-weight: 800;
+    font-size: 0.92rem;
+}
+
+.purchase-attendance-chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.purchase-attendance-chip {
+    cursor: pointer;
+}
+
+.purchase-attendance-chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.purchase-attendance-chip span {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(20, 57, 47, 0.12);
+    background: #fff;
+    color: #315c51;
+    font-weight: 700;
+    font-size: 0.88rem;
+}
+
+.purchase-attendance-chip input:checked + span {
+    border-color: rgba(12, 179, 134, 0.38);
+    background: rgba(12, 179, 134, 0.13);
+    color: #0a6652;
+}
+
+.purchase-attendance-quick {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    color: #315c51;
+}
+
+.purchase-attendance-quick input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--teal-500);
+    margin-top: 2px;
+}
+
+.purchase-attendance-quick span {
+    display: grid;
+    gap: 2px;
+}
+
+.purchase-attendance-quick small {
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.purchase-attendance-speech {
+    width: max-content;
+    min-height: 40px;
+    padding-inline: 14px;
+    gap: 8px;
+}
+
+.purchase-attendance-speech.is-listening {
+    border-color: rgba(216, 93, 93, 0.36);
+    background: rgba(216, 93, 93, 0.1);
+    color: #a02d2d;
+}
+
+.purchase-attendance-note {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: #58746b;
+    line-height: 1.45;
+}
+
+.cham-cong-attendance-line.is-purchase-event {
+    border-color: rgba(231, 155, 61, 0.24);
+    background: rgba(255, 250, 241, 0.86);
+}
+
+.cham-cong-attendance-line.is-purchase-event .cham-cong-entry-meta {
+    background: rgba(231, 155, 61, 0.16);
+    color: #7b4c12;
+}
+
 .cham-cong-location-hidden {
     display: none !important;
 }
@@ -11250,5 +11372,25 @@ body.report-fullscreen-open {
         min-height: 44px !important;
         padding-inline: 8px !important;
         font-size: 0.88rem !important;
+    }
+
+    .purchase-attendance-fields {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .purchase-attendance-chip-grid {
+        gap: 6px;
+    }
+
+    .purchase-attendance-chip span {
+        min-height: 34px;
+        padding: 6px 9px;
+        font-size: 0.82rem;
+    }
+
+    .purchase-attendance-speech {
+        width: 100%;
+        justify-content: center;
     }
 }

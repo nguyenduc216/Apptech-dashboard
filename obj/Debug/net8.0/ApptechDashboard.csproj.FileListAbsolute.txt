@@ -4072,3 +4072,5 @@ D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\.codex-build\bi
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\.codex-build\bin\Debug\net8.0\runtimes\win\lib\net6.0\System.Drawing.Common.dll
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\.codex-build\bin\Debug\net8.0\runtimes\win\lib\net8.0\System.Runtime.Caching.dll
 D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Debug\net8.0\wwwroot\uploads\checkin\checkin-aead2050ece942398bfb406fd61e1883-20260625023917285.jpg
+D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Debug\net8.0\App_Data\qr-sequence.txt
+D:\Working\T.A\Tech\Projects\apptech-dashboard\Apptech-dashboard\bin\Debug\net8.0\App_Data\test-checkin-history-20260716.sql
