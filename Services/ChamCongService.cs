@@ -46,10 +46,12 @@ public sealed class ChamCongService(
     private const string CheckinHistoryTableName = "TblCheckinHistory";
     private const string CustomerTableName = "TblKhachHang";
     private const string LocationTableName = "TblKhachHangDiaDiem";
+    private const string RequestTableName = "TblYeuCau";
     private const string SystemConfigTableName = "TblCauHinhHeThong";
     private const string ChamCongType = "ChamCong";
-    private const string CompanyAttendancePredicate = "(CheckInType = @CheckInType OR (CheckInType IS NULL AND IDYeuCau IS NULL))";
-    private const string CompanyAttendancePredicateWithAlias = "(ch.CheckInType = @CheckInType OR (ch.CheckInType IS NULL AND ch.IDYeuCau IS NULL))";
+    private const string CompanyAttendancePredicate = "CheckInType = @CheckInType";
+    private const string CompanyAttendancePredicateWithAlias = "ch.CheckInType = @CheckInType";
+    private const string DashboardHistoryPredicateWithAlias = "(ch.CheckInType = @CheckInType OR ch.IDYeuCau IS NOT NULL)";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -155,7 +157,7 @@ public sealed class ChamCongService(
                 ORDER BY ch.ThoiDiem ASC, ch.ID ASC
                 """
                 .Replace("{0}", string.Join(", ", employeeFilters))
-                .Replace("{1}", CompanyAttendancePredicateWithAlias));
+                .Replace("{1}", DashboardHistoryPredicateWithAlias));
             command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
             command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = date.Date });
 
@@ -479,12 +481,18 @@ public sealed class ChamCongService(
             items.Add(new ChamCongHistoryItem
             {
                 Id = GetNullableInt32(reader, "ID") ?? 0,
+                IDYeuCau = GetNullableInt32(reader, "IDYeuCau"),
+                MaYeuCau = GetNullableString(reader, "MaYeuCau"),
                 IDKhachHang = GetNullableInt32(reader, "IDKhachHang"),
                 IDDiaDiem = GetNullableInt32(reader, "IDDiaDiem"),
                 IDNhanVien = GetNullableInt32(reader, "IDNhanVien"),
                 HoTenNhanVien = GetNullableString(reader, "HoTenNhanVien"),
                 TenKhachHang = GetNullableString(reader, "TenKhachHang"),
                 DiaChi = GetNullableString(reader, "DiaChi"),
+                NguoiLienHe = GetNullableString(reader, "NguoiLienHe"),
+                DienThoai = GetNullableString(reader, "DienThoai"),
+                DanhSachCongViec = GetNullableString(reader, "DanhSachCongViec"),
+                CheckInType = GetNullableString(reader, "CheckInType"),
                 ThoiDiem = GetNullableDateTime(reader, "ThoiDiem"),
                 ThoiDiemCheckOut = GetNullableDateTime(reader, "ThoiDiemCheckOut"),
                 LongAddress = GetNullableDecimal(reader, "LongAddress"),
@@ -520,6 +528,13 @@ public sealed class ChamCongService(
 
         foreach (var item in items)
         {
+            if (string.Equals(item.AttendanceType, "KhachHang", StringComparison.OrdinalIgnoreCase))
+            {
+                item.IsCheckinViolation = false;
+                item.IsCheckoutViolation = false;
+                continue;
+            }
+
             if (item.DuyetCheckIn == true)
             {
                 item.IsCheckinViolation = false;
@@ -623,12 +638,18 @@ public sealed class ChamCongService(
         return $"""
             SELECT {top}
                 ch.ID,
-                ch.IDKhachHang,
-                ch.IDDiaDiem,
+                ch.IDYeuCau,
+                yc.MaYeuCau,
+                COALESCE(ch.IDKhachHang, yc.IDKhachHang, dd.IDKhachHang) AS IDKhachHang,
+                COALESCE(ch.IDDiaDiem, yc.IDDiaDiem) AS IDDiaDiem,
                 ch.IDNhanVien,
                 LTRIM(RTRIM(CONCAT(ISNULL(nv.Ho, N''), N' ', ISNULL(nv.Ten, N'')))) AS HoTenNhanVien,
                 kh.TenKhachHang,
                 dd.DiaChi,
+                dd.NguoiLienHe,
+                dd.DienThoai,
+                workList.DanhSachCongViec,
+                ch.CheckInType,
                 ch.ThoiDiem,
                 ch.ThoiDiemCheckOut,
                 ch.LongAddress,
@@ -641,9 +662,20 @@ public sealed class ChamCongService(
                 ch.GhiChuCheckOut,
                 ch.DuyetCheckIn
             FROM [{CheckinHistoryTableName}] AS ch
-            LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = ch.IDKhachHang
-            LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = ch.IDDiaDiem
+            LEFT JOIN [{RequestTableName}] AS yc ON yc.ID = ch.IDYeuCau
+            LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = COALESCE(ch.IDDiaDiem, yc.IDDiaDiem)
+            LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = COALESCE(ch.IDKhachHang, yc.IDKhachHang, dd.IDKhachHang)
             LEFT JOIN [TblNhanVien] AS nv ON nv.ID = ch.IDNhanVien
+            OUTER APPLY (
+                SELECT STUFF((
+                    SELECT N'||' + ISNULL(NULLIF(LTRIM(RTRIM(cv.TenCongViec)), N''), N'Công việc')
+                    FROM [TblYeuCauCongViec] AS ycvc
+                    LEFT JOIN [TblCongViec] AS cv ON cv.ID = ycvc.IDCongViec
+                    WHERE ycvc.IDYeuCau = yc.ID
+                    ORDER BY ycvc.ID
+                    FOR XML PATH(N''), TYPE
+                ).value(N'.', N'nvarchar(max)'), 1, 2, N'') AS DanhSachCongViec
+            ) AS workList
             {whereClause}
             """;
     }

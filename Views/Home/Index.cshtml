@@ -157,100 +157,81 @@
                         .OrderBy(item => item.ThoiDiem ?? DateTime.MaxValue)
                         .ThenBy(item => item.Id)
                         .ToList();
-                    for (var historyIndex = 0; historyIndex < orderedHistory.Count; historyIndex++)
+                    var groupedHistory = orderedHistory
+                        .GroupBy(item => item.IDNhanVien?.ToString(invariantCulture) ?? item.HoTenNhanVien ?? "unknown")
+                        .ToList();
+                    for (var historyIndex = 0; historyIndex < groupedHistory.Count; historyIndex++)
                     {
-                        var item = orderedHistory[historyIndex];
-                        <div class="cham-cong-timeline-item @(item.ThoiDiemCheckOut.HasValue ? "is-complete" : "is-pending") @(item.IsOpen ? "is-open" : "")" style="order:@historyIndex">
+                        var group = groupedHistory[historyIndex].ToList();
+                        var firstItem = group.First();
+                        var hasOpenItem = group.Any(item => item.IsOpen);
+                        var hasCustomerCheckin = group.Any(item => string.Equals(item.AttendanceType, "KhachHang", StringComparison.OrdinalIgnoreCase));
+                        var employeeName = firstItem.HoTenNhanVien ?? "Nhân viên";
+                        var eventItems = group
+                            .SelectMany(item => new[]
+                            {
+                                new { Item = item, IsCheckout = false, EventTime = item.ThoiDiem, ImagePath = item.ImgPath, IsViolation = item.IsCheckinViolation },
+                                new { Item = item, IsCheckout = true, EventTime = item.ThoiDiemCheckOut, ImagePath = item.ImgPathCheckOut, IsViolation = item.IsCheckoutViolation }
+                            })
+                            .Where(entry => entry.EventTime.HasValue)
+                            .OrderBy(entry => entry.EventTime)
+                            .ThenBy(entry => entry.Item.Id)
+                            .ThenBy(entry => entry.IsCheckout ? 1 : 0)
+                            .ToList();
+                        <div class="cham-cong-timeline-item @(hasOpenItem ? "is-pending is-open" : "is-complete") @(hasCustomerCheckin ? "has-customer-checkin" : "has-company-checkin")" data-employee-id="@(firstItem.IDNhanVien?.ToString(invariantCulture) ?? "")" style="order:@historyIndex">
                             <div class="cham-cong-dot"></div>
                             <div class="cham-cong-split">
-                                <strong class="cham-cong-employee-name">@(item.HoTenNhanVien ?? "Nhân viên")</strong>
-                                <section class="cham-cong-attendance-line is-checkin @(item.IsCheckinViolation ? "is-attendance-violation" : "")">
-                                    <div class="cham-cong-entry-photo">
-                                        @if (!string.IsNullOrWhiteSpace(item.ImgPath))
-                                        {
-                                            <button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="@item.ImgPath" data-image-title="Ảnh checkin @item.HoTenNhanVien">
-                                                <img src="@item.ImgPath" alt="Ảnh checkin" />
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
-                                        }
-                                    </div>
-                                    <div class="cham-cong-entry-content">
-                                        <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>@(item.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "--:--")</strong>
-                                        @if (!string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
-                                        {
-                                            <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuNhanVien</span></p>
-                                        }
-                                    </div>
-                                </section>
-                                <section class="cham-cong-attendance-line @(item.ThoiDiemCheckOut.HasValue ? "is-checkout-complete" : "is-checkout-pending") @(item.IsCheckoutViolation ? "is-attendance-violation" : "")">
-                                    <div class="cham-cong-entry-photo">
-                                        @if (!string.IsNullOrWhiteSpace(item.ImgPathCheckOut))
-                                        {
-                                            <button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="@item.ImgPathCheckOut" data-image-title="Ảnh checkout @item.HoTenNhanVien">
-                                                <img src="@item.ImgPathCheckOut" alt="Ảnh checkout" />
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
-                                        }
-                                    </div>
-                                    <div class="cham-cong-entry-content">
-                                        <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>@(item.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa checkout")</strong>
-                                        @if (!string.IsNullOrWhiteSpace(item.GhiChuCheckOut))
-                                        {
-                                            <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuCheckOut</span></p>
-                                        }
-                                    </div>
-                                </section>
-                                <section class="cham-cong-entry">
-                                    <div class="cham-cong-entry-photo">
-                                        @if (!string.IsNullOrWhiteSpace(item.ImgPath))
-                                        {
-                                            <img src="@item.ImgPath" alt="Ảnh checkin" />
-                                        }
-                                        else
-                                        {
-                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
-                                        }
-                                    </div>
-                                    <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>@(item.ThoiDiem?.ToString("HH:mm") ?? "--:--")</strong>
-                                    @if (!string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
-                                    {
-                                        <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuNhanVien</span></p>
-                                    }
-                                </section>
-                                <section class="cham-cong-entry">
-                                    <div class="cham-cong-entry-photo">
-                                        @if (!string.IsNullOrWhiteSpace(item.ImgPathCheckOut))
-                                        {
-                                            <img src="@item.ImgPathCheckOut" alt="Ảnh checkout" />
-                                        }
-                                        else
-                                        {
-                                            <i class="fa-solid fa-image" aria-hidden="true"></i>
-                                        }
-                                    </div>
-                                    <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>@(item.ThoiDiemCheckOut?.ToString("HH:mm") ?? "Đang làm")</strong>
-                                    @if (!string.IsNullOrWhiteSpace(item.GhiChuCheckOut))
-                                    {
-                                        <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuCheckOut</span></p>
-                                    }
-                                </section>
-                                <strong>@(item.ThoiDiem?.ToString("HH:mm") ?? "--:--") - @(item.ThoiDiemCheckOut?.ToString("HH:mm") ?? "Đang làm")</strong>
-                                <span>@(item.TenKhachHang ?? "AppTech")</span>
-                                @if (!string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
+                                <strong class="cham-cong-employee-name">@employeeName</strong>
+                                @foreach (var entry in eventItems)
                                 {
-                                    <p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>@item.GhiChuNhanVien</span></p>
+                                    var item = entry.Item;
+                                    var isCustomerCheckin = string.Equals(item.AttendanceType, "KhachHang", StringComparison.OrdinalIgnoreCase);
+                                    var requestDetailUrl = item.IDYeuCau.HasValue
+                                        ? Url.Action("Edit", "YeuCau", new { id = item.IDYeuCau.Value })
+                                        : null;
+                                    var eventClass = entry.IsCheckout ? "is-checkout-complete" : "is-checkin";
+                                    var eventIcon = entry.IsCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                                    var eventLabel = entry.IsCheckout ? "Checkout" : "Checkin";
+                                    var metaText = isCustomerCheckin ? item.MaYeuCau : "AppTech";
+                                    <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isCustomerCheckin ? "is-customer-event" : "is-company-event")">
+                                        <div class="cham-cong-entry-photo">
+                                            @if (!string.IsNullOrWhiteSpace(entry.ImagePath))
+                                            {
+                                                <button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="@entry.ImagePath" data-image-title="Ảnh @eventLabel.ToLowerInvariant() @employeeName">
+                                                    <img src="@entry.ImagePath" alt="Ảnh @eventLabel.ToLowerInvariant()" />
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <i class="fa-solid fa-image" aria-hidden="true"></i>
+                                            }
+                                        </div>
+                                        <div class="cham-cong-entry-content">
+                                            <strong><i class="fa-solid @eventIcon" aria-hidden="true"></i>@entry.EventTime?.ToString("dd/MM/yyyy HH:mm")</strong>
+                                            @if (isCustomerCheckin && item.IDYeuCau.HasValue)
+                                            {
+                                                var works = (item.DanhSachCongViec ?? string.Empty)
+                                                    .Split("||", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                                <button type="button"
+                                                        class="cham-cong-request-chip"
+                                                        data-request-summary-open
+                                                        data-request-code="@item.MaYeuCau"
+                                                        data-request-url="@requestDetailUrl"
+                                                        data-request-customer="@item.CustomerDisplayName"
+                                                        data-request-address="@item.LocationDisplayText"
+                                                        data-request-contact="@item.NguoiLienHe"
+                                                        data-request-phone="@item.DienThoai"
+                                                        data-request-works="@string.Join("||", works)">
+                                                    @(string.IsNullOrWhiteSpace(metaText) ? "Phiếu yêu cầu" : metaText)
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="cham-cong-entry-meta">AppTech</span>
+                                            }
+                                        </div>
+                                    </section>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(item.GhiChuCheckOut))
-                                {
-                                    <p class="cham-cong-note"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i><span>@item.GhiChuCheckOut</span></p>
-                                }
-                                <small>@(string.IsNullOrWhiteSpace(item.DiaChi) ? "Chưa có địa chỉ" : item.DiaChi)</small>
                             </div>
                         </div>
                     }
@@ -483,6 +464,54 @@
             </div>
         </section>
     </div>
+
+    <div class="crud-modal-shell cham-cong-request-summary-shell" data-request-summary-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-request-summary-close></div>
+        <section class="crud-modal cham-cong-request-summary-modal" role="dialog" aria-modal="true" aria-labelledby="cham-cong-request-summary-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="cham-cong-request-summary-title" data-request-summary-title>Phiếu yêu cầu</h2>
+                    <p class="crud-modal-subtitle" data-request-summary-subtitle>Thông tin cơ bản</p>
+                </div>
+                <button type="button" class="crud-modal-close" data-request-summary-close aria-label="Đóng">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="crud-form cham-cong-request-summary-body">
+                <dl class="cham-cong-request-summary-list">
+                    <div>
+                        <dt>Khách hàng</dt>
+                        <dd data-request-summary-customer>Khách hàng chưa xác định</dd>
+                    </div>
+                    <div>
+                        <dt>Địa chỉ</dt>
+                        <dd data-request-summary-address>Chưa có địa chỉ</dd>
+                    </div>
+                    <div>
+                        <dt>Người đại diện</dt>
+                        <dd data-request-summary-contact>Chưa có thông tin</dd>
+                    </div>
+                    <div>
+                        <dt>Số điện thoại</dt>
+                        <dd data-request-summary-phone>Chưa có thông tin</dd>
+                    </div>
+                </dl>
+                <div class="cham-cong-request-work-list">
+                    <strong>Danh sách công việc</strong>
+                    <ul data-request-summary-works>
+                        <li>Chưa có công việc</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="crud-modal-actions">
+                <a class="primary-button" href="#" target="_blank" rel="noopener noreferrer" data-request-summary-detail>
+                    <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+                    <span>Xem chi tiết</span>
+                </a>
+                <button type="button" class="secondary-button" data-request-summary-close>Đóng</button>
+            </div>
+        </section>
+    </div>
 </section>
 
 @if (!isolateChamCongDashboard)
@@ -691,6 +720,16 @@
             const imageZoomOutButton = root.querySelector("[data-cham-cong-image-zoom-out]");
             const imageRotateButton = root.querySelector("[data-cham-cong-image-rotate]");
             const imageDownloadLink = root.querySelector("[data-cham-cong-image-download]");
+            const requestSummaryShell = root.querySelector("[data-request-summary-shell]");
+            const requestSummaryCloseButtons = root.querySelectorAll("[data-request-summary-close]");
+            const requestSummaryTitle = root.querySelector("[data-request-summary-title]");
+            const requestSummarySubtitle = root.querySelector("[data-request-summary-subtitle]");
+            const requestSummaryCustomer = root.querySelector("[data-request-summary-customer]");
+            const requestSummaryAddress = root.querySelector("[data-request-summary-address]");
+            const requestSummaryContact = root.querySelector("[data-request-summary-contact]");
+            const requestSummaryPhone = root.querySelector("[data-request-summary-phone]");
+            const requestSummaryWorks = root.querySelector("[data-request-summary-works]");
+            const requestSummaryDetail = root.querySelector("[data-request-summary-detail]");
             const distanceLimit = Number.parseFloat(root.dataset.distanceLimit || "");
             let cameraStream = null;
             let attendanceCameraDevices = [];
@@ -1464,7 +1503,7 @@
 
             const getAttendanceEntryCount = (scope) => {
                 if (Array.isArray(scope)) {
-                    return scope.reduce((total, item) => total + 1 + (item.thoiDiemCheckOut ? 1 : 0), 0);
+                    return scope.length;
                 }
                 if (scope instanceof HTMLElement) {
                     return scope.querySelectorAll(".cham-cong-attendance-line").length;
@@ -1528,70 +1567,85 @@
                     updateHistoryCounter();
                     return;
                 }
-                historyElement.innerHTML = sortedItems.map((item, index) => {
-                    const range = `${item.checkinTime || "--:--"} - ${item.checkoutTime || "Đang làm"}`;
-                    const customer = item.tenKhachHang || "AppTech";
-                    const checkinNote = item.ghiChuNhanVien
-                        ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuNhanVien)}</span></p>`
-                        : "";
-                    const checkoutNote = item.ghiChuCheckOut
-                        ? `<p class="cham-cong-note"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuCheckOut)}</span></p>`
-                        : "";
-                    const address = item.diaChi || "Chưa có địa chỉ";
-                    const employeeName = item.hoTenNhanVien || "Nhân viên";
-                    const checkinPhoto = item.imgPath
-                        ? `<button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="${escapeHtml(item.imgPath)}" data-image-title="Ảnh checkin ${escapeHtml(employeeName)}"><img src="${escapeHtml(item.imgPath)}" alt="Ảnh checkin" /></button>`
+
+                const groupedItems = [];
+                const groupedByEmployee = new Map();
+                sortedItems.forEach((item) => {
+                    const key = item.idNhanVien ? `id:${item.idNhanVien}` : `name:${item.hoTenNhanVien || "unknown"}`;
+                    if (!groupedByEmployee.has(key)) {
+                        const group = {
+                            employeeId: item.idNhanVien || "",
+                            employeeName: item.hoTenNhanVien || "Nhân viên",
+                            items: []
+                        };
+                        groupedByEmployee.set(key, group);
+                        groupedItems.push(group);
+                    }
+                    groupedByEmployee.get(key).items.push(item);
+                });
+
+                const buildEventSortKey = (value) => {
+                    const parsed = parseHistoryDate(value);
+                    return parsed === Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : parsed;
+                };
+
+                const renderEventLine = (event, employeeName) => {
+                    const item = event.item;
+                    const isCustomerCheckin = item.attendanceType === "KhachHang";
+                    const summary = item.requestSummary || {};
+                    const workText = Array.isArray(summary.congViecs) ? summary.congViecs.join("||") : "";
+                    const metaHtml = isCustomerCheckin
+                        ? `<button type="button"
+                                   class="cham-cong-request-chip"
+                                   data-request-summary-open
+                                   data-request-code="${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}"
+                                   data-request-url="${escapeHtml(item.requestDetailUrl || "#")}"
+                                   data-request-customer="${escapeHtml(summary.tenKhachHang || item.tenKhachHang || "Khách hàng chưa xác định")}"
+                                   data-request-address="${escapeHtml(summary.diaChi || item.locationDisplayText || item.diaChi || "Chưa có địa chỉ")}"
+                                   data-request-contact="${escapeHtml(summary.nguoiLienHe || "")}"
+                                   data-request-phone="${escapeHtml(summary.dienThoai || "")}"
+                                   data-request-works="${escapeHtml(workText)}">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</button>`
+                        : '<span class="cham-cong-entry-meta">AppTech</span>';
+                    const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
+                    const isViolation = !isCustomerCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
+                    const lineClass = event.isCheckout ? "is-checkout-complete" : "is-checkin";
+                    const iconClass = event.isCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                    const label = event.isCheckout ? "checkout" : "checkin";
+                    const photo = imagePath
+                        ? `<button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="${escapeHtml(imagePath)}" data-image-title="Ảnh ${label} ${escapeHtml(employeeName)}"><img src="${escapeHtml(imagePath)}" alt="Ảnh ${label}" /></button>`
                         : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
-                    const checkoutPhoto = item.imgPathCheckOut
-                        ? `<button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="${escapeHtml(item.imgPathCheckOut)}" data-image-title="Ảnh checkout ${escapeHtml(employeeName)}"><img src="${escapeHtml(item.imgPathCheckOut)}" alt="Ảnh checkout" /></button>`
-                        : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
-                    const checkinLineNote = item.ghiChuNhanVien
-                        ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuNhanVien)}</span></p>`
-                        : "";
-                    const checkoutLineNote = item.ghiChuCheckOut
-                        ? `<p class="cham-cong-note"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i><span>${escapeHtml(item.ghiChuCheckOut)}</span></p>`
-                        : "";
-                    const checkinClass = `is-checkin ${item.isCheckinViolation ? "is-attendance-violation" : ""}`;
-                    const checkoutClass = item.thoiDiemCheckOut ? "is-checkout-complete" : "is-checkout-pending";
-                    const checkoutViolationClass = item.isCheckoutViolation ? " is-attendance-violation" : "";
                     return `
-                        <div class="cham-cong-timeline-item ${item.thoiDiemCheckOut ? "is-complete" : "is-pending"} ${item.isOpen ? "is-open" : ""}" data-employee-id="${escapeHtml(item.idNhanVien || "")}" style="order:${index};">
+                        <section class="cham-cong-attendance-line ${lineClass} ${isViolation ? "is-attendance-violation" : ""} ${isCustomerCheckin ? "is-customer-event" : "is-company-event"}">
+                            <div class="cham-cong-entry-photo">${photo}</div>
+                            <div class="cham-cong-entry-content">
+                                <strong><i class="fa-solid ${iconClass}" aria-hidden="true"></i>${escapeHtml(event.timeText || "--:--")}</strong>
+                                ${metaHtml}
+                            </div>
+                        </section>`;
+                };
+
+                historyElement.innerHTML = groupedItems.map((group, index) => {
+                    const events = [];
+                    group.items.forEach((item) => {
+                        if (item.thoiDiem) {
+                            events.push({ item, isCheckout: false, sort: buildEventSortKey(item.thoiDiem), timeText: item.thoiDiem || item.checkinTime });
+                        }
+                        if (item.thoiDiemCheckOut) {
+                            events.push({ item, isCheckout: true, sort: buildEventSortKey(item.thoiDiemCheckOut), timeText: item.thoiDiemCheckOut || item.checkoutTime });
+                        }
+                    });
+                    events.sort((left, right) => left.sort - right.sort || (Number(left.item.id) || 0) - (Number(right.item.id) || 0) || (left.isCheckout ? 1 : 0) - (right.isCheckout ? 1 : 0));
+                    const hasOpen = group.items.some((item) => item.isOpen);
+                    const hasCustomerCheckin = group.items.some((item) => item.attendanceType === "KhachHang");
+                    return `
+                        <div class="cham-cong-timeline-item ${hasOpen ? "is-pending is-open" : "is-complete"} ${hasCustomerCheckin ? "has-customer-checkin" : "has-company-checkin"}" data-employee-id="${escapeHtml(group.employeeId)}" style="order:${index};">
                             <div class="cham-cong-dot"></div>
                             <div class="cham-cong-split">
-                                <strong class="cham-cong-employee-name">${escapeHtml(employeeName)}</strong>
-                                <section class="cham-cong-attendance-line ${checkinClass}">
-                                    <div class="cham-cong-entry-photo">${checkinPhoto}</div>
-                                    <div class="cham-cong-entry-content">
-                                        <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.thoiDiem || item.checkinTime || "--:--")}</strong>
-                                        ${checkinLineNote}
-                                    </div>
-                                </section>
-                                <section class="cham-cong-attendance-line ${checkoutClass}${checkoutViolationClass}">
-                                    <div class="cham-cong-entry-photo">${checkoutPhoto}</div>
-                                    <div class="cham-cong-entry-content">
-                                        <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>${escapeHtml(item.thoiDiemCheckOut || "Chưa checkout")}</strong>
-                                        ${checkoutLineNote}
-                                    </div>
-                                </section>
-                                <section class="cham-cong-entry">
-                                    <div class="cham-cong-entry-photo">${checkinPhoto}</div>
-                                    <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.checkinTime || "--:--")}</strong>
-                                    ${checkinNote}
-                                </section>
-                                <section class="cham-cong-entry">
-                                    <div class="cham-cong-entry-photo">${checkoutPhoto}</div>
-                                    <strong><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>${escapeHtml(item.checkoutTime || "Đang làm")}</strong>
-                                    ${checkoutNote}
-                                </section>
-                                <strong>${escapeHtml(range)}</strong>
-                                <span>${escapeHtml(customer)}</span>
-                                <small>${escapeHtml(address)}</small>
-                                ${checkinNote}
-                                ${checkoutNote}
+                                <strong class="cham-cong-employee-name">${escapeHtml(group.employeeName)}</strong>
+                                ${events.map((event) => renderEventLine(event, group.employeeName)).join("")}
                             </div>
                         </div>`;
                 }).join("");
-                groupRenderedHistoryCards();
                 historyElement.scrollLeft = 0;
                 updateHistoryCounter();
             };
@@ -1625,10 +1679,6 @@
                 }
                 if (!mobileHistoryMedia.matches) {
                     historyCount.textContent = `${getAttendanceEntryCount(historyElement)} lượt`;
-                    return;
-                }
-                if (!mobileHistoryMedia.matches) {
-                    historyCount.textContent = `${items.length} lượt`;
                     return;
                 }
                 const nearestIndex = items.reduce((bestIndex, item, index) => {
@@ -1746,6 +1796,50 @@
                 document.body.classList.remove("modal-open");
             };
 
+            const setText = (element, value, fallback = "Chưa có thông tin") => {
+                if (element instanceof HTMLElement) {
+                    element.textContent = value && `${value}`.trim() ? value : fallback;
+                }
+            };
+
+            const openRequestSummary = (button) => {
+                if (!(requestSummaryShell instanceof HTMLElement)) {
+                    return;
+                }
+                const code = button.dataset.requestCode || "Phiếu yêu cầu";
+                setText(requestSummaryTitle, code, "Phiếu yêu cầu");
+                setText(requestSummarySubtitle, "Thông tin cơ bản", "");
+                setText(requestSummaryCustomer, button.dataset.requestCustomer, "Khách hàng chưa xác định");
+                setText(requestSummaryAddress, button.dataset.requestAddress, "Chưa có địa chỉ");
+                setText(requestSummaryContact, button.dataset.requestContact);
+                setText(requestSummaryPhone, button.dataset.requestPhone);
+
+                if (requestSummaryWorks instanceof HTMLElement) {
+                    const works = (button.dataset.requestWorks || "")
+                        .split("||")
+                        .map((item) => item.trim())
+                        .filter(Boolean);
+                    requestSummaryWorks.innerHTML = works.length > 0
+                        ? works.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+                        : "<li>Chưa có công việc</li>";
+                }
+
+                if (requestSummaryDetail instanceof HTMLAnchorElement) {
+                    requestSummaryDetail.href = button.dataset.requestUrl || "#";
+                    requestSummaryDetail.classList.toggle("disabled", !button.dataset.requestUrl);
+                }
+
+                requestSummaryShell.hidden = false;
+                document.body.classList.add("modal-open");
+            };
+
+            const closeRequestSummary = () => {
+                if (requestSummaryShell instanceof HTMLElement) {
+                    requestSummaryShell.hidden = true;
+                }
+                document.body.classList.remove("modal-open");
+            };
+
             const saveAttendance = async () => {
                 if (!capturedBlob || !activeGps) {
                     setStatus(cameraStatus, "Vui lòng chụp ảnh trước khi lưu.", "error");
@@ -1827,6 +1921,7 @@
             mapFullscreenCloseButtons.forEach((button) => button.addEventListener("click", closeFullscreenMap));
             cameraCloseButtons.forEach((button) => button.addEventListener("click", closeCameraModal));
             imageViewerCloseButtons.forEach((button) => button.addEventListener("click", closeImageViewer));
+            requestSummaryCloseButtons.forEach((button) => button.addEventListener("click", closeRequestSummary));
             imageZoomInButton?.addEventListener("click", () => {
                 imageZoom = Math.min(4, Number((imageZoom + 0.25).toFixed(2)));
                 syncImageViewerTransform();
@@ -1845,8 +1940,21 @@
                     && !imageViewerShell.hidden) {
                     closeImageViewer();
                 }
+                if (event.key === "Escape"
+                    && requestSummaryShell instanceof HTMLElement
+                    && !requestSummaryShell.hidden) {
+                    closeRequestSummary();
+                }
             });
             historyElement?.addEventListener("click", (event) => {
+                const requestTrigger = event.target instanceof Element
+                    ? event.target.closest("[data-request-summary-open]")
+                    : null;
+                if (requestTrigger instanceof HTMLElement) {
+                    openRequestSummary(requestTrigger);
+                    return;
+                }
+
                 const trigger = event.target instanceof Element
                     ? event.target.closest("[data-cham-cong-image-open], .cham-cong-entry-photo img")
                     : null;
@@ -1921,7 +2029,6 @@
 
             syncButtons();
             syncEmployeeSummary();
-            groupRenderedHistoryCards();
             updateHistoryCounter();
         })();
     </script>

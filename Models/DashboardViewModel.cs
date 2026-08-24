@@ -116,12 +116,18 @@ public sealed class ChamCongLocationOption
 public sealed class ChamCongHistoryItem
 {
     public int Id { get; set; }
+    public int? IDYeuCau { get; set; }
+    public string? MaYeuCau { get; set; }
     public int? IDKhachHang { get; set; }
     public int? IDDiaDiem { get; set; }
     public int? IDNhanVien { get; set; }
     public string? HoTenNhanVien { get; set; }
     public string? TenKhachHang { get; set; }
     public string? DiaChi { get; set; }
+    public string? NguoiLienHe { get; set; }
+    public string? DienThoai { get; set; }
+    public string? DanhSachCongViec { get; set; }
+    public string? CheckInType { get; set; }
     public DateTime? ThoiDiem { get; set; }
     public DateTime? ThoiDiemCheckOut { get; set; }
     public decimal? LongAddress { get; set; }
@@ -136,6 +142,16 @@ public sealed class ChamCongHistoryItem
     public bool IsCheckinViolation { get; set; }
     public bool IsCheckoutViolation { get; set; }
     public bool IsOpen => ThoiDiem.HasValue && !ThoiDiemCheckOut.HasValue;
+    public string AttendanceType => IDYeuCau.HasValue ? "KhachHang" : "ChamCong";
+    public string CustomerDisplayName => string.IsNullOrWhiteSpace(TenKhachHang)
+        ? (IDYeuCau.HasValue ? "Khách hàng chưa xác định" : "AppTech")
+        : TenKhachHang.Trim();
+    public string LocationDisplayText => string.IsNullOrWhiteSpace(DiaChi)
+        ? "Chưa có địa chỉ"
+        : DiaChi.Trim();
+    public string Title => AttendanceType == "KhachHang"
+        ? $"Chấm công tại khách hàng: {CustomerDisplayName}"
+        : $"Chấm công tại {CustomerDisplayName}";
 }
 
 public sealed class ChamCongCheckinRequest

@@ -449,16 +449,37 @@ public class HomeController(
         return account?.EmployeeId is > 0 ? account.EmployeeId : null;
     }
 
-    private static object BuildChamCongHistoryJson(ChamCongHistoryItem item)
+    private object BuildChamCongHistoryJson(ChamCongHistoryItem item)
     {
+        var requestDetailUrl = item.IDYeuCau.HasValue
+            ? Url.Action("Edit", "YeuCau", new { id = item.IDYeuCau.Value })
+            : null;
         return new
         {
             id = item.Id,
+            idYeuCau = item.IDYeuCau,
+            maYeuCau = item.MaYeuCau,
+            idKhachHang = item.IDKhachHang,
             idDiaDiem = item.IDDiaDiem,
             idNhanVien = item.IDNhanVien,
             hoTenNhanVien = item.HoTenNhanVien,
             tenKhachHang = item.TenKhachHang,
             diaChi = item.DiaChi,
+            attendanceType = item.AttendanceType,
+            requestDetailUrl,
+            locationDisplayText = item.LocationDisplayText,
+            title = item.Title,
+            requestSummary = item.IDYeuCau.HasValue
+                ? new
+                {
+                    tenKhachHang = item.CustomerDisplayName,
+                    diaChi = item.LocationDisplayText,
+                    nguoiLienHe = item.NguoiLienHe,
+                    dienThoai = item.DienThoai,
+                    congViecs = (item.DanhSachCongViec ?? string.Empty)
+                        .Split("||", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                }
+                : null,
             thoiDiem = item.ThoiDiem?.ToString("dd/MM/yyyy HH:mm"),
             thoiDiemCheckOut = item.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm"),
             checkinSortKey = item.ThoiDiem?.ToString("yyyyMMddHHmmss") ?? "99999999999999",
