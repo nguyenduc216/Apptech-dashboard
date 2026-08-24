@@ -84,6 +84,7 @@ public sealed class ChamCongDashboardModel
     public IReadOnlyList<int> SelectedEmployeeIds { get; set; } = [];
     public IReadOnlyList<ChamCongHistoryItem> History { get; set; } = [];
     public ChamCongHistoryItem? OpenCheckin { get; set; }
+    public ChamCongHistoryItem? OpenPurchaseCheckin { get; set; }
     public decimal? CheckinDistanceLimitMeters { get; set; }
     public bool CanSelectEmployees { get; set; }
     public bool CanAdminManageAttendance { get; set; }
@@ -142,16 +143,36 @@ public sealed class ChamCongHistoryItem
     public bool IsCheckinViolation { get; set; }
     public bool IsCheckoutViolation { get; set; }
     public bool IsOpen => ThoiDiem.HasValue && !ThoiDiemCheckOut.HasValue;
-    public string AttendanceType => IDYeuCau.HasValue ? "KhachHang" : "ChamCong";
+    public string AttendanceType
+    {
+        get
+        {
+            if (string.Equals(CheckInType, "MuaHang", StringComparison.OrdinalIgnoreCase))
+            {
+                return "MuaHang";
+            }
+
+            return IDYeuCau.HasValue ? "KhachHang" : "ChamCong";
+        }
+    }
+    public bool IsPurchase => string.Equals(AttendanceType, "MuaHang", StringComparison.OrdinalIgnoreCase);
+    public bool IsQuickPurchase => IsPurchase &&
+        ThoiDiem.HasValue &&
+        ThoiDiemCheckOut.HasValue &&
+        ThoiDiem.Value == ThoiDiemCheckOut.Value &&
+        string.Equals(ImgPath, ImgPathCheckOut, StringComparison.OrdinalIgnoreCase);
     public string CustomerDisplayName => string.IsNullOrWhiteSpace(TenKhachHang)
-        ? (IDYeuCau.HasValue ? "Khách hàng chưa xác định" : "AppTech")
+        ? (IsPurchase ? "Mua hàng" : (IDYeuCau.HasValue ? "Khách hàng chưa xác định" : "AppTech"))
         : TenKhachHang.Trim();
     public string LocationDisplayText => string.IsNullOrWhiteSpace(DiaChi)
-        ? "Chưa có địa chỉ"
+        ? (IsPurchase ? "Vị trí GPS phát sinh" : "Chưa có địa chỉ")
         : DiaChi.Trim();
-    public string Title => AttendanceType == "KhachHang"
-        ? $"Chấm công tại khách hàng: {CustomerDisplayName}"
-        : $"Chấm công tại {CustomerDisplayName}";
+    public string Title => AttendanceType switch
+    {
+        "KhachHang" => $"Chấm công tại khách hàng: {CustomerDisplayName}",
+        "MuaHang" => IsQuickPurchase ? "Đi mua hàng · Hoàn tất nhanh" : "Đi mua hàng / Đi ra ngoài",
+        _ => $"Chấm công tại {CustomerDisplayName}"
+    };
 }
 
 public sealed class ChamCongCheckinRequest
@@ -166,6 +187,29 @@ public sealed class ChamCongCheckinRequest
 }
 
 public sealed class ChamCongCheckoutRequest
+{
+    public int? IDNhanVien { get; set; }
+    public int Id { get; set; }
+    public DateTime? ThoiDiemCheckOut { get; set; }
+    public decimal? LongAddressCheckOut { get; set; }
+    public decimal? LatAddressCheckOut { get; set; }
+    public string? ImgPathCheckOut { get; set; }
+    public string? GhiChuCheckOut { get; set; }
+}
+
+public sealed class MuaHangCheckinRequest
+{
+    public int? IDNhanVien { get; set; }
+    public DateTime? ThoiDiem { get; set; }
+    public decimal? LongAddress { get; set; }
+    public decimal? LatAddress { get; set; }
+    public string? ImgPath { get; set; }
+    public string? GhiChuNhanVien { get; set; }
+    public string? NoiDungCongViec { get; set; }
+    public bool QuickCheckin { get; set; } = true;
+}
+
+public sealed class MuaHangCheckoutRequest
 {
     public int? IDNhanVien { get; set; }
     public int Id { get; set; }

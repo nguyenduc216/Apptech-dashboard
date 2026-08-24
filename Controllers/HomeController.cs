@@ -72,11 +72,15 @@ public class HomeController(
         var openCheckin = actionEmployeeId > 0
             ? await _chamCongService.GetOpenCheckinAsync(actionEmployeeId, selectedDate, HttpContext.RequestAborted)
             : null;
+        var openPurchaseCheckin = actionEmployeeId > 0
+            ? await _chamCongService.GetOpenPurchaseCheckinAsync(actionEmployeeId, selectedDate, HttpContext.RequestAborted)
+            : null;
         return Json(new
         {
             succeeded = true,
             selectedDate = selectedDate.ToString("yyyy-MM-dd"),
             openCheckinId = openCheckin?.Id,
+            openPurchaseCheckinId = openPurchaseCheckin?.Id,
             actionEmployeeId,
             canAdminManageAttendance,
             selectedEmployeeIds,
@@ -186,6 +190,111 @@ public class HomeController(
         {
             DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
             return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkout." });
+        }
+
+        return Json(new { succeeded = true });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MuaHangCheckin([FromForm] MuaHangCheckinRequest model, IFormFile? imageFile)
+    {
+        model.GhiChuNhanVien = string.IsNullOrWhiteSpace(model.GhiChuNhanVien) ? null : model.GhiChuNhanVien.Trim();
+        model.NoiDungCongViec = string.IsNullOrWhiteSpace(model.NoiDungCongViec) ? null : model.NoiDungCongViec.Trim();
+        model.LongAddress ??= ParseInvariantDecimal(Request.Form["LongAddress"].FirstOrDefault());
+        model.LatAddress ??= ParseInvariantDecimal(Request.Form["LatAddress"].FirstOrDefault());
+
+        var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
+        var canSelectEmployees = await CanSelectChamCongEmployeesAsync(HttpContext.RequestAborted);
+        var canAdminManageAttendance = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
+        if (!canSelectEmployees)
+        {
+            model.ThoiDiem = null;
+        }
+
+        var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(model.IDNhanVien, currentEmployeeId, HttpContext.RequestAborted);
+        if (targetEmployeeId <= 0)
+        {
+            return BadRequest(new { message = "Tài khoản chưa liên kết nhân viên nên không thể ghi nhận đi mua hàng." });
+        }
+
+        var checkinDate = (model.ThoiDiem ?? DateTime.Now).Date;
+        var dateError = ValidateAttendanceActionDate(checkinDate, targetEmployeeId, currentEmployeeId, canAdminManageAttendance);
+        if (dateError is not null)
+        {
+            return BadRequest(new { message = dateError });
+        }
+
+        var imageError = ValidateCheckinImage(imageFile);
+        if (imageError is not null)
+        {
+            return BadRequest(new { message = imageError });
+        }
+
+        var uploadResult = await SaveCheckinImageAsync(imageFile!, HttpContext.RequestAborted);
+        if (!uploadResult.Succeeded)
+        {
+            return BadRequest(new { message = uploadResult.ErrorMessage ?? "Không thể lưu ảnh đi mua hàng." });
+        }
+
+        model.ImgPath = uploadResult.RelativeUrl;
+        var result = await _chamCongService.PurchaseCheckinAsync(targetEmployeeId, model, HttpContext.RequestAborted);
+        if (!result.Succeeded)
+        {
+            DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin đi mua hàng." });
+        }
+
+        return Json(new { succeeded = true, id = result.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MuaHangCheckout([FromForm] MuaHangCheckoutRequest model, IFormFile? imageFile)
+    {
+        model.GhiChuCheckOut = string.IsNullOrWhiteSpace(model.GhiChuCheckOut) ? null : model.GhiChuCheckOut.Trim();
+        model.LongAddressCheckOut ??= ParseInvariantDecimal(Request.Form["LongAddressCheckOut"].FirstOrDefault());
+        model.LatAddressCheckOut ??= ParseInvariantDecimal(Request.Form["LatAddressCheckOut"].FirstOrDefault());
+
+        var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
+        var canSelectEmployees = await CanSelectChamCongEmployeesAsync(HttpContext.RequestAborted);
+        var canAdminManageAttendance = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
+        if (!canSelectEmployees)
+        {
+            model.ThoiDiemCheckOut = null;
+        }
+
+        var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(model.IDNhanVien, currentEmployeeId, HttpContext.RequestAborted);
+        if (targetEmployeeId <= 0)
+        {
+            return BadRequest(new { message = "Tài khoản chưa liên kết nhân viên nên không thể checkout đi mua hàng." });
+        }
+
+        var checkoutDate = (model.ThoiDiemCheckOut ?? DateTime.Now).Date;
+        var dateError = ValidateAttendanceActionDate(checkoutDate, targetEmployeeId, currentEmployeeId, canAdminManageAttendance);
+        if (dateError is not null)
+        {
+            return BadRequest(new { message = dateError });
+        }
+
+        var imageError = ValidateCheckinImage(imageFile);
+        if (imageError is not null)
+        {
+            return BadRequest(new { message = imageError });
+        }
+
+        var uploadResult = await SaveCheckinImageAsync(imageFile!, HttpContext.RequestAborted);
+        if (!uploadResult.Succeeded)
+        {
+            return BadRequest(new { message = uploadResult.ErrorMessage ?? "Không thể lưu ảnh checkout đi mua hàng." });
+        }
+
+        model.ImgPathCheckOut = uploadResult.RelativeUrl;
+        var result = await _chamCongService.PurchaseCheckoutAsync(targetEmployeeId, model, HttpContext.RequestAborted);
+        if (!result.Succeeded)
+        {
+            DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkout đi mua hàng." });
         }
 
         return Json(new { succeeded = true });
@@ -417,6 +526,9 @@ public class HomeController(
         var openCheckin = actionEmployeeId > 0
             ? await _chamCongService.GetOpenCheckinAsync(actionEmployeeId, selectedDate.Date, cancellationToken)
             : null;
+        var openPurchaseCheckin = actionEmployeeId > 0
+            ? await _chamCongService.GetOpenPurchaseCheckinAsync(actionEmployeeId, selectedDate.Date, cancellationToken)
+            : null;
         var distanceLimit = await _chamCongService.GetCheckinDistanceLimitMetersAsync(cancellationToken);
 
         return new ChamCongDashboardModel
@@ -431,6 +543,7 @@ public class HomeController(
                 .ThenBy(item => item.Id)
                 .ToList(),
             OpenCheckin = openCheckin,
+            OpenPurchaseCheckin = openPurchaseCheckin,
             CheckinDistanceLimitMeters = distanceLimit,
             CanSelectEmployees = canSelectEmployees,
             CanAdminManageAttendance = canAdminManageAttendance
@@ -466,6 +579,9 @@ public class HomeController(
             tenKhachHang = item.TenKhachHang,
             diaChi = item.DiaChi,
             attendanceType = item.AttendanceType,
+            isPurchase = item.IsPurchase,
+            isQuickPurchase = item.IsQuickPurchase,
+            checkInType = item.CheckInType,
             requestDetailUrl,
             locationDisplayText = item.LocationDisplayText,
             title = item.Title,

@@ -25,6 +25,10 @@ public interface IChamCongService
 
     Task<ChamCongHistoryItem?> GetOpenCheckinAsync(int employeeId, DateTime date, CancellationToken cancellationToken = default);
 
+    Task<ChamCongHistoryItem?> GetOpenPurchaseCheckinAsync(int employeeId, CancellationToken cancellationToken = default);
+
+    Task<ChamCongHistoryItem?> GetOpenPurchaseCheckinAsync(int employeeId, DateTime date, CancellationToken cancellationToken = default);
+
     Task<decimal?> GetCheckinDistanceLimitMetersAsync(CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, int? Id)> CheckinAsync(
@@ -35,6 +39,16 @@ public interface IChamCongService
     Task<(bool Succeeded, string? ErrorMessage)> CheckoutAsync(
         int employeeId,
         ChamCongCheckoutRequest model,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, int? Id)> PurchaseCheckinAsync(
+        int employeeId,
+        MuaHangCheckinRequest model,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage)> PurchaseCheckoutAsync(
+        int employeeId,
+        MuaHangCheckoutRequest model,
         CancellationToken cancellationToken = default);
 }
 
@@ -49,9 +63,12 @@ public sealed class ChamCongService(
     private const string RequestTableName = "TblYeuCau";
     private const string SystemConfigTableName = "TblCauHinhHeThong";
     private const string ChamCongType = "ChamCong";
+    private const string PurchaseAttendanceType = "MuaHang";
     private const string CompanyAttendancePredicate = "CheckInType = @CheckInType";
     private const string CompanyAttendancePredicateWithAlias = "ch.CheckInType = @CheckInType";
-    private const string DashboardHistoryPredicateWithAlias = "(ch.CheckInType = @CheckInType OR ch.IDYeuCau IS NOT NULL)";
+    private const string PurchaseAttendancePredicate = "CheckInType = @PurchaseCheckInType";
+    private const string PurchaseAttendancePredicateWithAlias = "ch.CheckInType = @PurchaseCheckInType";
+    private const string DashboardHistoryPredicateWithAlias = "(ch.CheckInType = @CheckInType OR ch.CheckInType = @PurchaseCheckInType OR ch.IDYeuCau IS NOT NULL)";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -159,6 +176,7 @@ public sealed class ChamCongService(
                 .Replace("{0}", string.Join(", ", employeeFilters))
                 .Replace("{1}", DashboardHistoryPredicateWithAlias));
             command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
+            command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
             command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = date.Date });
 
             var history = await ReadHistoryAsync(command, cancellationToken);
@@ -206,6 +224,44 @@ public sealed class ChamCongService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load open attendance checkin for employee {EmployeeId} on {Date}.", employeeId, date.Date);
+            return null;
+        }
+    }
+
+    public async Task<ChamCongHistoryItem?> GetOpenPurchaseCheckinAsync(int employeeId, CancellationToken cancellationToken = default)
+    {
+        if (employeeId <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            return await GetOpenPurchaseCheckinAsync(connection, employeeId, date: null, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Purchase open checkin lookup failed for employee {EmployeeId}.", employeeId);
+            return null;
+        }
+    }
+
+    public async Task<ChamCongHistoryItem?> GetOpenPurchaseCheckinAsync(int employeeId, DateTime date, CancellationToken cancellationToken = default)
+    {
+        if (employeeId <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            return await GetOpenPurchaseCheckinAsync(connection, employeeId, date.Date, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Purchase open checkin lookup failed for employee {EmployeeId} on {Date}.", employeeId, date.Date);
             return null;
         }
     }
@@ -417,6 +473,174 @@ public sealed class ChamCongService(
         }
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage, int? Id)> PurchaseCheckinAsync(
+        int employeeId,
+        MuaHangCheckinRequest model,
+        CancellationToken cancellationToken = default)
+    {
+        if (employeeId <= 0)
+        {
+            return (false, "Tài khoản chưa liên kết nhân viên nên không thể ghi nhận đi mua hàng.", null);
+        }
+
+        if (!model.LatAddress.HasValue || !model.LongAddress.HasValue)
+        {
+            return (false, "Vui lòng cấp quyền GPS để lấy vị trí đi mua hàng.", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(model.ImgPath))
+        {
+            return (false, "Vui lòng chụp ảnh đi mua hàng.", null);
+        }
+
+        var workNote = BuildPurchaseWorkNote(model.NoiDungCongViec, model.GhiChuNhanVien);
+        if (string.IsNullOrWhiteSpace(workNote))
+        {
+            return (false, "Vui lòng chọn nội dung đi ra ngoài hoặc nhập ghi chú chi tiết.", null);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+            if (await HasOpenPurchaseCheckinAsync(connection, transaction, employeeId, cancellationToken))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, "Bạn đang có lượt đi mua hàng chưa checkout. Vui lòng hoàn tất lượt hiện tại trước.", null);
+            }
+
+            var checkinTime = model.ThoiDiem ?? DateTime.Now;
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"""
+                INSERT INTO [{CheckinHistoryTableName}] (
+                    IDKhachHang,
+                    IDNhanVien,
+                    ThoiDiem,
+                    IDDiaDiem,
+                    IsCheckIn,
+                    LongAddress,
+                    LatAddress,
+                    ImgPath,
+                    GhiChuNhanVien,
+                    CheckInType,
+                    ThoiDiemCheckOut,
+                    LongAddressCheckOut,
+                    LatAddressCheckOut,
+                    ImgPathCheckOut,
+                    GhiChuCheckOut
+                )
+                VALUES (
+                    NULL,
+                    @IDNhanVien,
+                    @ThoiDiem,
+                    NULL,
+                    @IsCheckIn,
+                    @LongAddress,
+                    @LatAddress,
+                    @ImgPath,
+                    @GhiChuNhanVien,
+                    @CheckInType,
+                    @ThoiDiemCheckOut,
+                    @LongAddressCheckOut,
+                    @LatAddressCheckOut,
+                    @ImgPathCheckOut,
+                    @GhiChuCheckOut
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS int);
+                """;
+            command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
+            command.Parameters.Add(new SqlParameter("@ThoiDiem", SqlDbType.DateTime) { Value = checkinTime });
+            command.Parameters.Add(new SqlParameter("@IsCheckIn", SqlDbType.Bit) { Value = true });
+            command.Parameters.Add(new SqlParameter("@LongAddress", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.LongAddress.Value });
+            command.Parameters.Add(new SqlParameter("@LatAddress", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.LatAddress.Value });
+            command.Parameters.Add(new SqlParameter("@ImgPath", SqlDbType.NVarChar, 500) { Value = model.ImgPath.Trim() });
+            command.Parameters.Add(new SqlParameter("@GhiChuNhanVien", SqlDbType.NVarChar, 1000) { Value = ToDbValue(workNote) });
+            command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+            command.Parameters.Add(new SqlParameter("@ThoiDiemCheckOut", SqlDbType.DateTime) { Value = model.QuickCheckin ? checkinTime : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@LongAddressCheckOut", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.QuickCheckin ? model.LongAddress.Value : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@LatAddressCheckOut", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.QuickCheckin ? model.LatAddress.Value : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@ImgPathCheckOut", SqlDbType.NVarChar, 500) { Value = model.QuickCheckin ? model.ImgPath.Trim() : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@GhiChuCheckOut", SqlDbType.NVarChar, 1000) { Value = model.QuickCheckin ? ToDbValue(workNote) : DBNull.Value });
+
+            var id = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
+            await transaction.CommitAsync(cancellationToken);
+            return (true, null, id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Purchase checkin failed for employee {EmployeeId}.", employeeId);
+            return (false, "Không thể lưu thông tin đi mua hàng.", null);
+        }
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> PurchaseCheckoutAsync(
+        int employeeId,
+        MuaHangCheckoutRequest model,
+        CancellationToken cancellationToken = default)
+    {
+        if (employeeId <= 0)
+        {
+            return (false, "Tài khoản chưa liên kết nhân viên nên không thể checkout đi mua hàng.");
+        }
+
+        if (model.Id <= 0)
+        {
+            return (false, "Không xác định được lượt đi mua hàng cần checkout.");
+        }
+
+        if (!model.LatAddressCheckOut.HasValue || !model.LongAddressCheckOut.HasValue)
+        {
+            return (false, "Vui lòng cấp quyền GPS để lấy vị trí checkout đi mua hàng.");
+        }
+
+        if (string.IsNullOrWhiteSpace(model.ImgPathCheckOut))
+        {
+            return (false, "Vui lòng chụp ảnh checkout đi mua hàng.");
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                UPDATE [{CheckinHistoryTableName}]
+                SET
+                    ThoiDiemCheckOut = @ThoiDiemCheckOut,
+                    LongAddressCheckOut = @LongAddressCheckOut,
+                    LatAddressCheckOut = @LatAddressCheckOut,
+                    ImgPathCheckOut = @ImgPathCheckOut,
+                    GhiChuCheckOut = @GhiChuCheckOut
+                WHERE ID = @Id
+                  AND IDNhanVien = @IDNhanVien
+                  AND {PurchaseAttendancePredicate}
+                  AND ThoiDiem IS NOT NULL
+                  AND ThoiDiemCheckOut IS NULL
+                  AND @ThoiDiemCheckOut >= ThoiDiem
+                """;
+            command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = model.Id });
+            command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
+            command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
+            command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+            command.Parameters.Add(new SqlParameter("@ThoiDiemCheckOut", SqlDbType.DateTime) { Value = model.ThoiDiemCheckOut ?? DateTime.Now });
+            command.Parameters.Add(new SqlParameter("@LongAddressCheckOut", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.LongAddressCheckOut.Value });
+            command.Parameters.Add(new SqlParameter("@LatAddressCheckOut", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.LatAddressCheckOut.Value });
+            command.Parameters.Add(new SqlParameter("@ImgPathCheckOut", SqlDbType.NVarChar, 500) { Value = model.ImgPathCheckOut.Trim() });
+            command.Parameters.Add(new SqlParameter("@GhiChuCheckOut", SqlDbType.NVarChar, 1000) { Value = ToDbValue(model.GhiChuCheckOut) });
+
+            return await command.ExecuteNonQueryAsync(cancellationToken) > 0
+                ? (true, null)
+                : (false, "Không tìm thấy lượt đi mua hàng đang mở hoặc thời gian checkout nhỏ hơn thời gian checkin.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Purchase checkout failed for employee {EmployeeId}, checkin {CheckinId}.", employeeId, model.Id);
+            return (false, "Không thể lưu thông tin checkout đi mua hàng.");
+        }
+    }
+
     private async Task<ChamCongHistoryItem?> GetOpenCheckinAsync(
         SqlConnection connection,
         int employeeId,
@@ -448,6 +672,41 @@ public sealed class ChamCongService(
             var history = await ReadHistoryAsync(command, cancellationToken);
             await ApplyAttendanceViolationsAsync(connection, history, cancellationToken);
             return history.FirstOrDefault();
+    }
+
+    private async Task<ChamCongHistoryItem?> GetOpenPurchaseCheckinAsync(
+        SqlConnection connection,
+        int employeeId,
+        DateTime? date,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        var dateFilter = date.HasValue
+            ? """
+              AND ch.ThoiDiem >= @DateFrom
+              AND ch.ThoiDiem < DATEADD(day, 1, @DateFrom)
+            """
+            : "";
+        command.CommandText = BuildHistorySelect("""
+            WHERE ch.IDNhanVien = @IDNhanVien
+              AND {0}
+              AND ch.ThoiDiem IS NOT NULL
+              AND ch.ThoiDiemCheckOut IS NULL
+              {1}
+            ORDER BY ch.ThoiDiem DESC, ch.ID DESC
+            """
+            .Replace("{0}", PurchaseAttendancePredicateWithAlias)
+            .Replace("{1}", dateFilter), top: "TOP (1)");
+        command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
+        command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+        if (date.HasValue)
+        {
+            command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = date.Value.Date });
+        }
+
+        var history = await ReadHistoryAsync(command, cancellationToken);
+        await ApplyAttendanceViolationsAsync(connection, history, cancellationToken);
+        return history.FirstOrDefault();
     }
 
     private static async Task<ChamCongHistoryItem?> GetOpenCheckinByIdAsync(
@@ -528,7 +787,8 @@ public sealed class ChamCongService(
 
         foreach (var item in items)
         {
-            if (string.Equals(item.AttendanceType, "KhachHang", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(item.AttendanceType, "KhachHang", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.AttendanceType, "MuaHang", StringComparison.OrdinalIgnoreCase))
             {
                 item.IsCheckinViolation = false;
                 item.IsCheckoutViolation = false;
@@ -746,6 +1006,47 @@ public sealed class ChamCongService(
         command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
         command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = date.Date });
         return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
+    private static async Task<bool> HasOpenPurchaseCheckinAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int employeeId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            SELECT TOP (1) 1
+            FROM [{CheckinHistoryTableName}] WITH (UPDLOCK, HOLDLOCK)
+            WHERE IDNhanVien = @IDNhanVien
+              AND {PurchaseAttendancePredicate}
+              AND ThoiDiem IS NOT NULL
+              AND ThoiDiemCheckOut IS NULL
+            """;
+        command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
+        command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
+    private static string? BuildPurchaseWorkNote(string? selectedWork, string? detailNote)
+    {
+        var selectedParts = (selectedWork ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var note = string.IsNullOrWhiteSpace(detailNote) ? null : detailNote.Trim();
+
+        if (selectedParts.Count == 0)
+        {
+            return note;
+        }
+
+        var prefix = $"[{string.Join("; ", selectedParts)}]";
+        return string.IsNullOrWhiteSpace(note)
+            ? string.Join("; ", selectedParts)
+            : $"{prefix} {note}";
     }
 
     private async Task<string?> ValidateDistanceAsync(
