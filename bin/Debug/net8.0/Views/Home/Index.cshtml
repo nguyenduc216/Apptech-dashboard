@@ -397,7 +397,7 @@
                         </button>
                         <button type="button" class="secondary-button cham-cong-map-refresh-gps-button" data-cham-cong-refresh-gps>
                             <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
-                            <span>Láº¥y láº¡i GPS</span>
+                            <span>Lấy lại GPS</span>
                         </button>
                     </div>
                 </div>
@@ -1352,12 +1352,12 @@
                 try {
                     activeGps = await resolveGps();
                     if (cameraSubtitle) {
-                        cameraSubtitle.textContent = `GPS hiá»‡n táº¡i: ${activeGps.lat.toFixed(5)}, ${activeGps.long.toFixed(5)}`;
+                        cameraSubtitle.textContent = `GPS hiện tại: ${activeGps.lat.toFixed(5)}, ${activeGps.long.toFixed(5)}`;
                     }
                     syncAttendanceMap(activeGps);
-                    setStatus(cameraStatus, "ÄÃ£ cáº­p nháº­t láº¡i GPS hiá»‡n táº¡i.", "success");
+                    setStatus(cameraStatus, "Đã cập nhật lại GPS hiện tại.", "success");
                 } catch (error) {
-                    setStatus(cameraStatus, error instanceof Error ? error.message : "KhÃ´ng thá»ƒ láº¥y láº¡i GPS.", "error");
+                    setStatus(cameraStatus, error instanceof Error ? error.message : "Không thể lấy lại GPS.", "error");
                 } finally {
                     if (refreshGpsButton instanceof HTMLButtonElement) {
                         refreshGpsButton.disabled = false;

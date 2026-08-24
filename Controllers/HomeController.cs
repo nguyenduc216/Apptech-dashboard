@@ -73,7 +73,7 @@ public class HomeController(
             ? await _chamCongService.GetOpenCheckinAsync(actionEmployeeId, selectedDate, HttpContext.RequestAborted)
             : null;
         var openPurchaseCheckin = actionEmployeeId > 0
-            ? await _chamCongService.GetOpenPurchaseCheckinAsync(actionEmployeeId, selectedDate, HttpContext.RequestAborted)
+            ? await _chamCongService.GetOpenPurchaseCheckinAsync(actionEmployeeId, HttpContext.RequestAborted)
             : null;
         return Json(new
         {
@@ -527,7 +527,7 @@ public class HomeController(
             ? await _chamCongService.GetOpenCheckinAsync(actionEmployeeId, selectedDate.Date, cancellationToken)
             : null;
         var openPurchaseCheckin = actionEmployeeId > 0
-            ? await _chamCongService.GetOpenPurchaseCheckinAsync(actionEmployeeId, selectedDate.Date, cancellationToken)
+            ? await _chamCongService.GetOpenPurchaseCheckinAsync(actionEmployeeId, cancellationToken)
             : null;
         var distanceLimit = await _chamCongService.GetCheckinDistanceLimitMetersAsync(cancellationToken);
 

@@ -619,10 +619,9 @@ public sealed class ChamCongService(
                   AND ThoiDiem IS NOT NULL
                   AND ThoiDiemCheckOut IS NULL
                   AND @ThoiDiemCheckOut >= ThoiDiem
-                """;
+            """;
             command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = model.Id });
             command.Parameters.Add(new SqlParameter("@IDNhanVien", SqlDbType.Int) { Value = employeeId });
-            command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
             command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
             command.Parameters.Add(new SqlParameter("@ThoiDiemCheckOut", SqlDbType.DateTime) { Value = model.ThoiDiemCheckOut ?? DateTime.Now });
             command.Parameters.Add(new SqlParameter("@LongAddressCheckOut", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = model.LongAddressCheckOut.Value });
