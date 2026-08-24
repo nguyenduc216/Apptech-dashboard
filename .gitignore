@@ -1,3 +1,6 @@
 bin/
 obj/
-
+.codex-tmp/
+.vs/
+*.user
+*.suo

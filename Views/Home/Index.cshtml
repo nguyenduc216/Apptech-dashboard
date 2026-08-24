@@ -68,7 +68,9 @@
          data-can-admin-manage-attendance="@chamCong.CanAdminManageAttendance.ToString().ToLowerInvariant()"
          data-today-date="@DateTime.Today.ToString("yyyy-MM-dd")"
          data-open-checkin-id="@(chamCong.OpenCheckin?.Id.ToString(invariantCulture) ?? "")"
-         data-open-purchase-checkin-id="@(chamCong.OpenPurchaseCheckin?.Id.ToString(invariantCulture) ?? "")">
+         data-open-purchase-checkin-id="@(chamCong.OpenPurchaseCheckin?.Id.ToString(invariantCulture) ?? "")"
+         data-open-purchase-started-at="@(chamCong.OpenPurchaseCheckin?.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "")"
+         data-open-purchase-note="@(chamCong.OpenPurchaseCheckin?.GhiChuNhanVien ?? "")">
     <div class="panel-header">
         <div>
             <h3>Chấm công</h3>
@@ -328,7 +330,7 @@
                 }
                 else if (chamCong.OpenPurchaseCheckin is not null)
                 {
-                    <span>Đang đi mua hàng. Bạn có thể checkout mua hàng độc lập với chấm công AppTech.</span>
+                    <span>Đang có lượt đi mua hàng chưa hoàn tất từ @(chamCong.OpenPurchaseCheckin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "thời gian chưa xác định").</span>
                 }
                 else
                 {
@@ -1957,9 +1959,21 @@
                 }
                 root.dataset.openCheckinId = data.openCheckinId ? `${data.openCheckinId}` : "";
                 root.dataset.openPurchaseCheckinId = data.openPurchaseCheckinId ? `${data.openPurchaseCheckinId}` : "";
+                root.dataset.openPurchaseStartedAt = data.openPurchaseCheckin?.thoiDiem || "";
+                root.dataset.openPurchaseNote = data.openPurchaseCheckin?.ghiChuNhanVien || "";
                 root.dataset.actionEmployeeId = data.actionEmployeeId ? `${data.actionEmployeeId}` : "";
                 renderHistory(Array.isArray(data.history) ? data.history : []);
                 syncButtons();
+            };
+
+            const buildOpenPurchaseMessage = () => {
+                const startedAt = (root.dataset.openPurchaseStartedAt || "").trim();
+                const note = (root.dataset.openPurchaseNote || "").trim();
+                const startedText = startedAt || "thời gian chưa xác định";
+                if (note) {
+                    return `${note} · bắt đầu lúc ${startedText}.`;
+                }
+                return `Đang có lượt đi mua hàng chưa hoàn tất từ ${startedText}.`;
             };
 
             const syncButtons = () => {
@@ -1986,6 +2000,9 @@
                         locationField.hidden = validOptions.length <= 1;
                         locationField.classList.toggle("cham-cong-location-hidden", validOptions.length <= 1);
                     }
+                }
+                if (hasOpenPurchase) {
+                    setStatus(statusElement, buildOpenPurchaseMessage(), "info");
                 }
             };
 

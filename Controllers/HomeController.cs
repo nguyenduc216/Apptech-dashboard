@@ -81,6 +81,14 @@ public class HomeController(
             selectedDate = selectedDate.ToString("yyyy-MM-dd"),
             openCheckinId = openCheckin?.Id,
             openPurchaseCheckinId = openPurchaseCheckin?.Id,
+            openPurchaseCheckin = openPurchaseCheckin is null
+                ? null
+                : new
+                {
+                    id = openPurchaseCheckin.Id,
+                    thoiDiem = openPurchaseCheckin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm"),
+                    ghiChuNhanVien = openPurchaseCheckin.GhiChuNhanVien
+                },
             actionEmployeeId,
             canAdminManageAttendance,
             selectedEmployeeIds,
