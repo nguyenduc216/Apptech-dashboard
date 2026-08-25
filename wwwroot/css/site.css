@@ -1883,6 +1883,13 @@ body.menu-open {
     overflow: hidden;
 }
 
+.purchase-detail-map iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
 .purchase-detail-map.leaflet-container {
     width: 100% !important;
     min-width: 0 !important;
@@ -12806,4 +12813,38 @@ body {
     clip: auto;
     clip-path: none;
     white-space: normal;
+}
+
+.crud-modal-shell.purchase-detail-shell {
+    z-index: 2600;
+}
+
+.crud-modal-shell.purchase-detail-shell .crud-modal.purchase-detail-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: clamp(14px, 2vw, 28px) !important;
+    border-radius: 0 !important;
+    transform: none !important;
+    overflow: hidden !important;
+}
+
+.crud-modal-shell.purchase-detail-shell .purchase-detail-map {
+    height: clamp(360px, 62vh, 720px);
+}
+
+@media (max-width: 540px) {
+    .crud-modal-shell.purchase-detail-shell .crud-modal.purchase-detail-modal {
+        padding: 12px !important;
+    }
+
+    .crud-modal-shell.purchase-detail-shell .purchase-detail-map {
+        height: min(58vh, 460px);
+    }
 }

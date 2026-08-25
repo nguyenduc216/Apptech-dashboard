@@ -2177,21 +2177,6 @@
                     : '<div class="cham-cong-empty">Chưa có hình ảnh.</div>';
             };
 
-            const ensurePurchaseDetailMap = () => {
-                if (!purchaseDetailMapElement || !window.L) {
-                    return false;
-                }
-                if (!purchaseDetailMap) {
-                    purchaseDetailMap = window.L.map(purchaseDetailMapElement, {
-                        zoomControl: true,
-                        attributionControl: false
-                    });
-                    createAttendanceTileLayer().addTo(purchaseDetailMap);
-                    purchaseDetailMap.setView(defaultCenter, defaultZoom);
-                }
-                return true;
-            };
-
             const formatPurchasePoint = (point) => point
                 ? `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`
                 : "";
@@ -2200,49 +2185,28 @@
 
             const getGoogleMapsDirectionsUrl = (point) => `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}`;
 
-            const buildPurchasePointPopup = (label, time, point) => `
-                <strong>${escapeHtml(label)}</strong><br>
-                ${escapeHtml(time || "Chưa xác định")}<br>
-                <span>${escapeHtml(formatPurchasePoint(point))}</span><br>
-                <a href="${getGoogleMapsSearchUrl(point)}" target="_blank" rel="noopener noreferrer">Xem trên Google Maps</a>`;
-
-            const addPurchaseDetailMarker = (label, time, point, color, fillColor) => {
-                const latLng = [point.lat, point.lng];
-                const marker = window.L.circleMarker(latLng, {
-                    radius: 10,
-                    color,
-                    weight: 3,
-                    fillColor,
-                    fillOpacity: 0.9
-                }).addTo(purchaseDetailMap);
-                marker.bindTooltip(label);
-                marker.bindPopup(buildPurchasePointPopup(label, time, point));
-                purchaseDetailMarkers.push(marker);
-                return latLng;
-            };
-
             const syncPurchaseDetailMap = () => {
                 const detail = purchaseDetailCurrent;
-                if (!detail || !ensurePurchaseDetailMap()) {
+                if (!detail || !(purchaseDetailMapElement instanceof HTMLElement)) {
                     return;
                 }
-                purchaseDetailMarkers.forEach((marker) => purchaseDetailMap.removeLayer(marker));
+                if (purchaseDetailMap) {
+                    purchaseDetailMap.remove();
+                    purchaseDetailMap = null;
+                }
                 purchaseDetailMarkers = [];
-                const points = [];
-                if (detail.checkinPoint) {
-                    points.push(addPurchaseDetailMarker("Check-in", detail.checkinTime, detail.checkinPoint, "#0a6aa1", "#1f8fd1"));
+                const primaryPoint = detail.checkinPoint || detail.checkoutPoint;
+                if (!primaryPoint) {
+                    purchaseDetailMapElement.innerHTML = '<div class="cham-cong-empty">Chưa có tọa độ GPS.</div>';
+                    return;
                 }
-                if (detail.checkoutPoint && !isSamePurchasePoint(detail.checkinPoint, detail.checkoutPoint)) {
-                    points.push(addPurchaseDetailMarker("Checkout", detail.checkoutTime, detail.checkoutPoint, "#0aa17d", "#11c59b"));
-                }
-                if (points.length > 1) {
-                    purchaseDetailMap.fitBounds(window.L.latLngBounds(points).pad(0.35), { maxZoom: 16 });
-                } else if (points.length === 1) {
-                    purchaseDetailMap.setView(points[0], focusZoom);
-                } else {
-                    purchaseDetailMap.setView(defaultCenter, defaultZoom);
-                }
-                purchaseDetailMap.invalidateSize(true);
+                const query = encodeURIComponent(`${primaryPoint.lat},${primaryPoint.lng}`);
+                purchaseDetailMapElement.innerHTML = `
+                    <iframe
+                        src="https://www.google.com/maps?q=${query}&z=17&output=embed"
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade"
+                        title="Bản đồ vị trí đi mua hàng"></iframe>`;
             };
 
             const renderPurchaseDetailLocation = (detail) => {
