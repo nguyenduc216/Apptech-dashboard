@@ -592,6 +592,7 @@
                 </section>
                 <section id="purchase-detail-location" class="purchase-detail-panel" role="tabpanel" data-purchase-detail-panel="location" hidden>
                     <div class="purchase-detail-map" data-purchase-detail-map></div>
+                    <div class="purchase-detail-location-list" data-purchase-detail-location-list></div>
                     <div class="purchase-detail-directions" data-purchase-detail-directions></div>
                 </section>
                 <section id="purchase-detail-info" class="purchase-detail-panel" role="tabpanel" data-purchase-detail-panel="info" hidden>
@@ -881,6 +882,7 @@
             const purchaseDetailPanels = root.querySelectorAll("[data-purchase-detail-panel]");
             const purchaseDetailImages = root.querySelector("[data-purchase-detail-images]");
             const purchaseDetailMapElement = root.querySelector("[data-purchase-detail-map]");
+            const purchaseDetailLocationList = root.querySelector("[data-purchase-detail-location-list]");
             const purchaseDetailDirections = root.querySelector("[data-purchase-detail-directions]");
             const purchaseDetailInfo = root.querySelector("[data-purchase-detail-info]");
             const purchaseDetailDeleteButton = root.querySelector("[data-purchase-detail-delete]");
@@ -2143,10 +2145,15 @@
                     }
                 });
                 if (name === "location") {
+                    syncPurchaseDetailMap();
                     window.setTimeout(() => {
                         purchaseDetailMap?.invalidateSize(true);
                         syncPurchaseDetailMap();
                     }, 120);
+                    window.setTimeout(() => {
+                        purchaseDetailMap?.invalidateSize(true);
+                        syncPurchaseDetailMap();
+                    }, 420);
                 }
             };
 
@@ -2185,6 +2192,35 @@
                 return true;
             };
 
+            const formatPurchasePoint = (point) => point
+                ? `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`
+                : "";
+
+            const getGoogleMapsSearchUrl = (point) => `https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`;
+
+            const getGoogleMapsDirectionsUrl = (point) => `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}`;
+
+            const buildPurchasePointPopup = (label, time, point) => `
+                <strong>${escapeHtml(label)}</strong><br>
+                ${escapeHtml(time || "Chưa xác định")}<br>
+                <span>${escapeHtml(formatPurchasePoint(point))}</span><br>
+                <a href="${getGoogleMapsSearchUrl(point)}" target="_blank" rel="noopener noreferrer">Xem trên Google Maps</a>`;
+
+            const addPurchaseDetailMarker = (label, time, point, color, fillColor) => {
+                const latLng = [point.lat, point.lng];
+                const marker = window.L.circleMarker(latLng, {
+                    radius: 10,
+                    color,
+                    weight: 3,
+                    fillColor,
+                    fillOpacity: 0.9
+                }).addTo(purchaseDetailMap);
+                marker.bindTooltip(label);
+                marker.bindPopup(buildPurchasePointPopup(label, time, point));
+                purchaseDetailMarkers.push(marker);
+                return latLng;
+            };
+
             const syncPurchaseDetailMap = () => {
                 const detail = purchaseDetailCurrent;
                 if (!detail || !ensurePurchaseDetailMap()) {
@@ -2194,14 +2230,10 @@
                 purchaseDetailMarkers = [];
                 const points = [];
                 if (detail.checkinPoint) {
-                    const point = [detail.checkinPoint.lat, detail.checkinPoint.lng];
-                    points.push(point);
-                    purchaseDetailMarkers.push(window.L.marker(point).addTo(purchaseDetailMap).bindPopup(`Check-in<br>${escapeHtml(detail.checkinTime)}`));
+                    points.push(addPurchaseDetailMarker("Check-in", detail.checkinTime, detail.checkinPoint, "#0a6aa1", "#1f8fd1"));
                 }
                 if (detail.checkoutPoint && !isSamePurchasePoint(detail.checkinPoint, detail.checkoutPoint)) {
-                    const point = [detail.checkoutPoint.lat, detail.checkoutPoint.lng];
-                    points.push(point);
-                    purchaseDetailMarkers.push(window.L.marker(point).addTo(purchaseDetailMap).bindPopup(`Checkout<br>${escapeHtml(detail.checkoutTime)}`));
+                    points.push(addPurchaseDetailMarker("Checkout", detail.checkoutTime, detail.checkoutPoint, "#0aa17d", "#11c59b"));
                 }
                 if (points.length > 1) {
                     purchaseDetailMap.fitBounds(window.L.latLngBounds(points).pad(0.35), { maxZoom: 16 });
@@ -2219,13 +2251,27 @@
                 }
                 const links = [];
                 if (detail.checkinPoint) {
-                    links.push({ label: "Chỉ đường tới vị trí check-in", point: detail.checkinPoint });
+                    links.push({ label: "Check-in", actionLabel: "Chỉ đường tới vị trí check-in", time: detail.checkinTime, point: detail.checkinPoint });
                 }
                 if (detail.checkoutPoint && !isSamePurchasePoint(detail.checkinPoint, detail.checkoutPoint)) {
-                    links.push({ label: "Chỉ đường tới vị trí checkout", point: detail.checkoutPoint });
+                    links.push({ label: "Checkout", actionLabel: "Chỉ đường tới vị trí checkout", time: detail.checkoutTime, point: detail.checkoutPoint });
+                }
+                if (purchaseDetailLocationList instanceof HTMLElement) {
+                    purchaseDetailLocationList.innerHTML = links.length
+                        ? links.map((link) => `
+                            <div class="purchase-detail-location-card">
+                                <strong>${escapeHtml(link.label)}</strong>
+                                <span>${escapeHtml(link.time || "Chưa xác định")}</span>
+                                <code>${escapeHtml(formatPurchasePoint(link.point))}</code>
+                                <a href="${getGoogleMapsSearchUrl(link.point)}" target="_blank" rel="noopener noreferrer">
+                                    <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i>
+                                    <span>Xem vị trí / địa chỉ trên Google Maps</span>
+                                </a>
+                            </div>`).join("")
+                        : "";
                 }
                 purchaseDetailDirections.innerHTML = links.length
-                    ? links.map((link) => `<a class="secondary-button" href="https://www.google.com/maps/dir/?api=1&destination=${link.point.lat},${link.point.lng}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-route" aria-hidden="true"></i><span>${escapeHtml(link.label)}</span></a>`).join("")
+                    ? links.map((link) => `<a class="secondary-button" href="${getGoogleMapsDirectionsUrl(link.point)}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-route" aria-hidden="true"></i><span>${escapeHtml(link.actionLabel)}</span></a>`).join("")
                     : '<div class="cham-cong-empty">Chưa có tọa độ GPS.</div>';
                 syncPurchaseDetailMap();
             };
