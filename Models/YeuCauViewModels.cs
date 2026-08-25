@@ -297,6 +297,8 @@ public sealed class YeuCauListItem
     public string? TenKhachHang { get; set; }
     public DateTime? NgayYeuCau { get; set; }
     public int? IDDiaDiem { get; set; }
+    public int? IDDanhMucDichVu { get; set; }
+    public string? TenDanhMucDichVu { get; set; }
     public string? DiaChi { get; set; }
     public string? NguoiLienHe { get; set; }
     public string? DienThoai { get; set; }
@@ -538,6 +540,8 @@ public sealed class YeuCauFormModel : IValidatableObject
     [Required(ErrorMessage = "Không xác định được khách hàng từ địa điểm đã chọn.")]
     public int? IDKhachHang { get; set; }
 
+    public int? IDDanhMucDichVu { get; set; }
+
     public int? NhanVienThucHienId { get; set; }
 
     public bool CheckinTheoKhoangCach { get; set; }
@@ -754,6 +758,7 @@ public sealed class YeuCauDetailViewModel
     public YeuCauFormModel Form { get; set; } = new();
     public IReadOnlyList<YeuCauNhanVienOption> NhanVienOptions { get; set; } = [];
     public IReadOnlyList<YeuCauCongViecOption> WorkOptions { get; set; } = [];
+    public IReadOnlyList<DanhMucDichVuOption> ServiceOptions { get; set; } = [];
     public IReadOnlyList<YeuCauTrangThaiOption> StatusOptions { get; set; } = YeuCauTrangThaiCatalog.Options;
     public IReadOnlyList<YeuCauTrangThaiOption> WorkStatusOptions { get; set; } = YeuCauCongViecTrangThaiCatalog.Options;
     public IReadOnlyList<YeuCauCheckinItem> Checkins { get; set; } = [];

@@ -219,3 +219,8 @@ public sealed class MuaHangCheckoutRequest
     public string? ImgPathCheckOut { get; set; }
     public string? GhiChuCheckOut { get; set; }
 }
+
+public sealed class MuaHangDeleteRequest
+{
+    public int Id { get; set; }
+}

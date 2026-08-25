@@ -66,6 +66,7 @@ builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();
 builder.Services.AddScoped<ICongViecService, CongViecService>();
+builder.Services.AddScoped<IDanhMucDichVuService, DanhMucDichVuService>();
 builder.Services.AddScoped<IVatTuService, VatTuService>();
 builder.Services.AddScoped<IXuatKhoService, XuatKhoService>();
 builder.Services.AddScoped<INhapKhoService, NhapKhoService>();
@@ -95,6 +96,7 @@ using (var scope = app.Services.CreateScope())
     await permissionCatalogService.EnsureYeuCauCheckinProxyPermissionsAsync();
     await permissionCatalogService.EnsureCongViecReportPermissionsAsync();
     await permissionCatalogService.EnsureZaloManagementPermissionsAsync();
+    await permissionCatalogService.EnsureDanhMucDichVuPermissionsAsync();
 }
 
 if (!app.Environment.IsDevelopment())
@@ -183,6 +185,11 @@ app.MapControllerRoute(
     name: "cong-viec",
     pattern: "cong-viec",
     defaults: new { controller = "CongViec", action = "Index" });
+
+app.MapControllerRoute(
+    name: "danh-muc-dich-vu",
+    pattern: "danh-muc-dich-vu",
+    defaults: new { controller = "DanhMucDichVu", action = "Index" });
 
 app.MapControllerRoute(
     name: "vat-tu",

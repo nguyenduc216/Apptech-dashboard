@@ -18,6 +18,7 @@ public class YeuCauController(
     IZaloRequestService zaloRequestService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService,
+    IDanhMucDichVuService danhMucDichVuService,
     IWebHostEnvironment webHostEnvironment) : Controller
 {
     private static readonly HashSet<string> AllowedCheckinImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -40,6 +41,7 @@ public class YeuCauController(
     private readonly IZaloRequestService _zaloRequestService = zaloRequestService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
+    private readonly IDanhMucDichVuService _danhMucDichVuService = danhMucDichVuService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
 
     [HttpGet]
@@ -90,6 +92,7 @@ public class YeuCauController(
             IDKhachHang = item.IDKhachHang,
             NgayYeuCau = item.NgayYeuCau?.Date,
             IDDiaDiem = item.IDDiaDiem,
+            IDDanhMucDichVu = item.IDDanhMucDichVu,
             GhiChu = item.GhiChu,
             NhanVienThucHienText = item.NhanVienThucHien,
             CheckinTheoKhoangCach = item.CheckinTheoKhoangCach,
@@ -816,6 +819,16 @@ public class YeuCauController(
         var customerZaloProfile = form.IDKhachHang.HasValue && form.IDKhachHang.Value > 0
             ? await _zaloRequestService.GetCustomerZaloProfileAsync(form.IDKhachHang.Value, cancellationToken)
             : new CustomerZaloProfileInfo();
+        var serviceOptions = (await _danhMucDichVuService.GetActiveOptionsAsync(cancellationToken)).ToList();
+        if (form.IDDanhMucDichVu.HasValue &&
+            serviceOptions.All(option => option.Id != form.IDDanhMucDichVu.Value))
+        {
+            var (selectedService, _) = await _danhMucDichVuService.GetWorksAsync(form.IDDanhMucDichVu.Value, cancellationToken);
+            if (selectedService is not null)
+            {
+                serviceOptions.Add(selectedService);
+            }
+        }
 
         return new YeuCauDetailViewModel
         {
@@ -830,6 +843,7 @@ public class YeuCauController(
             Form = form,
             NhanVienOptions = await _yeuCauService.GetNhanVienOptionsAsync(cancellationToken),
             WorkOptions = await _yeuCauService.GetWorkOptionsAsync(cancellationToken),
+            ServiceOptions = serviceOptions.OrderBy(option => option.TenDichVu).ToList(),
             Checkins = form.Id.HasValue && form.Id.Value > 0
                 ? await _yeuCauService.GetCheckinsAsync(form.Id.Value, cancellationToken)
                 : [],

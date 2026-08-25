@@ -210,6 +210,8 @@ public sealed class YeuCauService(
                     yc.IDKhachHang,
                     yc.NgayYeuCau,
                     yc.IDDiaDiem,
+                    yc.IDDanhMucDichVu,
+                    dv.TenDichVu AS TenDanhMucDichVu,
                     yc.GhiChu,
                     yc.NhanVienThucHien,
                     yc.TrangThaiYeuCau,
@@ -239,6 +241,7 @@ public sealed class YeuCauService(
                 FROM [{TableName}] AS yc
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
                 LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
+                LEFT JOIN [TblDanhMucDichVu] AS dv ON dv.ID = yc.IDDanhMucDichVu
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
@@ -304,6 +307,8 @@ public sealed class YeuCauService(
                     yc.IDKhachHang,
                     yc.NgayYeuCau,
                     yc.IDDiaDiem,
+                    yc.IDDanhMucDichVu,
+                    dv.TenDichVu AS TenDanhMucDichVu,
                     yc.GhiChu,
                     yc.NhanVienThucHien,
                     yc.TrangThaiYeuCau,
@@ -333,6 +338,7 @@ public sealed class YeuCauService(
                 FROM [{TableName}] AS yc
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
                 LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
+                LEFT JOIN [TblDanhMucDichVu] AS dv ON dv.ID = yc.IDDanhMucDichVu
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
@@ -684,6 +690,7 @@ public sealed class YeuCauService(
                     IDKhachHang,
                     NgayYeuCau,
                     IDDiaDiem,
+                    IDDanhMucDichVu,
                     GhiChu,
                     NhanVienThucHien,
                     TrangThaiYeuCau,
@@ -702,6 +709,7 @@ public sealed class YeuCauService(
                     @IDKhachHang,
                     @NgayYeuCau,
                     @IDDiaDiem,
+                    @IDDanhMucDichVu,
                     @GhiChu,
                     @NhanVienThucHien,
                     @TrangThaiYeuCau,
@@ -787,6 +795,7 @@ public sealed class YeuCauService(
                     IDKhachHang = @IDKhachHang,
                     NgayYeuCau = @NgayYeuCau,
                     IDDiaDiem = @IDDiaDiem,
+                    IDDanhMucDichVu = @IDDanhMucDichVu,
                     GhiChu = @GhiChu,
                     NhanVienThucHien = @NhanVienThucHien,
                     TrangThaiYeuCau = @TrangThaiYeuCau,
@@ -888,6 +897,26 @@ public sealed class YeuCauService(
 
         model.NgayYeuCau ??= DateTime.Today;
         model.TrangThaiYeuCau = YeuCauTrangThaiCatalog.Normalize(model.TrangThaiYeuCau);
+
+        if (model.IDDanhMucDichVu.HasValue && model.IDDanhMucDichVu.Value > 0)
+        {
+            await using var serviceCommand = connection.CreateCommand();
+            serviceCommand.Transaction = transaction;
+            serviceCommand.CommandText = """
+                SELECT TOP (1) ID
+                FROM [TblDanhMucDichVu]
+                WHERE ID = @IDDanhMucDichVu
+                """;
+            serviceCommand.Parameters.Add(new SqlParameter("@IDDanhMucDichVu", SqlDbType.Int) { Value = model.IDDanhMucDichVu.Value });
+            if (await serviceCommand.ExecuteScalarAsync(cancellationToken) is null)
+            {
+                return "Danh mục dịch vụ không hợp lệ.";
+            }
+        }
+        else
+        {
+            model.IDDanhMucDichVu = null;
+        }
 
         model.NhanVienThucHienText = BuildRequestEmployeeSummary(model);
         return null;
@@ -2712,6 +2741,7 @@ public sealed class YeuCauService(
         command.Parameters.Add(new SqlParameter("@IDKhachHang", SqlDbType.Int) { Value = model.IDKhachHang!.Value });
         command.Parameters.Add(new SqlParameter("@NgayYeuCau", SqlDbType.DateTime) { Value = model.NgayYeuCau!.Value.Date });
         command.Parameters.Add(new SqlParameter("@IDDiaDiem", SqlDbType.Int) { Value = model.IDDiaDiem!.Value });
+        command.Parameters.Add(new SqlParameter("@IDDanhMucDichVu", SqlDbType.Int) { Value = ToDbValue(model.IDDanhMucDichVu) });
         command.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 50) { Value = ToDbValue(model.GhiChu) });
         command.Parameters.Add(new SqlParameter("@NhanVienThucHien", SqlDbType.NVarChar, 550) { Value = nhanVienThucHien });
         command.Parameters.Add(new SqlParameter("@TrangThaiYeuCau", SqlDbType.NVarChar, 250) { Value = YeuCauTrangThaiCatalog.Normalize(model.TrangThaiYeuCau) });
@@ -2756,6 +2786,8 @@ public sealed class YeuCauService(
             TenKhachHang = GetNullableString(reader, "TenKhachHang"),
             NgayYeuCau = GetNullableDateTime(reader, "NgayYeuCau"),
             IDDiaDiem = GetNullableInt32(reader, "IDDiaDiem"),
+            IDDanhMucDichVu = GetNullableInt32(reader, "IDDanhMucDichVu"),
+            TenDanhMucDichVu = GetNullableString(reader, "TenDanhMucDichVu"),
             DiaChi = GetNullableString(reader, "DiaChi"),
             NguoiLienHe = GetNullableString(reader, "NguoiLienHe"),
             DienThoai = GetNullableString(reader, "DienThoai"),

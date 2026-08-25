@@ -1,0 +1,524 @@
+@using System.Globalization
+@model DanhMucDichVuManagementViewModel
+@{
+    ViewData["Title"] = "Danh mục dịch vụ";
+    ViewData["Breadcrumb"] = "Trang chủ / Danh mục / Danh mục dịch vụ";
+
+    var tenDichVuHasError = ViewData.ModelState.TryGetValue("Form.TenDichVu", out var tenDichVuState) && tenDichVuState.Errors.Count > 0;
+    var mieuTaHasError = ViewData.ModelState.TryGetValue("Form.MieuTa", out var mieuTaState) && mieuTaState.Errors.Count > 0;
+    var summaryErrors = ViewData.ModelState.TryGetValue(string.Empty, out var summaryState)
+        ? summaryState.Errors.Select(error => error.ErrorMessage).Where(message => !string.IsNullOrWhiteSpace(message)).ToArray()
+        : [];
+    var viCulture = CultureInfo.GetCultureInfo("vi-VN");
+    var selectedWorkIds = Model.Form.CongViecs
+        .OrderBy(work => work.ThuTu <= 0 ? int.MaxValue : work.ThuTu)
+        .Select(work => work.IDCongViec)
+        .ToList();
+    var workOptionsById = Model.WorkOptions.ToDictionary(work => work.IDCongViec);
+}
+
+<section class="master-data-page service-catalog-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="floating-status-toast @Model.StatusType"
+             data-status-toast
+             role="status"
+             aria-live="polite">
+            <div class="floating-status-toast-icon" aria-hidden="true">
+                <i class="fa-solid @(Model.StatusType == "success" ? "fa-circle-check" : Model.StatusType == "error" ? "fa-circle-exclamation" : "fa-circle-info")"></i>
+            </div>
+            <div class="floating-status-toast-body">
+                <strong>@(Model.StatusType == "success" ? "Thành công" : Model.StatusType == "error" ? "Có lỗi xảy ra" : "Thông báo")</strong>
+                <span>@Model.StatusMessage</span>
+            </div>
+            <button type="button" class="floating-status-toast-close" data-status-toast-close aria-label="Đóng thông báo">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    }
+
+    <article class="panel master-data-panel">
+        <div class="panel-header master-data-header">
+            <div>
+                <h3>Danh sách dịch vụ</h3>
+                <p>Quản lý các template công việc dùng để nạp nhanh vào phiếu yêu cầu.</p>
+            </div>
+
+            <a class="master-data-add-button"
+               asp-permission-action="insert"
+               asp-action="Index"
+               asp-route-keyword="@Model.Filter.Keyword"
+               asp-route-statusFilter="@Model.Filter.StatusFilter"
+               asp-route-page="@Model.CurrentPage"
+               asp-route-showCreatePopup="true">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span>Thêm dịch vụ</span>
+            </a>
+        </div>
+
+        <form method="get" asp-action="Index" class="master-data-filter-form">
+            <label class="master-data-filter-field" for="keyword">
+                <span>Tìm theo tên dịch vụ / mô tả</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                    <input id="keyword" name="keyword" type="search" value="@Model.Filter.Keyword" placeholder="Nhập tên dịch vụ hoặc mô tả..." />
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="statusFilter">
+                <span>Trạng thái</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-power-off" aria-hidden="true"></i>
+                    <select id="statusFilter" name="statusFilter">
+                        <option value="" selected="@(Model.Filter.StatusFilter is null ? "selected" : null)">Tất cả</option>
+                        <option value="true" selected="@(Model.Filter.StatusFilter == true ? "selected" : null)">Đang sử dụng</option>
+                        <option value="false" selected="@(Model.Filter.StatusFilter == false ? "selected" : null)">Ngưng sử dụng</option>
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </span>
+            </label>
+
+            <div class="master-data-filter-actions">
+                <button type="submit" class="primary-button master-data-filter-button">
+                    <span class="button-content">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <span>Tìm kiếm</span>
+                    </span>
+                </button>
+                <a class="secondary-button master-data-reset-button" asp-action="Index">Làm mới</a>
+            </div>
+        </form>
+
+        <div class="master-data-summary">
+            <div><strong>@Model.TotalCount</strong> dịch vụ</div>
+            <div>Trang <strong>@Model.CurrentPage</strong>@(Model.TotalPages > 0 ? $" / {Model.TotalPages}" : "")</div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table master-data-table">
+                <thead>
+                    <tr>
+                        <th>Tên dịch vụ</th>
+                        <th>Mô tả</th>
+                        <th>Công việc</th>
+                        <th>Trạng thái</th>
+                        <th>Ngày cập nhật</th>
+                        <th class="actions-col">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="master-data-empty">Không có dữ liệu phù hợp.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td><div class="master-data-name">@item.TenDichVu</div></td>
+                                <td>@(string.IsNullOrWhiteSpace(item.MieuTa) ? "-" : item.MieuTa)</td>
+                                <td>@item.SoCongViec.ToString(viCulture) công việc</td>
+                                <td>
+                                    <span class="status-pill @(item.TrangThaiSuDung ? "active" : "locked")">
+                                        @(item.TrangThaiSuDung ? "Đang sử dụng" : "Ngưng sử dụng")
+                                    </span>
+                                </td>
+                                <td>@((item.UpdatedDate ?? item.CreatedDate)?.ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</td>
+                                <td class="actions-col">
+                                    <div class="master-data-actions">
+                                        <a class="table-action-button edit"
+                                           asp-permission-action="update"
+                                           asp-action="Index"
+                                           asp-route-keyword="@Model.Filter.Keyword"
+                                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                                           asp-route-page="@Model.CurrentPage"
+                                           asp-route-editId="@item.Id">
+                                            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                            <span>Sửa</span>
+                                        </a>
+                                        <form method="post" asp-action="Delete" class="inline-action-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="Id" value="@item.Id" />
+                                            <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+                                            <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
+                                            <input type="hidden" name="Page" value="@Model.CurrentPage" />
+                                            <button type="submit"
+                                                    class="table-action-button delete"
+                                                    asp-permission-action="delete"
+                                                    data-delete-confirm="Bạn có chắc muốn xóa dịch vụ này?">
+                                                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                <span>Xóa</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pagination-bar" aria-label="Phân trang dịch vụ">
+                <a class="pagination-button @(Model.CurrentPage <= 1 ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@(Model.CurrentPage - 1)">
+                    <i class="fa-solid fa-angle-left" aria-hidden="true"></i>
+                    <span>Trước</span>
+                </a>
+
+                <div class="pagination-pages">
+                    @foreach (var pageNumber in Model.VisiblePages)
+                    {
+                        <a class="pagination-page @(pageNumber == Model.CurrentPage ? "active" : "")"
+                           asp-action="Index"
+                           asp-route-keyword="@Model.Filter.Keyword"
+                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                           asp-route-page="@pageNumber">@pageNumber</a>
+                    }
+                </div>
+
+                <a class="pagination-button @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
+                   asp-action="Index"
+                   asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-page="@(Model.CurrentPage + 1)">
+                    <span>Tiếp</span>
+                    <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
+                </a>
+            </nav>
+        }
+    </article>
+
+    @if (Model.IsPopupOpen)
+    {
+        <div class="crud-modal-shell" data-service-catalog-root>
+            <div class="crud-modal-backdrop" aria-hidden="true"></div>
+
+            <section class="crud-modal service-catalog-modal" role="dialog" aria-modal="true" aria-labelledby="service-catalog-modal-title">
+                <div class="crud-modal-header">
+                    <div class="crud-modal-heading">
+                        <h2 id="service-catalog-modal-title">@Model.PopupTitle</h2>
+                        <p class="crud-modal-subtitle">Chọn các công việc thuộc dịch vụ để dùng như template cho phiếu yêu cầu.</p>
+                    </div>
+
+                    <a class="crud-modal-close-button"
+                       asp-action="Index"
+                       asp-route-keyword="@Model.Filter.Keyword"
+                       asp-route-statusFilter="@Model.Filter.StatusFilter"
+                       asp-route-page="@Model.CurrentPage"
+                       aria-label="Đóng popup">
+                        <span aria-hidden="true">&times;</span>
+                    </a>
+                </div>
+
+                <form method="post" asp-action="@Model.SubmitAction" class="crud-form service-catalog-form" data-service-catalog-form>
+                    @Html.AntiForgeryToken()
+                    <input asp-for="Form.Id" type="hidden" />
+                    <input asp-for="Form.Keyword" type="hidden" />
+                    <input asp-for="Form.StatusFilter" type="hidden" />
+                    <input asp-for="Form.Page" type="hidden" />
+
+                    @if (summaryErrors.Length > 0)
+                    {
+                        <div class="page-alert error">
+                            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                            <span>@string.Join(" ", summaryErrors)</span>
+                        </div>
+                    }
+
+                    <div class="account-form-grid">
+                        <label class="login-field field-span-2 @(tenDichVuHasError ? "has-error" : "")">
+                            <span>Tên dịch vụ *</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                                <input asp-for="Form.TenDichVu" maxlength="250" placeholder="Ví dụ: Sửa nhà thông minh chung cư" />
+                            </span>
+                            <span asp-validation-for="Form.TenDichVu" class="login-field-error"></span>
+                        </label>
+
+                        <label class="login-field">
+                            <span>Trạng thái</span>
+                            <span class="login-input-shell select-shell">
+                                <i class="fa-solid fa-power-off" aria-hidden="true"></i>
+                                <select asp-for="Form.TrangThaiSuDung">
+                                    <option value="true">Đang sử dụng</option>
+                                    <option value="false">Ngưng sử dụng</option>
+                                </select>
+                                <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                            </span>
+                        </label>
+
+                        <label class="login-field field-span-3 @(mieuTaHasError ? "has-error" : "")">
+                            <span>Mô tả</span>
+                            <span class="login-textarea-shell">
+                                <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+                                <textarea asp-for="Form.MieuTa" rows="3" maxlength="1000" placeholder="Mô tả phạm vi dịch vụ..."></textarea>
+                            </span>
+                            <span asp-validation-for="Form.MieuTa" class="login-field-error"></span>
+                        </label>
+                    </div>
+
+                    <section class="service-catalog-work-picker">
+                        <div class="service-catalog-work-toolbar">
+                            <div>
+                                <h3>Công việc trong dịch vụ</h3>
+                                <p><span data-selected-work-count>@selectedWorkIds.Count</span> công việc đã chọn</p>
+                            </div>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                                <input type="search" placeholder="Tìm công việc..." data-service-work-search />
+                            </span>
+                        </div>
+
+                        <div class="service-catalog-work-grid">
+                            <div class="service-catalog-work-options" data-service-work-options>
+                                @foreach (var option in Model.WorkOptions)
+                                {
+                                    var checkedAttr = selectedWorkIds.Contains(option.IDCongViec);
+                                    <label class="service-catalog-work-option">
+                                        <input type="checkbox"
+                                               value="@option.IDCongViec"
+                                               data-service-work-checkbox
+                                               data-work-name="@option.TenCongViec"
+                                               @(checkedAttr ? "checked" : null) />
+                                        <span>
+                                            <strong>@option.TenCongViec</strong>
+                                            <small>@(option.Checklists.Count == 0 ? "Chưa có checklist" : $"{option.Checklists.Count} checklist")</small>
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+
+                            <div class="service-catalog-selected-panel">
+                                <div class="service-catalog-selected-title">Đã chọn</div>
+                                <div class="service-catalog-selected-empty" data-selected-work-empty>Chưa có công việc nào.</div>
+                                <div class="service-catalog-selected-list" data-selected-work-list>
+                                    @for (var index = 0; index < selectedWorkIds.Count; index++)
+                                    {
+                                        var workId = selectedWorkIds[index];
+                                        var workName = workOptionsById.TryGetValue(workId, out var workOption)
+                                            ? workOption.TenCongViec
+                                            : $"Công việc #{workId}";
+                                        <article class="service-catalog-selected-item" data-selected-work-item data-work-id="@workId">
+                                            <input type="hidden" name="Form.CongViecs[@index].IDCongViec" value="@workId" data-selected-work-id />
+                                            <input type="hidden" name="Form.CongViecs[@index].ThuTu" value="@(index + 1)" data-selected-work-order />
+                                            <span>@workName</span>
+                                            <div class="service-catalog-selected-actions">
+                                                <button type="button" class="menu-nav-button" data-selected-work-move="up" aria-label="Đưa lên">
+                                                    <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+                                                </button>
+                                                <button type="button" class="menu-nav-button" data-selected-work-move="down" aria-label="Đưa xuống">
+                                                    <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+                                                </button>
+                                                <button type="button" class="menu-nav-button danger" data-selected-work-remove aria-label="Xóa khỏi dịch vụ">
+                                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="crud-modal-actions">
+                        <a class="secondary-button crud-cancel-button"
+                           asp-action="Index"
+                           asp-route-keyword="@Model.Filter.Keyword"
+                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                           asp-route-page="@Model.CurrentPage">Hủy</a>
+                        <button type="submit" class="primary-button" asp-permission-action="@(Model.PopupMode == DanhMucDichVuPopupMode.Edit ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
+                            <span class="button-content">
+                                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                <span>Lưu</span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <template data-selected-work-template>
+                <article class="service-catalog-selected-item" data-selected-work-item>
+                    <input type="hidden" value="" data-selected-work-id />
+                    <input type="hidden" value="" data-selected-work-order />
+                    <span data-selected-work-name>Công việc</span>
+                    <div class="service-catalog-selected-actions">
+                        <button type="button" class="menu-nav-button" data-selected-work-move="up" aria-label="Đưa lên">
+                            <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="menu-nav-button" data-selected-work-move="down" aria-label="Đưa xuống">
+                            <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="menu-nav-button danger" data-selected-work-remove aria-label="Xóa khỏi dịch vụ">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </article>
+            </template>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <script>
+        (() => {
+            const root = document.querySelector("[data-service-catalog-root]");
+            if (!(root instanceof HTMLElement)) {
+                return;
+            }
+
+            const searchInput = root.querySelector("[data-service-work-search]");
+            const selectedList = root.querySelector("[data-selected-work-list]");
+            const selectedEmpty = root.querySelector("[data-selected-work-empty]");
+            const selectedCount = root.querySelector("[data-selected-work-count]");
+            const template = root.querySelector("[data-selected-work-template]");
+            const form = root.querySelector("[data-service-catalog-form]");
+
+            if (!(selectedList instanceof HTMLElement) || !(template instanceof HTMLTemplateElement)) {
+                return;
+            }
+
+            const getSelectedItems = () => Array.from(selectedList.querySelectorAll("[data-selected-work-item]"));
+            const getSelectedIds = () => new Set(getSelectedItems().map((item) => item.dataset.workId || ""));
+
+            const syncIndexes = () => {
+                const items = getSelectedItems();
+                items.forEach((item, index) => {
+                    const idInput = item.querySelector("[data-selected-work-id]");
+                    const orderInput = item.querySelector("[data-selected-work-order]");
+                    if (idInput instanceof HTMLInputElement) {
+                        idInput.name = `Form.CongViecs[${index}].IDCongViec`;
+                    }
+                    if (orderInput instanceof HTMLInputElement) {
+                        orderInput.name = `Form.CongViecs[${index}].ThuTu`;
+                        orderInput.value = `${index + 1}`;
+                    }
+                });
+
+                if (selectedEmpty instanceof HTMLElement) {
+                    selectedEmpty.classList.toggle("is-hidden", items.length > 0);
+                }
+                if (selectedCount instanceof HTMLElement) {
+                    selectedCount.textContent = `${items.length}`;
+                }
+            };
+
+            const setCheckbox = (workId, checked) => {
+                const checkbox = root.querySelector(`[data-service-work-checkbox][value="${CSS.escape(workId)}"]`);
+                if (checkbox instanceof HTMLInputElement) {
+                    checkbox.checked = checked;
+                }
+            };
+
+            const addSelectedWork = (workId, workName) => {
+                if (!workId || getSelectedIds().has(workId)) {
+                    return;
+                }
+
+                const fragment = template.content.cloneNode(true);
+                const item = fragment.querySelector("[data-selected-work-item]");
+                if (!(item instanceof HTMLElement)) {
+                    return;
+                }
+
+                item.dataset.workId = workId;
+                const idInput = item.querySelector("[data-selected-work-id]");
+                const nameNode = item.querySelector("[data-selected-work-name]");
+                if (idInput instanceof HTMLInputElement) {
+                    idInput.value = workId;
+                }
+                if (nameNode instanceof HTMLElement) {
+                    nameNode.textContent = workName || `Công việc #${workId}`;
+                }
+
+                selectedList.appendChild(fragment);
+                syncIndexes();
+            };
+
+            root.querySelectorAll("[data-service-work-checkbox]").forEach((checkbox) => {
+                if (!(checkbox instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                checkbox.addEventListener("change", () => {
+                    if (checkbox.checked) {
+                        addSelectedWork(checkbox.value, checkbox.dataset.workName || checkbox.value);
+                        return;
+                    }
+
+                    selectedList.querySelector(`[data-selected-work-item][data-work-id="${CSS.escape(checkbox.value)}"]`)?.remove();
+                    syncIndexes();
+                });
+            });
+
+            selectedList.addEventListener("click", (event) => {
+                const target = event.target instanceof HTMLElement ? event.target : null;
+                const item = target?.closest("[data-selected-work-item]");
+                if (!(item instanceof HTMLElement)) {
+                    return;
+                }
+
+                const removeButton = target?.closest("[data-selected-work-remove]");
+                if (removeButton) {
+                    const workId = item.dataset.workId || "";
+                    item.remove();
+                    setCheckbox(workId, false);
+                    syncIndexes();
+                    return;
+                }
+
+                const moveButton = target?.closest("[data-selected-work-move]");
+                if (!(moveButton instanceof HTMLElement)) {
+                    return;
+                }
+
+                if (moveButton.dataset.selectedWorkMove === "up" && item.previousElementSibling) {
+                    selectedList.insertBefore(item, item.previousElementSibling);
+                } else if (moveButton.dataset.selectedWorkMove === "down" && item.nextElementSibling) {
+                    selectedList.insertBefore(item.nextElementSibling, item);
+                }
+
+                syncIndexes();
+            });
+
+            if (searchInput instanceof HTMLInputElement) {
+                searchInput.addEventListener("input", () => {
+                    const keyword = searchInput.value.trim().toLocaleLowerCase("vi-VN");
+                    root.querySelectorAll("[data-service-work-checkbox]").forEach((checkbox) => {
+                        if (!(checkbox instanceof HTMLInputElement)) {
+                            return;
+                        }
+
+                        const option = checkbox.closest(".service-catalog-work-option");
+                        if (!(option instanceof HTMLElement)) {
+                            return;
+                        }
+
+                        const text = `${checkbox.dataset.workName || ""}`.toLocaleLowerCase("vi-VN");
+                        option.hidden = keyword.length > 0 && !text.includes(keyword);
+                    });
+                });
+            }
+
+            if (form instanceof HTMLFormElement) {
+                form.addEventListener("submit", (event) => {
+                    syncIndexes();
+                    if (getSelectedItems().length === 0) {
+                        event.preventDefault();
+                        window.alert("Vui lòng chọn ít nhất một công việc cho dịch vụ.");
+                    }
+                });
+            }
+
+            syncIndexes();
+        })();
+    </script>
+}

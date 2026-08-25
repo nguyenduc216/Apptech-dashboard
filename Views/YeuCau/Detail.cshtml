@@ -110,6 +110,7 @@
           data-work-image-url="@Url.Action("UploadWorkImage", "YeuCau")"
           data-work-image-delete-url="@Url.Action("DeleteWorkImage", "YeuCau")"
           data-work-checklist-add-url="@Url.Action("AddWorkChecklist", "YeuCau")"
+          data-service-works-url="@Url.Action("GetWorks", "DanhMucDichVu")"
           data-location-coordinate-url="@Url.Action("UpdateLocationCoordinates", "YeuCau")"
           data-location-coordinate-draft-url="@Url.Action("UpdateDraftLocationCoordinates", "YeuCau")"
           data-checkin-delete-url="@Url.Action("DeleteCheckin", "YeuCau")"
@@ -561,6 +562,33 @@
                      data-tab="cong-viec"
                      role="tabpanel"
                      @(activeTab == "cong-viec" ? null : "hidden")>
+                    <section class="yeu-cau-service-template">
+                        <label class="login-field" for="requestServiceCatalog">
+                            <span>Danh mục dịch vụ</span>
+                            <span class="login-input-shell select-shell">
+                                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                                <select asp-for="Form.IDDanhMucDichVu" id="requestServiceCatalog" data-service-template-select>
+                                    <option value="">-- Chọn dịch vụ --</option>
+                                    @foreach (var option in Model.ServiceOptions)
+                                    {
+                                        <option value="@option.Id" data-work-count="@option.SoCongViec">@option.TenDichVu</option>
+                                    }
+                                </select>
+                                <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                            </span>
+                        </label>
+                        <div class="yeu-cau-service-template-status" data-service-template-status>
+                            @if (Model.Form.IDDanhMucDichVu.HasValue && Model.Form.IDDanhMucDichVu.Value > 0)
+                            {
+                                <span>Dịch vụ đã chọn chỉ là nguồn tham chiếu. Công việc trong phiếu không tự đồng bộ lại.</span>
+                            }
+                            else
+                            {
+                                <span>Chọn dịch vụ để nạp nhanh nhóm công việc vào phiếu.</span>
+                            }
+                        </div>
+                    </section>
+
                     <div class="panel-header">
                         <div>
                             <h3>Công việc</h3>
@@ -2077,6 +2105,8 @@
             const workPickerList = root.querySelector("[data-work-picker-list]");
             const workPickerSubmit = root.querySelector("[data-work-picker-submit]");
             const workPickerCloseButtons = root.querySelectorAll("[data-work-picker-close]");
+            const serviceTemplateSelect = root.querySelector("[data-service-template-select]");
+            const serviceTemplateStatus = root.querySelector("[data-service-template-status]");
             const linkedEmployeePickerShell = root.querySelector("[data-linked-employee-picker-shell]");
             const linkedEmployeePickerList = root.querySelector("[data-linked-employee-picker-list]");
             const linkedEmployeePickerEmpty = root.querySelector("[data-linked-employee-picker-empty]");
@@ -2241,6 +2271,7 @@
             let selectedLocationLabel = locationInput.value.trim();
             let activeEmployeeWorkItem = null;
             const workOptions = JSON.parse(workOptionsJsonElement.textContent || "[]");
+            const serviceWorksUrl = root.dataset.serviceWorksUrl || "";
             const viewStateKey = `yeu-cau-detail-state:${formIdInput instanceof HTMLInputElement && formIdInput.value ? formIdInput.value : "new"}`;
 
             const readViewState = () => {
@@ -4629,6 +4660,98 @@
                 return workItem;
             };
 
+            const getCurrentCongViecIds = () => new Set(getWorkItems()
+                .map((workItem) => {
+                    const select = workItem.querySelector("[data-work-option-select]");
+                    const parsed = select instanceof HTMLSelectElement
+                        ? Number.parseInt(select.value, 10)
+                        : Number.NaN;
+                    return Number.isFinite(parsed) && parsed > 0 ? `${parsed}` : "";
+                })
+                .filter(Boolean));
+
+            const setServiceTemplateStatus = (message, type = "info") => {
+                if (!(serviceTemplateStatus instanceof HTMLElement)) {
+                    return;
+                }
+
+                serviceTemplateStatus.className = `yeu-cau-service-template-status ${type}`;
+                serviceTemplateStatus.innerHTML = `<span>${message}</span>`;
+            };
+
+            const mergeServiceWorks = async () => {
+                if (!(serviceTemplateSelect instanceof HTMLSelectElement) || !serviceWorksUrl) {
+                    return;
+                }
+
+                const serviceId = Number.parseInt(serviceTemplateSelect.value || "", 10);
+                if (!Number.isFinite(serviceId) || serviceId <= 0) {
+                    setServiceTemplateStatus("Chọn dịch vụ để nạp nhanh nhóm công việc vào phiếu.");
+                    return;
+                }
+
+                serviceTemplateSelect.disabled = true;
+                setServiceTemplateStatus("Đang nạp công việc từ dịch vụ...", "info");
+                try {
+                    const url = new URL(serviceWorksUrl, window.location.origin);
+                    url.searchParams.set("id", `${serviceId}`);
+                    const response = await fetch(url.toString(), {
+                        headers: { Accept: "application/json" }
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok || !Array.isArray(result.works)) {
+                        throw new Error(result.message || "Không thể nạp công việc từ dịch vụ.");
+                    }
+
+                    const currentIds = getCurrentCongViecIds();
+                    let addedCount = 0;
+                    let duplicateCount = 0;
+                    result.works.forEach((work) => {
+                        const workId = Number.parseInt(`${work.idCongViec ?? work.id ?? ""}`, 10);
+                        if (!Number.isFinite(workId) || workId <= 0) {
+                            return;
+                        }
+
+                        if (currentIds.has(`${workId}`)) {
+                            duplicateCount++;
+                            return;
+                        }
+
+                        if (!findWorkOption(workId)) {
+                            workOptions.push({
+                                id: workId,
+                                tenCongViec: work.tenCongViec || `Công việc #${workId}`,
+                                soLuongAnhCheckIn: Number(work.soLuongAnhCheckIn || 0),
+                                soLuongAnhCheckOut: Number(work.soLuongAnhCheckOut || 0),
+                                checklists: Array.isArray(work.checklists) ? work.checklists : []
+                            });
+                        }
+
+                        const workItem = createWorkItem();
+                        if (!(workItem instanceof HTMLElement)) {
+                            return;
+                        }
+
+                        setWorkStartTimeNow(workItem);
+                        applyWorkOption(workItem, workId);
+                        currentIds.add(`${workId}`);
+                        addedCount++;
+                    });
+
+                    updateWorkIndexes();
+                    syncWorkEmptyState();
+                    syncWorkProgress();
+                    setActiveTab("cong-viec");
+                    setServiceTemplateStatus(
+                        `Đã thêm ${addedCount} công việc từ dịch vụ. ${duplicateCount} công việc đã có trong phiếu.`,
+                        "success");
+                } catch (error) {
+                    setServiceTemplateStatus(error instanceof Error ? error.message : "Không thể nạp công việc từ dịch vụ.", "error");
+                } finally {
+                    serviceTemplateSelect.disabled = false;
+                }
+            };
+
             const updateWorkIndexes = () => {
                 getWorkItems().forEach((workItem, workIndex) => {
                     const workIdInput = workItem.querySelector("[data-work-id]");
@@ -5725,6 +5848,12 @@
             workAddButton.addEventListener("click", () => {
                 openWorkPicker();
             });
+
+            if (serviceTemplateSelect instanceof HTMLSelectElement) {
+                serviceTemplateSelect.addEventListener("change", () => {
+                    void mergeServiceWorks();
+                });
+            }
 
             workPickerSubmit.addEventListener("click", () => {
                 const checkedItems = Array.from(workPickerList.querySelectorAll("[data-work-picker-checkbox]:checked"));

@@ -61,6 +61,7 @@
          data-checkout-url="@Url.Action("ChamCongCheckout", "Home")"
          data-purchase-checkin-url="@Url.Action("MuaHangCheckin", "Home")"
          data-purchase-checkout-url="@Url.Action("MuaHangCheckout", "Home")"
+         data-purchase-delete-url="@Url.Action("MuaHangDelete", "Home")"
          data-distance-limit="@(chamCong.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? "")"
          data-current-employee-id="@(chamCong.CurrentEmployeeId?.ToString(invariantCulture) ?? "")"
          data-action-employee-id="@(chamCong.SelectedEmployeeIds.FirstOrDefault(chamCong.CurrentEmployeeId ?? 0).ToString(invariantCulture))"
@@ -243,6 +244,16 @@
                                                 {
                                                     <span class="purchase-attendance-note">@item.GhiChuNhanVien</span>
                                                 }
+                                                @if (isPurchaseCheckin && chamCong.CanAdminManageAttendance)
+                                                {
+                                                    <button type="button"
+                                                            class="purchase-attendance-delete"
+                                                            data-purchase-delete
+                                                            data-purchase-delete-id="@item.Id">
+                                                        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                                                        <span>Xóa</span>
+                                                    </button>
+                                                }
                                             }
                                         </div>
                                     </section>
@@ -367,6 +378,32 @@
                             }
                         </div>
                     </div>
+                    @if (chamCong.CanAdminManageAttendance)
+                    {
+                        <div class="purchase-attendance-admin-grid">
+                            <label class="master-data-filter-field" for="purchaseAttendanceEmployee">
+                                <span>Nhân viên đi mua hàng</span>
+                                <span class="login-input-shell select-shell">
+                                    <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                                    <select id="purchaseAttendanceEmployee" data-purchase-employee>
+                                        <option value="">Chọn nhân viên</option>
+                                        @foreach (var employee in chamCong.EmployeeOptions)
+                                        {
+                                            <option value="@employee.Id">@employee.HoTen</option>
+                                        }
+                                    </select>
+                                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                                </span>
+                            </label>
+                            <label class="master-data-filter-field" for="purchaseAttendanceTime">
+                                <span>Thời gian check-in</span>
+                                <span class="login-input-shell">
+                                    <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                                    <input id="purchaseAttendanceTime" type="datetime-local" data-purchase-time />
+                                </span>
+                            </label>
+                        </div>
+                    }
                     <label class="purchase-attendance-quick">
                         <input type="checkbox" data-purchase-quick checked />
                         <span>
@@ -374,10 +411,6 @@
                             <small>Hoàn tất chuyến đi ngay sau khi ghi nhận.</small>
                         </span>
                     </label>
-                    <button type="button" class="secondary-button purchase-attendance-speech" data-purchase-speech title="Thiết bị này chưa hỗ trợ nhập bằng giọng nói.">
-                        <i class="fa-solid fa-microphone" aria-hidden="true"></i>
-                        <span data-purchase-speech-label>Nói để nhập</span>
-                    </button>
                 </div>
                 <div class="cham-cong-camera-map-shell">
                     <button type="button"
@@ -447,6 +480,10 @@
                         <textarea id="chamCongNote" rows="3" maxlength="1000" data-cham-cong-note></textarea>
                     </span>
                 </label>
+                <button type="button" class="secondary-button purchase-attendance-speech" data-purchase-speech title="Thiết bị này chưa hỗ trợ nhập bằng giọng nói." hidden>
+                    <i class="fa-solid fa-microphone" aria-hidden="true"></i>
+                    <span data-purchase-speech-label>Nói để nhập nhanh ghi chú</span>
+                </button>
                 <div class="page-alert info cham-cong-status" data-cham-cong-camera-status hidden></div>
             </div>
             <div class="crud-modal-footer cham-cong-camera-footer">
@@ -754,10 +791,13 @@
             const retakeButton = root.querySelector("[data-cham-cong-retake]");
             const saveButton = root.querySelector("[data-cham-cong-save]");
             const timeInput = root.querySelector("[data-cham-cong-time]");
+            const timeField = timeInput?.closest(".master-data-filter-field");
             const timeLabel = root.querySelector("[data-cham-cong-time-label]");
             const noteInput = root.querySelector("[data-cham-cong-note]");
             const noteLabel = root.querySelector("[data-cham-cong-note-label]");
             const purchaseFields = root.querySelector("[data-purchase-fields]");
+            const purchaseEmployeeSelect = root.querySelector("[data-purchase-employee]");
+            const purchaseTimeInput = root.querySelector("[data-purchase-time]");
             const purchaseQuickInput = root.querySelector("[data-purchase-quick]");
             const purchaseWorkOptions = root.querySelectorAll("[data-purchase-work-option]");
             const purchaseSpeechButton = root.querySelector("[data-purchase-speech]");
@@ -814,6 +854,7 @@
             let imageZoom = 1;
             let imageRotation = 0;
             let speechRecognition = null;
+            let isPurchaseSpeechSupported = true;
             let isListeningToPurchaseNote = false;
             const defaultCenter = [12.2388, 109.1967];
             const defaultZoom = 13;
@@ -1470,6 +1511,25 @@
                 return selected || Number.parseInt(root.dataset.actionEmployeeId || "", 10) || null;
             };
 
+            const getPurchaseActionEmployeeId = () => {
+                if (root.dataset.canAdminManageAttendance === "true") {
+                    const selected = purchaseEmployeeSelect instanceof HTMLSelectElement
+                        ? Number.parseInt(purchaseEmployeeSelect.value || "", 10)
+                        : NaN;
+                    return Number.isFinite(selected) && selected > 0 ? selected : null;
+                }
+
+                return Number.parseInt(root.dataset.currentEmployeeId || "", 10) || getSelectedActionEmployeeId();
+            };
+
+            const getPurchaseCheckinTimeValue = () => {
+                if (root.dataset.canAdminManageAttendance === "true" && purchaseTimeInput instanceof HTMLInputElement) {
+                    return purchaseTimeInput.value;
+                }
+
+                return "";
+            };
+
             const getSelectedDateValue = () => dateInput instanceof HTMLInputElement && dateInput.value
                 ? dateInput.value
                 : root.dataset.todayDate || "";
@@ -1556,7 +1616,7 @@
                 isListeningToPurchaseNote = false;
                 purchaseSpeechButton?.classList.remove("is-listening");
                 if (purchaseSpeechLabel instanceof HTMLElement) {
-                    purchaseSpeechLabel.textContent = "Nói để nhập";
+                    purchaseSpeechLabel.textContent = "Nói để nhập nhanh ghi chú";
                 }
             };
 
@@ -1576,12 +1636,14 @@
             const initPurchaseSpeech = () => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition || !(purchaseSpeechButton instanceof HTMLButtonElement)) {
+                    isPurchaseSpeechSupported = false;
                     if (purchaseSpeechButton instanceof HTMLButtonElement) {
                         purchaseSpeechButton.hidden = true;
                     }
                     return;
                 }
 
+                isPurchaseSpeechSupported = true;
                 speechRecognition = new SpeechRecognition();
                 speechRecognition.lang = "vi-VN";
                 speechRecognition.interimResults = false;
@@ -1603,7 +1665,7 @@
                     isListeningToPurchaseNote = false;
                     purchaseSpeechButton.classList.remove("is-listening");
                     if (purchaseSpeechLabel instanceof HTMLElement) {
-                        purchaseSpeechLabel.textContent = "Nói để nhập";
+                        purchaseSpeechLabel.textContent = "Nói để nhập nhanh ghi chú";
                     }
                 };
             };
@@ -1638,6 +1700,9 @@
             const getPurchaseNote = () => noteInput instanceof HTMLTextAreaElement ? noteInput.value.trim() : "";
 
             const validatePurchaseContent = () => {
+                if (root.dataset.canAdminManageAttendance === "true" && !getPurchaseActionEmployeeId()) {
+                    throw new Error("Vui lòng chọn nhân viên đi mua hàng.");
+                }
                 if (!getSelectedPurchaseWork() && !getPurchaseNote()) {
                     throw new Error("Vui lòng chọn nội dung đi ra ngoài hoặc nhập ghi chú chi tiết.");
                 }
@@ -1665,6 +1730,17 @@
                 if (purchaseQuickInput instanceof HTMLInputElement) {
                     purchaseQuickInput.checked = true;
                 }
+                if (purchaseEmployeeSelect instanceof HTMLSelectElement) {
+                    purchaseEmployeeSelect.value = "";
+                    purchaseEmployeeSelect.disabled = !isPurchaseCheckinMode();
+                }
+                if (purchaseTimeInput instanceof HTMLInputElement) {
+                    purchaseTimeInput.value = formatDateTimeLocalValue(new Date());
+                    purchaseTimeInput.disabled = !isPurchaseCheckinMode();
+                }
+                if (purchaseSpeechButton instanceof HTMLButtonElement) {
+                    purchaseSpeechButton.hidden = !isPurchaseCheckinMode() || !isPurchaseSpeechSupported;
+                }
                 if (noteLabel instanceof HTMLElement) {
                     noteLabel.textContent = isPurchaseMode()
                         ? "Ghi chú chi tiết"
@@ -1672,6 +1748,9 @@
                 }
                 if (timeInput instanceof HTMLInputElement) {
                     timeInput.value = formatDateTimeLocalValue(getSelectedDateWithCurrentTime());
+                }
+                if (timeField instanceof HTMLElement) {
+                    timeField.hidden = isPurchaseCheckinMode() || (isPurchaseMode() && root.dataset.canAdminManageAttendance !== "true");
                 }
                 if (timeLabel instanceof HTMLElement) {
                     timeLabel.textContent = isPurchaseCheckoutMode()
@@ -1728,7 +1807,9 @@
                     payload.append("__RequestVerificationToken", tokenInput.value);
                 }
                 Object.entries(values).forEach(([key, value]) => payload.append(key, `${value}`));
-                payload.append("imageFile", new File([imageBlob], `chamcong-${Date.now()}.jpg`, { type: "image/jpeg" }));
+                if (imageBlob instanceof Blob) {
+                    payload.append("imageFile", new File([imageBlob], `chamcong-${Date.now()}.jpg`, { type: "image/jpeg" }));
+                }
 
                 const response = await fetch(url, {
                     method: "POST",
@@ -1836,6 +1917,9 @@
                     const isPurchaseCheckin = item.attendanceType === "MuaHang" || item.isPurchase === true;
                     const summary = item.requestSummary || {};
                     const workText = Array.isArray(summary.congViecs) ? summary.congViecs.join("||") : "";
+                    const deletePurchaseHtml = isPurchaseCheckin && root.dataset.canAdminManageAttendance === "true"
+                        ? `<button type="button" class="purchase-attendance-delete" data-purchase-delete data-purchase-delete-id="${escapeHtml(item.id)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Xóa</span></button>`
+                        : "";
                     const metaHtml = isCustomerCheckin
                         ? `<button type="button"
                                    class="cham-cong-request-chip"
@@ -1848,7 +1932,7 @@
                                    data-request-phone="${escapeHtml(summary.dienThoai || "")}"
                                    data-request-works="${escapeHtml(workText)}">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</button>`
                         : isPurchaseCheckin
-                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Mua hàng · Nhanh" : "Mua hàng"}</span>${item.ghiChuNhanVien ? `<span class="purchase-attendance-note">${escapeHtml(item.ghiChuNhanVien)}</span>` : ""}`
+                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Mua hàng · Nhanh" : "Mua hàng"}</span>${item.ghiChuNhanVien ? `<span class="purchase-attendance-note">${escapeHtml(item.ghiChuNhanVien)}</span>` : ""}${deletePurchaseHtml}`
                             : '<span class="cham-cong-entry-meta">AppTech</span>';
                     const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
@@ -2152,8 +2236,8 @@
                     } else if (activeMode === "purchase-checkin") {
                         validatePurchaseContent();
                         await postForm(root.dataset.purchaseCheckinUrl || "", {
-                            IDNhanVien: getSelectedActionEmployeeId() || "",
-                            ThoiDiem: timeInput instanceof HTMLInputElement ? timeInput.value : "",
+                            IDNhanVien: getPurchaseActionEmployeeId() || "",
+                            ThoiDiem: getPurchaseCheckinTimeValue(),
                             LongAddress: activeGps.long,
                             LatAddress: activeGps.lat,
                             NoiDungCongViec: getSelectedPurchaseWork(),
@@ -2188,11 +2272,46 @@
                 }
             };
 
+            const deletePurchaseAttendance = async (button) => {
+                if (!(button instanceof HTMLButtonElement)) {
+                    return;
+                }
+
+                const id = Number.parseInt(button.dataset.purchaseDeleteId || "", 10);
+                if (!Number.isFinite(id) || id <= 0) {
+                    setStatus(statusElement, "Không xác định được lượt đi mua hàng cần xóa.", "error");
+                    return;
+                }
+
+                if (!window.confirm("Xóa lượt đi mua hàng này?")) {
+                    return;
+                }
+
+                try {
+                    button.disabled = true;
+                    await postForm(root.dataset.purchaseDeleteUrl || "", { Id: id });
+                    setStatus(statusElement, "Đã xóa lượt đi mua hàng.", "success");
+                    await loadHistory();
+                } catch (error) {
+                    setStatus(statusElement, error instanceof Error ? error.message : "Không thể xóa lượt đi mua hàng.", "error");
+                } finally {
+                    button.disabled = false;
+                }
+            };
+
             checkinButton?.addEventListener("click", () => void openCameraModal("checkin"));
             checkoutButton?.addEventListener("click", () => void openCameraModal("checkout"));
             purchaseCheckinButton?.addEventListener("click", () => void openCameraModal("purchase-checkin"));
             purchaseCheckoutButton?.addEventListener("click", () => void openCameraModal("purchase-checkout"));
             purchaseSpeechButton?.addEventListener("click", togglePurchaseSpeech);
+            historyElement?.addEventListener("click", (event) => {
+                const button = event.target instanceof Element
+                    ? event.target.closest("[data-purchase-delete]")
+                    : null;
+                if (button instanceof HTMLButtonElement) {
+                    void deletePurchaseAttendance(button);
+                }
+            });
             mapToggle?.addEventListener("click", () => {
                 const expanded = mapToggle.getAttribute("aria-expanded") === "true";
                 setMapCollapsed(expanded);

@@ -29,6 +29,164 @@
     --scrollbar-thumb-active: rgba(10, 74, 61, 0.58);
 }
 
+.service-catalog-modal {
+    max-width: min(980px, calc(100vw - 28px));
+}
+
+.service-catalog-work-picker,
+.yeu-cau-service-template {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.yeu-cau-service-template {
+    margin-bottom: 14px;
+}
+
+.yeu-cau-service-template-status {
+    color: var(--text-muted);
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.yeu-cau-service-template-status.success {
+    color: #05755c;
+}
+
+.yeu-cau-service-template-status.error {
+    color: #a02d2d;
+}
+
+.service-catalog-work-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+    gap: 12px;
+    align-items: end;
+}
+
+.service-catalog-work-toolbar h3 {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 1rem;
+}
+
+.service-catalog-work-toolbar p {
+    margin: 3px 0 0;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.service-catalog-work-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.72fr);
+    gap: 12px;
+    min-width: 0;
+}
+
+.service-catalog-work-options,
+.service-catalog-selected-list {
+    display: grid;
+    gap: 8px;
+    align-content: start;
+    max-height: 360px;
+    overflow: auto;
+}
+
+.service-catalog-work-option,
+.service-catalog-selected-item {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.service-catalog-work-option {
+    cursor: pointer;
+}
+
+.service-catalog-work-option input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--teal-500);
+}
+
+.service-catalog-work-option span,
+.service-catalog-work-option strong,
+.service-catalog-work-option small,
+.service-catalog-selected-item span {
+    min-width: 0;
+}
+
+.service-catalog-work-option strong,
+.service-catalog-selected-item span {
+    color: var(--text-strong);
+    overflow-wrap: anywhere;
+    font-weight: 800;
+}
+
+.service-catalog-work-option small {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.service-catalog-selected-panel {
+    min-width: 0;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+}
+
+.service-catalog-selected-title {
+    color: var(--text-strong);
+    font-weight: 900;
+}
+
+.service-catalog-selected-empty {
+    padding: 12px;
+    border: 1px dashed rgba(10, 74, 61, 0.18);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-align: center;
+}
+
+.service-catalog-selected-empty.is-hidden {
+    display: none;
+}
+
+.service-catalog-selected-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.service-catalog-selected-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+@media (max-width: 720px) {
+    .service-catalog-work-toolbar,
+    .service-catalog-work-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .service-catalog-selected-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
 * {
     box-sizing: border-box;
     scrollbar-width: thin;
@@ -1473,6 +1631,13 @@ body.menu-open {
     background: rgba(255, 250, 241, 0.9);
 }
 
+.purchase-attendance-admin-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.62fr);
+    gap: 12px;
+    align-items: end;
+}
+
 .purchase-attendance-label {
     display: block;
     margin-bottom: 8px;
@@ -1563,14 +1728,48 @@ body.menu-open {
     line-height: 1.45;
 }
 
+.purchase-attendance-delete {
+    width: max-content;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1px solid rgba(220, 38, 38, 0.26);
+    background: rgba(254, 242, 242, 0.9);
+    color: #991b1b;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.purchase-attendance-delete:hover,
+.purchase-attendance-delete:focus-visible {
+    border-color: rgba(220, 38, 38, 0.42);
+    background: rgba(254, 226, 226, 0.96);
+    color: #7f1d1d;
+    transform: translateY(-1px);
+}
+
+.purchase-attendance-delete:disabled {
+    opacity: 0.65;
+    cursor: wait;
+    transform: none;
+}
+
 .cham-cong-attendance-line.is-purchase-event {
-    border-color: rgba(231, 155, 61, 0.24);
-    background: rgba(255, 250, 241, 0.86);
+    border-color: rgba(56, 189, 248, 0.34);
+    background: rgba(224, 242, 254, 0.88);
+    color: #075985;
 }
 
 .cham-cong-attendance-line.is-purchase-event .cham-cong-entry-meta {
-    background: rgba(231, 155, 61, 0.16);
-    color: #7b4c12;
+    background: rgba(14, 165, 233, 0.16);
+    color: #0369a1;
 }
 
 .cham-cong-location-hidden {
@@ -3616,6 +3815,36 @@ body.report-fullscreen-open {
 
 .cham-cong-attendance-line.is-customer-event .cham-cong-request-chip {
     color: #1e40af;
+}
+
+.cham-cong-timeline-item.has-purchase-checkin {
+    border-color: rgba(56, 189, 248, 0.38);
+}
+
+.cham-cong-timeline-item.has-purchase-checkin .cham-cong-dot {
+    background: #38bdf8;
+    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.16);
+}
+
+.cham-cong-attendance-line.is-purchase-event,
+.cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-purchase-event,
+.cham-cong-attendance-line.is-purchase-event.is-checkin,
+.cham-cong-attendance-line.is-purchase-event.is-checkout-complete {
+    border-color: rgba(56, 189, 248, 0.45);
+    background: rgba(224, 242, 254, 0.92);
+    color: #075985;
+}
+
+.cham-cong-attendance-line.is-purchase-event .cham-cong-entry-content > strong,
+.cham-cong-attendance-line.is-purchase-event .cham-cong-entry-content > strong i,
+.cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-purchase-event .cham-cong-entry-content > strong,
+.cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-purchase-event .cham-cong-entry-content > strong i {
+    color: #0369a1;
+}
+
+.cham-cong-attendance-line.is-purchase-event .cham-cong-entry-meta {
+    background: rgba(14, 165, 233, 0.16);
+    color: #0369a1;
 }
 
 .cham-cong-entry {
@@ -11377,6 +11606,10 @@ body.report-fullscreen-open {
     .purchase-attendance-fields {
         padding: 10px;
         gap: 10px;
+    }
+
+    .purchase-attendance-admin-grid {
+        grid-template-columns: 1fr;
     }
 
     .purchase-attendance-chip-grid {

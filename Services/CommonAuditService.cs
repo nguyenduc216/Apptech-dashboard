@@ -13,6 +13,10 @@ public interface ICommonAuditService
         SqlTransaction? transaction,
         CommonAuditEntry entry,
         CancellationToken cancellationToken = default);
+
+    Task WriteAsync(
+        CommonAuditEntry entry,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record CommonAuditEntry(

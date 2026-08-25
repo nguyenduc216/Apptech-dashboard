@@ -16,7 +16,8 @@ public class HomeController(
     IUserPermissionService userPermissionService,
     IChamCongService chamCongService,
     INhanVienService nhanVienService,
-    IWebHostEnvironment webHostEnvironment) : Controller
+    IWebHostEnvironment webHostEnvironment,
+    ICommonAuditService commonAuditService) : Controller
 {
     private static readonly HashSet<string> AllowedAvatarExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -34,6 +35,7 @@ public class HomeController(
     private readonly IChamCongService _chamCongService = chamCongService;
     private readonly INhanVienService _nhanVienService = nhanVienService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
+    private readonly ICommonAuditService _commonAuditService = commonAuditService;
 
     public async Task<IActionResult> Index(DateTime? chamCongDate = null, [FromQuery] int[] employeeIds = null!)
     {
@@ -213,11 +215,15 @@ public class HomeController(
         model.LatAddress ??= ParseInvariantDecimal(Request.Form["LatAddress"].FirstOrDefault());
 
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
-        var canSelectEmployees = await CanSelectChamCongEmployeesAsync(HttpContext.RequestAborted);
         var canAdminManageAttendance = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
-        if (!canSelectEmployees)
+        if (!canAdminManageAttendance)
         {
+            model.IDNhanVien = null;
             model.ThoiDiem = null;
+        }
+        else if (model.IDNhanVien is not > 0)
+        {
+            return BadRequest(new { message = "Vui lòng chọn nhân viên đi mua hàng." });
         }
 
         var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(model.IDNhanVien, currentEmployeeId, HttpContext.RequestAborted);
@@ -251,6 +257,16 @@ public class HomeController(
         {
             DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
             return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin đi mua hàng." });
+        }
+
+        if (canAdminManageAttendance)
+        {
+            await WritePurchaseCheckinAdminAuditAsync(
+                result.Id,
+                currentEmployeeId,
+                targetEmployeeId,
+                model,
+                HttpContext.RequestAborted);
         }
 
         return Json(new { succeeded = true, id = result.Id });
@@ -303,6 +319,42 @@ public class HomeController(
         {
             DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
             return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkout đi mua hàng." });
+        }
+
+        return Json(new { succeeded = true });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MuaHangDelete([FromForm] MuaHangDeleteRequest model)
+    {
+        var canAdminManageAttendance = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
+        if (!canAdminManageAttendance)
+        {
+            return Forbid();
+        }
+
+        if (model.Id <= 0)
+        {
+            return BadRequest(new { message = "Không xác định được lượt đi mua hàng cần xóa." });
+        }
+
+        var result = await _chamCongService.DeletePurchaseCheckinAsync(model.Id, HttpContext.RequestAborted);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể xóa lượt đi mua hàng." });
+        }
+
+        if (result.DeletedCheckin is not null)
+        {
+            await WritePurchaseDeleteAdminAuditAsync(result.DeletedCheckin, HttpContext.RequestAborted);
+
+            foreach (var imagePath in new[] { result.DeletedCheckin.ImgPath, result.DeletedCheckin.ImgPathCheckOut }
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                DeleteLocalCheckinImageIfOwned(imagePath);
+            }
         }
 
         return Json(new { succeeded = true });
@@ -499,6 +551,87 @@ public class HomeController(
     public IActionResult Error()
     {
         return View();
+    }
+
+    private async Task WritePurchaseCheckinAdminAuditAsync(
+        int? checkinId,
+        int? currentEmployeeId,
+        int targetEmployeeId,
+        MuaHangCheckinRequest model,
+        CancellationToken cancellationToken)
+    {
+        if (!checkinId.HasValue)
+        {
+            return;
+        }
+
+        await _commonAuditService.WriteAsync(
+            new CommonAuditEntry(
+                "Dashboard",
+                "AdminPurchaseCheckin",
+                "TblCheckinHistory",
+                checkinId.Value.ToString(CultureInfo.InvariantCulture),
+                "MuaHang",
+                "Admin cập nhật thông tin check-in đi mua hàng.",
+                GetAuditUserName(),
+                Data: new
+                {
+                    checkinId = checkinId.Value,
+                    currentEmployeeId,
+                    targetEmployeeId,
+                    thoiDiem = model.ThoiDiem,
+                    quickCheckin = model.QuickCheckin,
+                    noiDungCongViec = model.NoiDungCongViec,
+                    ghiChuNhanVien = model.GhiChuNhanVien
+                },
+                NewData: new
+                {
+                    idNhanVien = targetEmployeeId,
+                    thoiDiem = model.ThoiDiem,
+                    checkInType = "MuaHang"
+                }),
+            cancellationToken);
+    }
+
+    private async Task WritePurchaseDeleteAdminAuditAsync(
+        ChamCongHistoryItem deletedCheckin,
+        CancellationToken cancellationToken)
+    {
+        await _commonAuditService.WriteAsync(
+            new CommonAuditEntry(
+                "Dashboard",
+                "AdminPurchaseDelete",
+                "TblCheckinHistory",
+                deletedCheckin.Id.ToString(CultureInfo.InvariantCulture),
+                "MuaHang",
+                "Admin xóa lượt check-in đi mua hàng.",
+                GetAuditUserName(),
+                OldData: new
+                {
+                    id = deletedCheckin.Id,
+                    idNhanVien = deletedCheckin.IDNhanVien,
+                    hoTenNhanVien = deletedCheckin.HoTenNhanVien,
+                    thoiDiem = deletedCheckin.ThoiDiem,
+                    thoiDiemCheckOut = deletedCheckin.ThoiDiemCheckOut,
+                    longAddress = deletedCheckin.LongAddress,
+                    latAddress = deletedCheckin.LatAddress,
+                    longAddressCheckOut = deletedCheckin.LongAddressCheckOut,
+                    latAddressCheckOut = deletedCheckin.LatAddressCheckOut,
+                    imgPath = deletedCheckin.ImgPath,
+                    imgPathCheckOut = deletedCheckin.ImgPathCheckOut,
+                    ghiChuNhanVien = deletedCheckin.GhiChuNhanVien,
+                    ghiChuCheckOut = deletedCheckin.GhiChuCheckOut,
+                    checkInType = deletedCheckin.CheckInType
+                }),
+            cancellationToken);
+    }
+
+    private string GetAuditUserName()
+    {
+        return User.Identity?.Name ??
+            User.FindFirstValue(ClaimTypes.Name) ??
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            "system";
     }
 
     private async Task<UserAccount?> GetCurrentAccountAsync()

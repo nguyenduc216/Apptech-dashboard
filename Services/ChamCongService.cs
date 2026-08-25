@@ -50,6 +50,10 @@ public interface IChamCongService
         int employeeId,
         MuaHangCheckoutRequest model,
         CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, ChamCongHistoryItem? DeletedCheckin)> DeletePurchaseCheckinAsync(
+        int id,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class ChamCongService(
@@ -640,6 +644,54 @@ public sealed class ChamCongService(
         }
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage, ChamCongHistoryItem? DeletedCheckin)> DeletePurchaseCheckinAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        if (id <= 0)
+        {
+            return (false, "Không xác định được lượt đi mua hàng cần xóa.", null);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+            var existing = await GetPurchaseCheckinByIdAsync(connection, transaction, id, cancellationToken);
+            if (existing is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, "Không tìm thấy lượt đi mua hàng cần xóa.", null);
+            }
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"""
+                DELETE FROM [{CheckinHistoryTableName}]
+                WHERE ID = @Id
+                  AND {PurchaseAttendancePredicate}
+                """;
+            command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+            command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+
+            var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
+            if (affectedRows <= 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, "Không tìm thấy lượt đi mua hàng cần xóa.", null);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return (true, null, existing);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Purchase checkin delete failed for checkin {CheckinId}.", id);
+            return (false, "Không thể xóa lượt đi mua hàng lúc này.", null);
+        }
+    }
+
     private async Task<ChamCongHistoryItem?> GetOpenCheckinAsync(
         SqlConnection connection,
         int employeeId,
@@ -671,6 +723,25 @@ public sealed class ChamCongService(
             var history = await ReadHistoryAsync(command, cancellationToken);
             await ApplyAttendanceViolationsAsync(connection, history, cancellationToken);
             return history.FirstOrDefault();
+    }
+
+    private async Task<ChamCongHistoryItem?> GetPurchaseCheckinByIdAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int id,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = BuildHistorySelect($"""
+            WHERE ch.ID = @Id
+              AND {PurchaseAttendancePredicateWithAlias}
+            """);
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+        command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+
+        var history = await ReadHistoryAsync(command, cancellationToken);
+        return history.FirstOrDefault();
     }
 
     private async Task<ChamCongHistoryItem?> GetOpenPurchaseCheckinAsync(

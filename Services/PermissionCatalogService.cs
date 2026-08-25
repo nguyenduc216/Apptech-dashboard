@@ -12,6 +12,7 @@ public interface IPermissionCatalogService
     Task EnsureYeuCauCheckinProxyPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureCongViecReportPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default);
+    Task EnsureDanhMucDichVuPermissionsAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class PermissionCatalogService(
@@ -25,6 +26,10 @@ public sealed class PermissionCatalogService(
     public const string CheckinProxyManagePermissionCode = "YeuCau_CheckinProxy_Manage";
     public const string WorkReportViewPermissionCode = "Report_Work_View";
     public const string ZaloManagementViewPermissionCode = "Zalo_Manage_View";
+    public const string DanhMucDichVuViewPermissionCode = "DanhMucDichVu_View";
+    public const string DanhMucDichVuCreatePermissionCode = "DanhMucDichVu_Create";
+    public const string DanhMucDichVuUpdatePermissionCode = "DanhMucDichVu_Update";
+    public const string DanhMucDichVuDeletePermissionCode = "DanhMucDichVu_Delete";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -344,6 +349,93 @@ public sealed class PermissionCatalogService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to ensure Zalo management permissions.");
+        }
+    }
+
+    public async Task EnsureDanhMucDichVuPermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
+                ? _connectionString
+                : _sqlOptions.BuildConnectionString();
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                IF NOT EXISTS (SELECT 1 FROM [TblChucNang] WHERE MaChucNang = N'MasterData')
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'MasterData', NULL, N'Danh mục', N'Nhóm danh mục quản trị', NULL, N'20', N'fa-solid fa-table-list', 1);
+                END;
+
+                DECLARE @ParentCode nvarchar(250) = N'MasterData';
+                DECLARE @FunctionId int;
+
+                SELECT TOP (1) @FunctionId = ID
+                FROM [TblChucNang]
+                WHERE MaChucNang = N'DanhMucDichVu';
+
+                IF @FunctionId IS NULL
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'DanhMucDichVu', @ParentCode, N'Danh mục dịch vụ', N'Template nhóm công việc cho phiếu yêu cầu', N'/danh-muc-dich-vu', N'20.6', N'fa-solid fa-layer-group', 1);
+
+                    SET @FunctionId = CONVERT(int, SCOPE_IDENTITY());
+                END
+                ELSE
+                BEGIN
+                    UPDATE [TblChucNang]
+                    SET MaChucNangCha = @ParentCode,
+                        TenChucNang = N'Danh mục dịch vụ',
+                        MieuTa = N'Template nhóm công việc cho phiếu yêu cầu',
+                        URL = N'/danh-muc-dich-vu',
+                        ThuTuHienThi = N'20.6',
+                        CssClass = N'fa-solid fa-layer-group',
+                        TrangThaiSuDung = 1
+                    WHERE ID = @FunctionId;
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @ViewPermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, N'Xem danh mục dịch vụ', @ViewPermissionCode, N'Cho phép xem danh mục dịch vụ.');
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @CreatePermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, N'Thêm danh mục dịch vụ', @CreatePermissionCode, N'Cho phép thêm danh mục dịch vụ.');
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @UpdatePermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, N'Cập nhật danh mục dịch vụ', @UpdatePermissionCode, N'Cho phép cập nhật danh mục dịch vụ.');
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @DeletePermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, N'Xóa danh mục dịch vụ', @DeletePermissionCode, N'Cho phép xóa hoặc ngưng sử dụng danh mục dịch vụ.');
+                END;
+                """;
+            command.Parameters.Add(new SqlParameter("@ViewPermissionCode", SqlDbType.NVarChar, 250) { Value = DanhMucDichVuViewPermissionCode });
+            command.Parameters.Add(new SqlParameter("@CreatePermissionCode", SqlDbType.NVarChar, 250) { Value = DanhMucDichVuCreatePermissionCode });
+            command.Parameters.Add(new SqlParameter("@UpdatePermissionCode", SqlDbType.NVarChar, 250) { Value = DanhMucDichVuUpdatePermissionCode });
+            command.Parameters.Add(new SqlParameter("@DeletePermissionCode", SqlDbType.NVarChar, 250) { Value = DanhMucDichVuDeletePermissionCode });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure service catalog permissions.");
         }
     }
 }
