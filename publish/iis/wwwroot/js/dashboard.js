@@ -257,6 +257,51 @@
         }
     };
 
+    const setControlTooltip = (control) => {
+        if (!(control instanceof HTMLElement) || control.hasAttribute("title")) {
+            return;
+        }
+
+        const label = control.getAttribute("aria-label")
+            || control.querySelector("span:not([aria-hidden='true'])")?.textContent
+            || control.textContent
+            || "";
+        const normalizedLabel = label.replace(/\s+/g, " ").trim();
+        if (normalizedLabel) {
+            control.setAttribute("title", normalizedLabel);
+        }
+    };
+
+    const syncIconOnlyTooltips = (root = document) => {
+        const selectors = [
+            ".table-action-button",
+            ".purchase-attendance-delete",
+            ".qr-scanner-button",
+            ".qr-checkbox-field",
+            ".qr-export-pdf-button",
+            ".qr-print-180-button",
+            ".qr-generator-header-actions .secondary-button"
+        ].join(",");
+
+        if (root instanceof HTMLElement && root.matches(selectors)) {
+            setControlTooltip(root);
+        }
+
+        root.querySelectorAll?.(selectors).forEach(setControlTooltip);
+    };
+
+    syncIconOnlyTooltips();
+
+    new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node instanceof HTMLElement) {
+                    syncIconOnlyTooltips(node);
+                }
+            });
+        });
+    }).observe(document.body, { childList: true, subtree: true });
+
     window.addEventListener("pagehide", () => {
         saveScrollPosition();
     });
