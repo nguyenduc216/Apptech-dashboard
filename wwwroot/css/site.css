@@ -1728,6 +1728,21 @@ body.menu-open {
     line-height: 1.45;
 }
 
+.purchase-attendance-status {
+    min-width: 0;
+    width: max-content;
+    max-width: 100%;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.12);
+    color: #0369a1;
+    font-size: 0.74rem;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .purchase-attendance-delete {
     width: max-content;
     min-height: 30px;
@@ -1770,6 +1785,172 @@ body.menu-open {
 .cham-cong-attendance-line.is-purchase-event .cham-cong-entry-meta {
     background: rgba(14, 165, 233, 0.16);
     color: #0369a1;
+}
+
+.purchase-detail-modal {
+    width: min(760px, calc(100vw - 24px));
+    max-height: min(760px, calc(100vh - 24px));
+}
+
+.purchase-detail-badge {
+    flex: 0 0 auto;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.14);
+    color: #0369a1;
+    font-weight: 800;
+    font-size: 0.8rem;
+}
+
+.purchase-detail-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 0 18px 12px;
+}
+
+.purchase-detail-tabs button {
+    min-width: 0;
+    min-height: 38px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    border-radius: 7px;
+    background: rgba(245, 250, 248, 0.92);
+    color: var(--navy-800);
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.purchase-detail-tabs button[aria-selected="true"] {
+    border-color: rgba(14, 165, 233, 0.38);
+    background: rgba(224, 242, 254, 0.95);
+    color: #0369a1;
+}
+
+.purchase-detail-body {
+    padding-top: 0;
+}
+
+.purchase-detail-panel {
+    min-width: 0;
+}
+
+.purchase-detail-images {
+    display: grid;
+    gap: 12px;
+}
+
+.purchase-detail-image {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    border-radius: 8px;
+    background: #111827;
+    color: #f8fafc;
+    font: inherit;
+    font-weight: 800;
+    text-align: left;
+    cursor: zoom-in;
+}
+
+.purchase-detail-image img {
+    width: 100%;
+    max-height: min(420px, 58vh);
+    object-fit: contain;
+    border-radius: 6px;
+    background: #0f172a;
+}
+
+.purchase-detail-map {
+    width: 100%;
+    height: clamp(320px, 44vh, 420px);
+    border-radius: 8px;
+    border: 1px solid rgba(10, 74, 61, 0.12);
+    overflow: hidden;
+}
+
+.purchase-detail-directions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.purchase-detail-info {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.purchase-detail-info > div {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(10, 74, 61, 0.1);
+}
+
+.purchase-detail-info dt {
+    color: var(--text-muted);
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+}
+
+.purchase-detail-info dd {
+    margin: 0;
+    color: var(--navy-800);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.purchase-detail-info ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.purchase-detail-delete {
+    width: auto;
+    min-width: 0;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 14px;
+    flex: 0 0 auto;
+}
+
+.purchase-detail-delete span {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+}
+
+@media (max-width: 540px) {
+    .purchase-detail-tabs {
+        padding-inline: 12px;
+        gap: 4px;
+    }
+
+    .purchase-detail-tabs button {
+        min-height: 36px;
+        font-size: 0.82rem;
+    }
+
+    .purchase-detail-map {
+        height: clamp(240px, 38vh, 320px);
+    }
+
+    .purchase-detail-info > div {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
 }
 
 .cham-cong-location-hidden {
@@ -12514,4 +12695,27 @@ body {
         right: 8px;
         width: auto;
     }
+}
+
+.purchase-detail-footer .purchase-detail-delete {
+    position: relative;
+    width: auto;
+    min-width: 0;
+    height: 40px;
+    min-height: 40px;
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+}
+
+.purchase-detail-footer .purchase-detail-delete span {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
 }

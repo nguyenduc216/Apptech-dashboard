@@ -175,7 +175,7 @@
                         var hasPurchaseCheckin = group.Any(item => string.Equals(item.AttendanceType, "MuaHang", StringComparison.OrdinalIgnoreCase));
                         var employeeName = firstItem.HoTenNhanVien ?? "Nhân viên";
                         var eventItems = group
-                            .SelectMany(item => item.IsQuickPurchase
+                            .SelectMany(item => item.IsPurchase || item.IsQuickPurchase
                                 ? new[] { new { Item = item, IsCheckout = false, EventTime = item.ThoiDiem, ImagePath = item.ImgPath, IsViolation = item.IsCheckinViolation } }
                                 : new[]
                                 {
@@ -205,7 +205,25 @@
                                         ? (item.IsQuickPurchase ? "Mua hàng nhanh" : entry.IsCheckout ? "Checkout mua hàng" : "Check-in mua hàng")
                                         : entry.IsCheckout ? "Checkout" : "Checkin";
                                     var metaText = isCustomerCheckin ? item.MaYeuCau : isPurchaseCheckin ? "Mua hàng" : "AppTech";
-                                    <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && !isPurchaseCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event")">
+                                    var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang đi" : "Hoàn tất";
+                                    <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && !isPurchaseCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event")"
+                                             @(isPurchaseCheckin ? "data-purchase-detail-open" : null)
+                                             data-purchase-id="@(isPurchaseCheckin ? item.Id.ToString(invariantCulture) : null)"
+                                             data-purchase-employee-name="@(isPurchaseCheckin ? employeeName : null)"
+                                             data-purchase-checkin-time="@(isPurchaseCheckin ? item.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") : null)"
+                                             data-purchase-checkout-time="@(isPurchaseCheckin ? item.ThoiDiemCheckOut?.ToString("dd/MM/yyyy HH:mm") : null)"
+                                             data-purchase-checkin-lat="@(isPurchaseCheckin ? item.LatAddress?.ToString(invariantCulture) : null)"
+                                             data-purchase-checkin-lng="@(isPurchaseCheckin ? item.LongAddress?.ToString(invariantCulture) : null)"
+                                             data-purchase-checkout-lat="@(isPurchaseCheckin ? item.LatAddressCheckOut?.ToString(invariantCulture) : null)"
+                                             data-purchase-checkout-lng="@(isPurchaseCheckin ? item.LongAddressCheckOut?.ToString(invariantCulture) : null)"
+                                             data-purchase-checkin-image="@(isPurchaseCheckin ? item.ImgPath : null)"
+                                             data-purchase-checkout-image="@(isPurchaseCheckin ? item.ImgPathCheckOut : null)"
+                                             data-purchase-work-content="@(isPurchaseCheckin ? string.Join("||", item.PurchaseWorkContent) : null)"
+                                             data-purchase-note="@(isPurchaseCheckin ? item.PurchaseNote : null)"
+                                             data-purchase-legacy="@(isPurchaseCheckin ? item.HasLegacyPurchaseNote.ToString().ToLowerInvariant() : null)"
+                                             data-purchase-quick="@(isPurchaseCheckin ? item.IsQuickPurchase.ToString().ToLowerInvariant() : null)"
+                                             data-purchase-open="@(isPurchaseCheckin ? item.IsOpen.ToString().ToLowerInvariant() : null)"
+                                             data-purchase-can-delete="@(isPurchaseCheckin ? chamCong.CanAdminManageAttendance.ToString().ToLowerInvariant() : null)">
                                         <div class="cham-cong-entry-photo">
                                             @if (!string.IsNullOrWhiteSpace(entry.ImagePath))
                                             {
@@ -240,19 +258,9 @@
                                             else
                                             {
                                                 <span class="cham-cong-entry-meta">@(isPurchaseCheckin ? (item.IsQuickPurchase ? "Mua hàng · Nhanh" : metaText) : "AppTech")</span>
-                                                @if (isPurchaseCheckin && !string.IsNullOrWhiteSpace(item.GhiChuNhanVien))
+                                                @if (isPurchaseCheckin && !item.IsQuickPurchase)
                                                 {
-                                                    <span class="purchase-attendance-note">@item.GhiChuNhanVien</span>
-                                                }
-                                                @if (isPurchaseCheckin && chamCong.CanAdminManageAttendance)
-                                                {
-                                                    <button type="button"
-                                                            class="purchase-attendance-delete"
-                                                            data-purchase-delete
-                                                            data-purchase-delete-id="@item.Id">
-                                                        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                                        <span>Xóa</span>
-                                                    </button>
+                                                    <span class="purchase-attendance-status">@purchaseStatus</span>
                                                 }
                                             }
                                         </div>
@@ -560,6 +568,46 @@
         </section>
     </div>
 
+    <div class="crud-modal-shell purchase-detail-shell" data-purchase-detail-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-purchase-detail-close></div>
+        <section class="crud-modal purchase-detail-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-detail-title">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="purchase-detail-title">Chi tiết đi mua hàng</h2>
+                    <p class="crud-modal-subtitle" data-purchase-detail-subtitle></p>
+                </div>
+                <span class="purchase-detail-badge" data-purchase-detail-badge></span>
+                <button type="button" class="crud-modal-close" data-purchase-detail-close aria-label="Đóng">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="purchase-detail-tabs" role="tablist" aria-label="Chi tiết đi mua hàng">
+                <button type="button" role="tab" aria-selected="true" aria-controls="purchase-detail-images" data-purchase-detail-tab="images">Hình ảnh</button>
+                <button type="button" role="tab" aria-selected="false" aria-controls="purchase-detail-location" data-purchase-detail-tab="location">Vị trí</button>
+                <button type="button" role="tab" aria-selected="false" aria-controls="purchase-detail-info" data-purchase-detail-tab="info">Thông tin</button>
+            </div>
+            <div class="crud-form purchase-detail-body">
+                <section id="purchase-detail-images" class="purchase-detail-panel" role="tabpanel" data-purchase-detail-panel="images">
+                    <div class="purchase-detail-images" data-purchase-detail-images></div>
+                </section>
+                <section id="purchase-detail-location" class="purchase-detail-panel" role="tabpanel" data-purchase-detail-panel="location" hidden>
+                    <div class="purchase-detail-map" data-purchase-detail-map></div>
+                    <div class="purchase-detail-directions" data-purchase-detail-directions></div>
+                </section>
+                <section id="purchase-detail-info" class="purchase-detail-panel" role="tabpanel" data-purchase-detail-panel="info" hidden>
+                    <dl class="purchase-detail-info" data-purchase-detail-info></dl>
+                </section>
+            </div>
+            <div class="crud-modal-footer purchase-detail-footer">
+                <button type="button" class="purchase-attendance-delete purchase-detail-delete" data-purchase-detail-delete hidden>
+                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                    <span>Xóa lượt mua hàng</span>
+                </button>
+                <button type="button" class="secondary-button crud-cancel-button" data-purchase-detail-close>Đóng</button>
+            </div>
+        </section>
+    </div>
+
     <div class="crud-modal-shell cham-cong-request-summary-shell" data-request-summary-shell hidden>
         <div class="crud-modal-backdrop" aria-hidden="true" data-request-summary-close></div>
         <section class="crud-modal cham-cong-request-summary-modal" role="dialog" aria-modal="true" aria-labelledby="cham-cong-request-summary-title">
@@ -825,6 +873,17 @@
             const imageZoomOutButton = root.querySelector("[data-cham-cong-image-zoom-out]");
             const imageRotateButton = root.querySelector("[data-cham-cong-image-rotate]");
             const imageDownloadLink = root.querySelector("[data-cham-cong-image-download]");
+            const purchaseDetailShell = root.querySelector("[data-purchase-detail-shell]");
+            const purchaseDetailCloseButtons = root.querySelectorAll("[data-purchase-detail-close]");
+            const purchaseDetailSubtitle = root.querySelector("[data-purchase-detail-subtitle]");
+            const purchaseDetailBadge = root.querySelector("[data-purchase-detail-badge]");
+            const purchaseDetailTabs = root.querySelectorAll("[data-purchase-detail-tab]");
+            const purchaseDetailPanels = root.querySelectorAll("[data-purchase-detail-panel]");
+            const purchaseDetailImages = root.querySelector("[data-purchase-detail-images]");
+            const purchaseDetailMapElement = root.querySelector("[data-purchase-detail-map]");
+            const purchaseDetailDirections = root.querySelector("[data-purchase-detail-directions]");
+            const purchaseDetailInfo = root.querySelector("[data-purchase-detail-info]");
+            const purchaseDetailDeleteButton = root.querySelector("[data-purchase-detail-delete]");
             const requestSummaryShell = root.querySelector("[data-request-summary-shell]");
             const requestSummaryCloseButtons = root.querySelectorAll("[data-request-summary-close]");
             const requestSummaryTitle = root.querySelector("[data-request-summary-title]");
@@ -853,6 +912,9 @@
             let fullscreenRouteLayer = null;
             let imageZoom = 1;
             let imageRotation = 0;
+            let purchaseDetailCurrent = null;
+            let purchaseDetailMap = null;
+            let purchaseDetailMarkers = [];
             let speechRecognition = null;
             let isPurchaseSpeechSupported = true;
             let isListeningToPurchaseNote = false;
@@ -1703,8 +1765,11 @@
                 if (root.dataset.canAdminManageAttendance === "true" && !getPurchaseActionEmployeeId()) {
                     throw new Error("Vui lòng chọn nhân viên đi mua hàng.");
                 }
-                if (!getSelectedPurchaseWork() && !getPurchaseNote()) {
-                    throw new Error("Vui lòng chọn nội dung đi ra ngoài hoặc nhập ghi chú chi tiết.");
+                if (!getSelectedPurchaseWork()) {
+                    throw new Error("Vui lòng chọn ít nhất một nội dung đi ra ngoài.");
+                }
+                if (!getPurchaseNote()) {
+                    throw new Error("Vui lòng nhập ghi chú cho lượt đi ra ngoài.");
                 }
             };
 
@@ -1911,15 +1976,45 @@
                     return parsed === Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : parsed;
                 };
 
+                const buildPurchaseDetailAttributes = (item, employeeName) => {
+                    if (!(item?.attendanceType === "MuaHang" || item?.isPurchase === true)) {
+                        return "";
+                    }
+                    const workContent = Array.isArray(item.noiDungDiRaNgoai)
+                        ? item.noiDungDiRaNgoai.join("||")
+                        : "";
+                    const attr = {
+                        "data-purchase-detail-open": "",
+                        "data-purchase-id": item.id || "",
+                        "data-purchase-employee-name": employeeName || item.hoTenNhanVien || "",
+                        "data-purchase-checkin-time": item.checkInTime || item.thoiDiem || "",
+                        "data-purchase-checkout-time": item.checkoutTime || item.thoiDiemCheckOut || "",
+                        "data-purchase-checkin-lat": item.checkInLat ?? item.latAddress ?? "",
+                        "data-purchase-checkin-lng": item.checkInLng ?? item.longAddress ?? "",
+                        "data-purchase-checkout-lat": item.checkoutLat ?? item.latAddressCheckOut ?? "",
+                        "data-purchase-checkout-lng": item.checkoutLng ?? item.longAddressCheckOut ?? "",
+                        "data-purchase-checkin-image": item.checkInImage || item.imgPath || "",
+                        "data-purchase-checkout-image": item.checkoutImage || item.imgPathCheckOut || "",
+                        "data-purchase-work-content": workContent,
+                        "data-purchase-note": item.ghiChu || "",
+                        "data-purchase-legacy": item.isLegacyPurchaseData === true ? "true" : "false",
+                        "data-purchase-quick": item.isQuickPurchase === true ? "true" : "false",
+                        "data-purchase-open": item.isOpen === true ? "true" : "false",
+                        "data-purchase-can-delete": item.canDelete === true ? "true" : "false"
+                    };
+                    return Object.entries(attr)
+                        .map(([name, value]) => name === "data-purchase-detail-open"
+                            ? name
+                            : `${name}="${escapeHtml(value)}"`)
+                        .join(" ");
+                };
+
                 const renderEventLine = (event, employeeName) => {
                     const item = event.item;
                     const isCustomerCheckin = item.attendanceType === "KhachHang";
                     const isPurchaseCheckin = item.attendanceType === "MuaHang" || item.isPurchase === true;
                     const summary = item.requestSummary || {};
                     const workText = Array.isArray(summary.congViecs) ? summary.congViecs.join("||") : "";
-                    const deletePurchaseHtml = isPurchaseCheckin && root.dataset.canAdminManageAttendance === "true"
-                        ? `<button type="button" class="purchase-attendance-delete" data-purchase-delete data-purchase-delete-id="${escapeHtml(item.id)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Xóa</span></button>`
-                        : "";
                     const metaHtml = isCustomerCheckin
                         ? `<button type="button"
                                    class="cham-cong-request-chip"
@@ -1932,7 +2027,7 @@
                                    data-request-phone="${escapeHtml(summary.dienThoai || "")}"
                                    data-request-works="${escapeHtml(workText)}">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</button>`
                         : isPurchaseCheckin
-                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Mua hàng · Nhanh" : "Mua hàng"}</span>${item.ghiChuNhanVien ? `<span class="purchase-attendance-note">${escapeHtml(item.ghiChuNhanVien)}</span>` : ""}${deletePurchaseHtml}`
+                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Mua hàng · Nhanh" : "Mua hàng"}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang đi" : "Hoàn tất"}</span>`}`
                             : '<span class="cham-cong-entry-meta">AppTech</span>';
                     const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
@@ -1942,10 +2037,10 @@
                         ? item.isQuickPurchase ? "mua hàng nhanh" : event.isCheckout ? "checkout mua hàng" : "check-in mua hàng"
                         : event.isCheckout ? "checkout" : "checkin";
                     const photo = imagePath
-                        ? `<button type="button" class="cham-cong-entry-image-button" data-cham-cong-image-open data-image-src="${escapeHtml(imagePath)}" data-image-title="Ảnh ${label} ${escapeHtml(employeeName)}"><img src="${escapeHtml(imagePath)}" alt="Ảnh ${label}" /></button>`
+                        ? `<button type="button" class="cham-cong-entry-image-button" ${isPurchaseCheckin ? "data-purchase-detail-open" : `data-cham-cong-image-open data-image-src="${escapeHtml(imagePath)}" data-image-title="Ảnh ${label} ${escapeHtml(employeeName)}"`}><img src="${escapeHtml(imagePath)}" alt="Ảnh ${label}" /></button>`
                         : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
                     return `
-                        <section class="cham-cong-attendance-line ${lineClass} ${isViolation ? "is-attendance-violation" : ""} ${isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event"}">
+                        <section class="cham-cong-attendance-line ${lineClass} ${isViolation ? "is-attendance-violation" : ""} ${isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event"}" ${buildPurchaseDetailAttributes(item, employeeName)}>
                             <div class="cham-cong-entry-photo">${photo}</div>
                             <div class="cham-cong-entry-content">
                                 <strong><i class="fa-solid ${iconClass}" aria-hidden="true"></i>${escapeHtml(event.timeText || "--:--")}</strong>
@@ -1960,7 +2055,7 @@
                         if (item.thoiDiem) {
                             events.push({ item, isCheckout: false, sort: buildEventSortKey(item.thoiDiem), timeText: item.thoiDiem || item.checkinTime });
                         }
-                        if (item.thoiDiemCheckOut && !item.isQuickPurchase) {
+                        if (item.thoiDiemCheckOut && !item.isQuickPurchase && !(item.attendanceType === "MuaHang" || item.isPurchase === true)) {
                             events.push({ item, isCheckout: true, sort: buildEventSortKey(item.thoiDiemCheckOut), timeText: item.thoiDiemCheckOut || item.checkoutTime });
                         }
                     });
@@ -1988,6 +2083,204 @@
                 '"': "&quot;",
                 "'": "&#039;"
             }[character]));
+
+            const parsePurchaseCoordinate = (value) => {
+                const parsed = Number.parseFloat(`${value ?? ""}`);
+                return Number.isFinite(parsed) ? parsed : null;
+            };
+
+            const isSamePurchasePoint = (left, right) => left && right
+                && Math.abs(left.lat - right.lat) < 0.000001
+                && Math.abs(left.lng - right.lng) < 0.000001;
+
+            const getPurchaseDetailFromTrigger = (trigger) => {
+                const source = trigger?.closest?.("[data-purchase-id]") || trigger;
+                if (!(source instanceof HTMLElement)) {
+                    return null;
+                }
+                const checkinPoint = {
+                    lat: parsePurchaseCoordinate(source.dataset.purchaseCheckinLat),
+                    lng: parsePurchaseCoordinate(source.dataset.purchaseCheckinLng)
+                };
+                const checkoutPoint = {
+                    lat: parsePurchaseCoordinate(source.dataset.purchaseCheckoutLat),
+                    lng: parsePurchaseCoordinate(source.dataset.purchaseCheckoutLng)
+                };
+                const hasCheckinPoint = checkinPoint.lat !== null && checkinPoint.lng !== null;
+                const hasCheckoutPoint = checkoutPoint.lat !== null && checkoutPoint.lng !== null;
+                return {
+                    id: Number.parseInt(source.dataset.purchaseId || "", 10) || 0,
+                    employeeName: source.dataset.purchaseEmployeeName || "Nhân viên",
+                    checkinTime: source.dataset.purchaseCheckinTime || "",
+                    checkoutTime: source.dataset.purchaseCheckoutTime || "",
+                    checkinPoint: hasCheckinPoint ? checkinPoint : null,
+                    checkoutPoint: hasCheckoutPoint ? checkoutPoint : null,
+                    checkinImage: source.dataset.purchaseCheckinImage || "",
+                    checkoutImage: source.dataset.purchaseCheckoutImage || "",
+                    workContent: (source.dataset.purchaseWorkContent || "").split("||").map((item) => item.trim()).filter(Boolean),
+                    note: source.dataset.purchaseNote || "",
+                    isLegacy: source.dataset.purchaseLegacy === "true",
+                    isQuick: source.dataset.purchaseQuick === "true",
+                    isOpen: source.dataset.purchaseOpen === "true",
+                    canDelete: source.dataset.purchaseCanDelete === "true"
+                };
+            };
+
+            const getPurchaseStatusText = (detail) => detail?.isQuick
+                ? "Nhanh"
+                : detail?.isOpen ? "Đang đi" : "Hoàn tất";
+
+            const setPurchaseDetailTab = (name) => {
+                purchaseDetailTabs.forEach((tab) => {
+                    if (tab instanceof HTMLButtonElement) {
+                        const selected = tab.dataset.purchaseDetailTab === name;
+                        tab.setAttribute("aria-selected", selected ? "true" : "false");
+                    }
+                });
+                purchaseDetailPanels.forEach((panel) => {
+                    if (panel instanceof HTMLElement) {
+                        panel.hidden = panel.dataset.purchaseDetailPanel !== name;
+                    }
+                });
+                if (name === "location") {
+                    window.setTimeout(() => {
+                        purchaseDetailMap?.invalidateSize(true);
+                        syncPurchaseDetailMap();
+                    }, 120);
+                }
+            };
+
+            const renderPurchaseDetailImages = (detail) => {
+                if (!(purchaseDetailImages instanceof HTMLElement)) {
+                    return;
+                }
+                const images = [];
+                if (detail.checkinImage) {
+                    images.push({ label: "Ảnh check-in", src: detail.checkinImage });
+                }
+                if (detail.checkoutImage && detail.checkoutImage !== detail.checkinImage) {
+                    images.push({ label: "Ảnh checkout", src: detail.checkoutImage });
+                }
+                purchaseDetailImages.innerHTML = images.length
+                    ? images.map((image) => `
+                        <button type="button" class="purchase-detail-image" data-cham-cong-image-open data-image-src="${escapeHtml(image.src)}" data-image-title="${escapeHtml(image.label)} ${escapeHtml(detail.employeeName)}">
+                            <span>${escapeHtml(image.label)}</span>
+                            <img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.label)}" />
+                        </button>`).join("")
+                    : '<div class="cham-cong-empty">Chưa có hình ảnh.</div>';
+            };
+
+            const ensurePurchaseDetailMap = () => {
+                if (!purchaseDetailMapElement || !window.L) {
+                    return false;
+                }
+                if (!purchaseDetailMap) {
+                    purchaseDetailMap = window.L.map(purchaseDetailMapElement, {
+                        zoomControl: true,
+                        attributionControl: false
+                    });
+                    createAttendanceTileLayer().addTo(purchaseDetailMap);
+                    purchaseDetailMap.setView(defaultCenter, defaultZoom);
+                }
+                return true;
+            };
+
+            const syncPurchaseDetailMap = () => {
+                const detail = purchaseDetailCurrent;
+                if (!detail || !ensurePurchaseDetailMap()) {
+                    return;
+                }
+                purchaseDetailMarkers.forEach((marker) => purchaseDetailMap.removeLayer(marker));
+                purchaseDetailMarkers = [];
+                const points = [];
+                if (detail.checkinPoint) {
+                    const point = [detail.checkinPoint.lat, detail.checkinPoint.lng];
+                    points.push(point);
+                    purchaseDetailMarkers.push(window.L.marker(point).addTo(purchaseDetailMap).bindPopup(`Check-in<br>${escapeHtml(detail.checkinTime)}`));
+                }
+                if (detail.checkoutPoint && !isSamePurchasePoint(detail.checkinPoint, detail.checkoutPoint)) {
+                    const point = [detail.checkoutPoint.lat, detail.checkoutPoint.lng];
+                    points.push(point);
+                    purchaseDetailMarkers.push(window.L.marker(point).addTo(purchaseDetailMap).bindPopup(`Checkout<br>${escapeHtml(detail.checkoutTime)}`));
+                }
+                if (points.length > 1) {
+                    purchaseDetailMap.fitBounds(window.L.latLngBounds(points).pad(0.35), { maxZoom: 16 });
+                } else if (points.length === 1) {
+                    purchaseDetailMap.setView(points[0], focusZoom);
+                } else {
+                    purchaseDetailMap.setView(defaultCenter, defaultZoom);
+                }
+                purchaseDetailMap.invalidateSize(true);
+            };
+
+            const renderPurchaseDetailLocation = (detail) => {
+                if (!(purchaseDetailDirections instanceof HTMLElement)) {
+                    return;
+                }
+                const links = [];
+                if (detail.checkinPoint) {
+                    links.push({ label: "Chỉ đường tới vị trí check-in", point: detail.checkinPoint });
+                }
+                if (detail.checkoutPoint && !isSamePurchasePoint(detail.checkinPoint, detail.checkoutPoint)) {
+                    links.push({ label: "Chỉ đường tới vị trí checkout", point: detail.checkoutPoint });
+                }
+                purchaseDetailDirections.innerHTML = links.length
+                    ? links.map((link) => `<a class="secondary-button" href="https://www.google.com/maps/dir/?api=1&destination=${link.point.lat},${link.point.lng}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-route" aria-hidden="true"></i><span>${escapeHtml(link.label)}</span></a>`).join("")
+                    : '<div class="cham-cong-empty">Chưa có tọa độ GPS.</div>';
+                syncPurchaseDetailMap();
+            };
+
+            const renderPurchaseDetailInfo = (detail) => {
+                if (!(purchaseDetailInfo instanceof HTMLElement)) {
+                    return;
+                }
+                const workHtml = detail.workContent.length > 0
+                    ? `<ul>${detail.workContent.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+                    : detail.isLegacy ? "Không xác định / Dữ liệu cũ" : "Chưa có dữ liệu";
+                const checkoutHtml = detail.isQuick
+                    ? ""
+                    : `<div><dt>Checkout</dt><dd>${escapeHtml(detail.checkoutTime || "Chưa checkout")}</dd></div>`;
+                purchaseDetailInfo.innerHTML = `
+                    <div><dt>Nhân viên</dt><dd>${escapeHtml(detail.employeeName)}</dd></div>
+                    <div><dt>Check-in</dt><dd>${escapeHtml(detail.checkinTime || "Chưa xác định")}</dd></div>
+                    ${checkoutHtml}
+                    <div><dt>Loại</dt><dd>${escapeHtml(detail.isQuick ? "Check-in nhanh" : getPurchaseStatusText(detail))}</dd></div>
+                    <div><dt>Nội dung đi ra ngoài</dt><dd>${workHtml}</dd></div>
+                    <div><dt>Ghi chú</dt><dd>${escapeHtml(detail.note || "Không có ghi chú")}</dd></div>`;
+            };
+
+            const openPurchaseDetail = (detail) => {
+                if (!detail || !(purchaseDetailShell instanceof HTMLElement)) {
+                    return;
+                }
+                purchaseDetailCurrent = detail;
+                if (purchaseDetailSubtitle instanceof HTMLElement) {
+                    purchaseDetailSubtitle.textContent = `${detail.employeeName} · ${detail.checkinTime || "Chưa xác định"}`;
+                }
+                if (purchaseDetailBadge instanceof HTMLElement) {
+                    purchaseDetailBadge.textContent = getPurchaseStatusText(detail);
+                }
+                if (purchaseDetailDeleteButton instanceof HTMLButtonElement) {
+                    purchaseDetailDeleteButton.hidden = !detail.canDelete;
+                    purchaseDetailDeleteButton.dataset.purchaseDeleteId = `${detail.id}`;
+                }
+                renderPurchaseDetailImages(detail);
+                renderPurchaseDetailLocation(detail);
+                renderPurchaseDetailInfo(detail);
+                setPurchaseDetailTab("images");
+                purchaseDetailShell.hidden = false;
+                document.body.classList.add("modal-open");
+            };
+
+            const closePurchaseDetail = () => {
+                if (purchaseDetailShell instanceof HTMLElement) {
+                    purchaseDetailShell.hidden = true;
+                }
+                purchaseDetailCurrent = null;
+                if (!(imageViewerShell instanceof HTMLElement) || imageViewerShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
+            };
 
             const parseHistoryDate = (value) => {
                 const match = `${value ?? ""}`.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
@@ -2147,7 +2440,9 @@
                 if (imageViewerImg instanceof HTMLImageElement) {
                     imageViewerImg.removeAttribute("src");
                 }
-                document.body.classList.remove("modal-open");
+                if (!(purchaseDetailShell instanceof HTMLElement) || purchaseDetailShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
             };
 
             const setText = (element, value, fallback = "Chưa có thông tin") => {
@@ -2195,8 +2490,12 @@
             };
 
             const saveAttendance = async () => {
-                if (!capturedBlob || !activeGps) {
-                    setStatus(cameraStatus, "Vui lòng chụp ảnh trước khi lưu.", "error");
+                if (!activeGps) {
+                    setStatus(cameraStatus, "Vui lòng cấp quyền GPS để lấy vị trí.", "error");
+                    return;
+                }
+                if (!capturedBlob) {
+                    setStatus(cameraStatus, isPurchaseMode() ? "Vui lòng chụp ảnh khi ghi nhận đi mua hàng." : "Vui lòng chụp ảnh trước khi lưu.", "error");
                     return;
                 }
                 try {
@@ -2283,7 +2582,7 @@
                     return;
                 }
 
-                if (!window.confirm("Xóa lượt đi mua hàng này?")) {
+                if (!window.confirm("Bạn có chắc muốn xóa lượt đi mua hàng này?")) {
                     return;
                 }
 
@@ -2291,6 +2590,7 @@
                     button.disabled = true;
                     await postForm(root.dataset.purchaseDeleteUrl || "", { Id: id });
                     setStatus(statusElement, "Đã xóa lượt đi mua hàng.", "success");
+                    closePurchaseDetail();
                     await loadHistory();
                 } catch (error) {
                     setStatus(statusElement, error instanceof Error ? error.message : "Không thể xóa lượt đi mua hàng.", "error");
@@ -2304,6 +2604,24 @@
             purchaseCheckinButton?.addEventListener("click", () => void openCameraModal("purchase-checkin"));
             purchaseCheckoutButton?.addEventListener("click", () => void openCameraModal("purchase-checkout"));
             purchaseSpeechButton?.addEventListener("click", togglePurchaseSpeech);
+            purchaseDetailTabs.forEach((tab) => tab.addEventListener("click", () => {
+                if (tab instanceof HTMLButtonElement) {
+                    setPurchaseDetailTab(tab.dataset.purchaseDetailTab || "images");
+                }
+            }));
+            purchaseDetailCloseButtons.forEach((button) => button.addEventListener("click", closePurchaseDetail));
+            purchaseDetailDeleteButton?.addEventListener("click", () => void deletePurchaseAttendance(purchaseDetailDeleteButton));
+            purchaseDetailImages?.addEventListener("click", (event) => {
+                const trigger = event.target instanceof Element
+                    ? event.target.closest("[data-cham-cong-image-open]")
+                    : null;
+                if (!(trigger instanceof HTMLElement)) {
+                    return;
+                }
+                const src = trigger.dataset.imageSrc || trigger.querySelector("img")?.getAttribute("src") || "";
+                const title = trigger.dataset.imageTitle || trigger.querySelector("img")?.getAttribute("alt") || "Ảnh đi mua hàng";
+                openImageViewer(src, title);
+            });
             historyElement?.addEventListener("click", (event) => {
                 const button = event.target instanceof Element
                     ? event.target.closest("[data-purchase-delete]")
@@ -2364,8 +2682,23 @@
                     && !requestSummaryShell.hidden) {
                     closeRequestSummary();
                 }
+                if (event.key === "Escape"
+                    && purchaseDetailShell instanceof HTMLElement
+                    && !purchaseDetailShell.hidden) {
+                    closePurchaseDetail();
+                }
             });
             historyElement?.addEventListener("click", (event) => {
+                const purchaseTrigger = event.target instanceof Element
+                    ? event.target.closest("[data-purchase-detail-open]")
+                    : null;
+                if (purchaseTrigger instanceof HTMLElement) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    openPurchaseDetail(getPurchaseDetailFromTrigger(purchaseTrigger));
+                    return;
+                }
+
                 const requestTrigger = event.target instanceof Element
                     ? event.target.closest("[data-request-summary-open]")
                     : null;

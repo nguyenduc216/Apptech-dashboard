@@ -97,7 +97,7 @@ public class HomeController(
             history = history
                 .OrderBy(item => item.ThoiDiem ?? DateTime.MaxValue)
                 .ThenBy(item => item.Id)
-                .Select(BuildChamCongHistoryJson)
+                .Select(item => BuildChamCongHistoryJson(item, canAdminManageAttendance))
         });
     }
 
@@ -239,7 +239,17 @@ public class HomeController(
             return BadRequest(new { message = dateError });
         }
 
-        var imageError = ValidateCheckinImage(imageFile);
+        if (string.IsNullOrWhiteSpace(model.NoiDungCongViec))
+        {
+            return BadRequest(new { message = "Vui lòng chọn ít nhất một nội dung đi ra ngoài." });
+        }
+
+        if (string.IsNullOrWhiteSpace(model.GhiChuNhanVien))
+        {
+            return BadRequest(new { message = "Vui lòng nhập ghi chú cho lượt đi ra ngoài." });
+        }
+
+        var imageError = ValidateCheckinImage(imageFile, "Vui lòng chụp ảnh khi ghi nhận đi mua hàng.");
         if (imageError is not null)
         {
             return BadRequest(new { message = imageError });
@@ -301,7 +311,7 @@ public class HomeController(
             return BadRequest(new { message = dateError });
         }
 
-        var imageError = ValidateCheckinImage(imageFile);
+        var imageError = ValidateCheckinImage(imageFile, "Vui lòng chụp ảnh checkout đi mua hàng.");
         if (imageError is not null)
         {
             return BadRequest(new { message = imageError });
@@ -703,7 +713,7 @@ public class HomeController(
         return account?.EmployeeId is > 0 ? account.EmployeeId : null;
     }
 
-    private object BuildChamCongHistoryJson(ChamCongHistoryItem item)
+    private object BuildChamCongHistoryJson(ChamCongHistoryItem item, bool canAdminManageAttendance)
     {
         var requestDetailUrl = item.IDYeuCau.HasValue
             ? Url.Action("Edit", "YeuCau", new { id = item.IDYeuCau.Value })
@@ -747,10 +757,20 @@ public class HomeController(
             longAddress = item.LongAddress,
             latAddressCheckOut = item.LatAddressCheckOut,
             longAddressCheckOut = item.LongAddressCheckOut,
+            checkInLat = item.LatAddress,
+            checkInLng = item.LongAddress,
+            checkoutLat = item.LatAddressCheckOut,
+            checkoutLng = item.LongAddressCheckOut,
             imgPath = item.ImgPath,
             imgPathCheckOut = item.ImgPathCheckOut,
+            checkInImage = item.ImgPath,
+            checkoutImage = item.ImgPathCheckOut,
             ghiChuNhanVien = item.GhiChuNhanVien,
             ghiChuCheckOut = item.GhiChuCheckOut,
+            noiDungDiRaNgoai = item.PurchaseWorkContent,
+            ghiChu = item.PurchaseNote,
+            isLegacyPurchaseData = item.HasLegacyPurchaseNote,
+            canDelete = item.IsPurchase && canAdminManageAttendance,
             isCheckinViolation = item.IsCheckinViolation,
             isCheckoutViolation = item.IsCheckoutViolation
         };
@@ -1056,11 +1076,11 @@ public class HomeController(
         }
     }
 
-    private static string? ValidateCheckinImage(IFormFile? imageFile)
+    private static string? ValidateCheckinImage(IFormFile? imageFile, string missingMessage = "Vui lòng chụp ảnh chấm công.")
     {
         if (imageFile is null || imageFile.Length == 0)
         {
-            return "Vui lòng chụp ảnh chấm công.";
+            return missingMessage;
         }
 
         var extension = Path.GetExtension(imageFile.FileName);

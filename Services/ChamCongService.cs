@@ -494,14 +494,20 @@ public sealed class ChamCongService(
 
         if (string.IsNullOrWhiteSpace(model.ImgPath))
         {
-            return (false, "Vui lòng chụp ảnh đi mua hàng.", null);
+            return (false, "Vui lòng chụp ảnh khi ghi nhận đi mua hàng.", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(model.NoiDungCongViec))
+        {
+            return (false, "Vui lòng chọn ít nhất một nội dung đi ra ngoài.", null);
+        }
+
+        if (string.IsNullOrWhiteSpace(model.GhiChuNhanVien))
+        {
+            return (false, "Vui lòng nhập ghi chú cho lượt đi ra ngoài.", null);
         }
 
         var workNote = BuildPurchaseWorkNote(model.NoiDungCongViec, model.GhiChuNhanVien);
-        if (string.IsNullOrWhiteSpace(workNote))
-        {
-            return (false, "Vui lòng chọn nội dung đi ra ngoài hoặc nhập ghi chú chi tiết.", null);
-        }
 
         try
         {
@@ -1108,15 +1114,8 @@ public sealed class ChamCongService(
             .ToList();
         var note = string.IsNullOrWhiteSpace(detailNote) ? null : detailNote.Trim();
 
-        if (selectedParts.Count == 0)
-        {
-            return note;
-        }
-
         var prefix = $"[{string.Join("; ", selectedParts)}]";
-        return string.IsNullOrWhiteSpace(note)
-            ? string.Join("; ", selectedParts)
-            : $"{prefix} {note}";
+        return $"{prefix} {note}";
     }
 
     private async Task<string?> ValidateDistanceAsync(

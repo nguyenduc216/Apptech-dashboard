@@ -142,6 +142,9 @@ public sealed class ChamCongHistoryItem
     public bool? DuyetCheckIn { get; set; }
     public bool IsCheckinViolation { get; set; }
     public bool IsCheckoutViolation { get; set; }
+    public IReadOnlyList<string> PurchaseWorkContent => ParsePurchaseNote(GhiChuNhanVien).WorkContent;
+    public string? PurchaseNote => ParsePurchaseNote(GhiChuNhanVien).Note;
+    public bool HasLegacyPurchaseNote => IsPurchase && ParsePurchaseNote(GhiChuNhanVien).IsLegacy;
     public bool IsOpen => ThoiDiem.HasValue && !ThoiDiemCheckOut.HasValue;
     public string AttendanceType
     {
@@ -173,6 +176,41 @@ public sealed class ChamCongHistoryItem
         "MuaHang" => IsQuickPurchase ? "Đi mua hàng · Hoàn tất nhanh" : "Đi mua hàng / Đi ra ngoài",
         _ => $"Chấm công tại {CustomerDisplayName}"
     };
+
+    private (IReadOnlyList<string> WorkContent, string? Note, bool IsLegacy) ParsePurchaseNote(string? rawValue)
+    {
+        if (!IsPurchase)
+        {
+            return ([], string.IsNullOrWhiteSpace(rawValue) ? null : rawValue.Trim(), false);
+        }
+
+        var note = string.IsNullOrWhiteSpace(rawValue) ? null : rawValue.Trim();
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            return ([], null, false);
+        }
+
+        if (!note.StartsWith('['))
+        {
+            return ([], note, true);
+        }
+
+        var endIndex = note.IndexOf(']');
+        if (endIndex <= 1)
+        {
+            return ([], note, true);
+        }
+
+        var workContent = note[1..endIndex]
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var detailNote = note[(endIndex + 1)..].Trim();
+        return workContent.Count == 0
+            ? ([], note, true)
+            : (workContent, string.IsNullOrWhiteSpace(detailNote) ? null : detailNote, false);
+    }
 }
 
 public sealed class ChamCongCheckinRequest
