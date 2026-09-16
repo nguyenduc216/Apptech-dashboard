@@ -1168,7 +1168,7 @@
                     touchZoom: false
                 });
 
-                window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19
                 }).addTo(map);
 
@@ -1246,9 +1246,9 @@
                     zoomControl: true
                 });
 
-                window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+                    attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
                 }).addTo(viewMap);
 
                 viewMap.setView(defaultCenter, defaultZoom);
@@ -1336,9 +1336,9 @@
                     zoomControl: true
                 });
 
-                window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+                    attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
                 }).addTo(editorMap);
 
                 editorMap.on("click", (event) => {
@@ -1370,9 +1370,9 @@
                     zoomControl: true
                 });
 
-                window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+                    attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
                 }).addTo(editorFullscreenMap);
 
                 editorFullscreenMap.on("click", (event) => {
