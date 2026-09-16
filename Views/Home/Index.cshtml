@@ -62,6 +62,7 @@
          data-purchase-checkin-url="@Url.Action("MuaHangCheckin", "Home")"
          data-purchase-checkout-url="@Url.Action("MuaHangCheckout", "Home")"
          data-purchase-delete-url="@Url.Action("MuaHangDelete", "Home")"
+         data-construction-requests-url="@Url.Action("CheckinCongTrinhRequests", "Home")"
          data-distance-limit="@(chamCong.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? "")"
          data-current-employee-id="@(chamCong.CurrentEmployeeId?.ToString(invariantCulture) ?? "")"
          data-action-employee-id="@(chamCong.SelectedEmployeeIds.FirstOrDefault(chamCong.CurrentEmployeeId ?? 0).ToString(invariantCulture))"
@@ -324,6 +325,13 @@
                         @(chamCong.OpenPurchaseCheckin is null && (chamCong.CurrentEmployeeId.HasValue || chamCong.CanSelectEmployees) ? null : "hidden")>
                     <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
                     <span>Đi mua hàng</span>
+                </button>
+                <button type="button"
+                        class="secondary-button construction-checkin-button"
+                        data-construction-checkin-open
+                        @((chamCong.CurrentEmployeeId.HasValue || chamCong.CanSelectEmployees) ? null : "hidden")>
+                    <i class="fa-solid fa-helmet-safety" aria-hidden="true"></i>
+                    <span>Checkin công trình</span>
                 </button>
                 <button type="button"
                         class="secondary-button purchase-attendance-button is-active"
@@ -656,6 +664,67 @@
             </div>
         </section>
     </div>
+
+    <div class="crud-modal-shell construction-checkin-shell" data-construction-checkin-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-construction-checkin-close></div>
+        <section class="crud-modal construction-checkin-modal" role="dialog" aria-modal="true" aria-labelledby="constructionCheckinTitle">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="constructionCheckinTitle">Checkin công trình</h2>
+                    <p class="crud-modal-subtitle">
+                        Danh sách phiếu yêu cầu của nhân viên
+                        <strong data-construction-checkin-employee>Nhân viên</strong>
+                    </p>
+                </div>
+                <button type="button" class="crud-modal-close" data-construction-checkin-close aria-label="Đóng Checkin công trình">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="construction-checkin-toolbar">
+                <span class="page-alert info construction-checkin-status" data-construction-checkin-status>Đang tải phiếu yêu cầu...</span>
+                <button type="button" class="secondary-button construction-checkin-refresh" data-construction-checkin-refresh>
+                    <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                    <span>Tải lại</span>
+                </button>
+            </div>
+            <div class="construction-checkin-list" data-construction-checkin-list></div>
+        </section>
+    </div>
+
+    <div class="crud-modal-shell construction-map-shell" data-construction-map-shell hidden>
+        <div class="crud-modal-backdrop" aria-hidden="true" data-construction-map-close></div>
+        <section class="crud-modal khach-hang-location-viewer construction-map-modal" role="dialog" aria-modal="true" aria-labelledby="constructionMapTitle">
+            <div class="crud-modal-header">
+                <div class="crud-modal-heading">
+                    <h2 id="constructionMapTitle" data-construction-map-title>Bản đồ công trình</h2>
+                    <p class="crud-modal-subtitle" data-construction-map-subtitle>Vị trí khách hàng</p>
+                </div>
+                <button type="button" class="crud-modal-close" data-construction-map-close aria-label="Đóng bản đồ công trình">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="khach-hang-location-viewer-body">
+                <div class="khach-hang-location-viewer-map-shell">
+                    <div class="khach-hang-location-map khach-hang-location-viewer-map construction-map-canvas" data-construction-map></div>
+                    <div class="khach-hang-location-viewer-map-actions">
+                        <button type="button" class="khach-hang-location-map-action" data-construction-map-route>
+                            <i class="fa-solid fa-route" aria-hidden="true"></i>
+                            <span>Chỉ đường</span>
+                        </button>
+                        <a class="khach-hang-location-map-action"
+                           href="#"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           data-construction-map-external>
+                            <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+                            <span>Mở Google Maps</span>
+                        </a>
+                    </div>
+                    <div class="khach-hang-location-viewer-status" data-construction-map-route-status hidden></div>
+                </div>
+            </div>
+        </section>
+    </div>
 </section>
 
 @if (!isolateChamCongDashboard)
@@ -896,6 +965,21 @@
             const requestSummaryPhone = root.querySelector("[data-request-summary-phone]");
             const requestSummaryWorks = root.querySelector("[data-request-summary-works]");
             const requestSummaryDetail = root.querySelector("[data-request-summary-detail]");
+            const constructionOpenButton = root.querySelector("[data-construction-checkin-open]");
+            const constructionShell = root.querySelector("[data-construction-checkin-shell]");
+            const constructionCloseButtons = root.querySelectorAll("[data-construction-checkin-close]");
+            const constructionRefreshButton = root.querySelector("[data-construction-checkin-refresh]");
+            const constructionEmployee = root.querySelector("[data-construction-checkin-employee]");
+            const constructionStatus = root.querySelector("[data-construction-checkin-status]");
+            const constructionList = root.querySelector("[data-construction-checkin-list]");
+            const constructionMapShell = root.querySelector("[data-construction-map-shell]");
+            const constructionMapCloseButtons = root.querySelectorAll("[data-construction-map-close]");
+            const constructionMapTitle = root.querySelector("[data-construction-map-title]");
+            const constructionMapSubtitle = root.querySelector("[data-construction-map-subtitle]");
+            const constructionMapElement = root.querySelector("[data-construction-map]");
+            const constructionMapRouteButton = root.querySelector("[data-construction-map-route]");
+            const constructionMapExternalLink = root.querySelector("[data-construction-map-external]");
+            const constructionMapRouteStatus = root.querySelector("[data-construction-map-route-status]");
             const distanceLimit = Number.parseFloat(root.dataset.distanceLimit || "");
             let cameraStream = null;
             let attendanceCameraDevices = [];
@@ -917,6 +1001,10 @@
             let purchaseDetailCurrent = null;
             let purchaseDetailMap = null;
             let purchaseDetailMarkers = [];
+            let constructionMap = null;
+            let constructionMapMarker = null;
+            let constructionRouteLayer = null;
+            let activeConstructionLocation = null;
             let speechRecognition = null;
             let isPurchaseSpeechSupported = true;
             let isListeningToPurchaseNote = false;
@@ -2086,6 +2174,332 @@
                 "'": "&#039;"
             }[character]));
 
+            const normalizePhoneHref = (value) => `${value || ""}`.replace(/[^\d+]/g, "");
+
+            const parseConstructionCoordinate = (value) => {
+                const parsed = Number.parseFloat(`${value ?? ""}`);
+                return Number.isFinite(parsed) ? parsed : null;
+            };
+
+            const getConstructionStatusClass = (value) => {
+                const normalized = `${value || ""}`
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .replace(/\s+/g, "")
+                    .toLowerCase();
+                if (normalized.includes("hoanthanh")) {
+                    return "completed";
+                }
+                if (normalized.includes("dangthuchien")) {
+                    return "in-progress";
+                }
+                if (normalized.includes("huy")) {
+                    return "cancelled";
+                }
+                return "pending";
+            };
+
+            const setConstructionStatus = (message, type = "info") => {
+                setStatus(constructionStatus, message, type);
+            };
+
+            const buildConstructionDetailUrl = (item) => {
+                const baseUrl = item.detailUrl || `/YeuCau/Edit/${item.id}`;
+                try {
+                    const url = new URL(baseUrl, window.location.origin);
+                    url.searchParams.set("activeTab", "checkin");
+                    return `${url.pathname}${url.search}${url.hash}`;
+                } catch {
+                    const separator = baseUrl.includes("?") ? "&" : "?";
+                    return `${baseUrl}${separator}activeTab=checkin`;
+                }
+            };
+
+            const renderConstructionCard = (item) => {
+                const lat = parseConstructionCoordinate(item.latAddress);
+                const lng = parseConstructionCoordinate(item.longAddress);
+                const hasLocation = lat !== null && lng !== null;
+                const statusClass = item.trangThaiCssClass || getConstructionStatusClass(item.trangThai);
+                const phoneHref = normalizePhoneHref(item.dienThoai);
+                const tileZoom = 16;
+                const tileXRaw = hasLocation ? long2tileRaw(lng, tileZoom) : 0;
+                const tileYRaw = hasLocation ? lat2tileRaw(lat, tileZoom) : 0;
+                const tileX = Math.floor(tileXRaw);
+                const tileY = Math.floor(tileYRaw);
+                const markerLeft = Math.round((tileXRaw - tileX) * 100);
+                const markerTop = Math.round((tileYRaw - tileY) * 100);
+                const phoneHtml = phoneHref
+                    ? `<a class="construction-request-card__phone" href="tel:${escapeHtml(phoneHref)}" aria-label="Gọi ${escapeHtml(item.dienThoai)}">${escapeHtml(item.dienThoai)}</a>`
+                    : `<span class="construction-request-card__muted">Chưa có số điện thoại</span>`;
+                const mapHtml = hasLocation
+                    ? `<button type="button"
+                               class="construction-request-card__map-thumb"
+                               data-construction-map-open
+                               data-id="${escapeHtml(item.id)}"
+                               data-code="${escapeHtml(item.maYeuCau || "")}"
+                               data-customer="${escapeHtml(item.tenKhachHang || "")}"
+                               data-address="${escapeHtml(item.diaChi || "")}"
+                               data-lat="${lat}"
+                               data-lng="${lng}"
+                               aria-label="Mở bản đồ ${escapeHtml(item.tenKhachHang || item.maYeuCau || "công trình")}">
+                            <img src="https://tile.openstreetmap.org/${tileZoom}/${tileX}/${tileY}.png" alt="" loading="lazy" />
+                            <span class="construction-request-card__map-pin" style="left:${markerLeft}%;top:${markerTop}%;" aria-hidden="true"></span>
+                            <span class="construction-request-card__map-cta"><i class="fa-solid fa-location-arrow" aria-hidden="true"></i><span>Bản đồ</span></span>
+                       </button>`
+                    : `<button type="button" class="construction-request-card__map-thumb is-empty" disabled aria-label="Phiếu chưa có vị trí">
+                            <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                            <span>Chưa có vị trí</span>
+                       </button>`;
+
+                return `
+                    <article class="construction-request-card construction-request-card--${escapeHtml(statusClass)}">
+                        <div class="construction-request-card__top">
+                            <div class="construction-request-card__main">
+                                <div class="construction-request-card__meta-line">
+                                    <span class="construction-request-card__status-dot" aria-hidden="true"></span>
+                                    <span class="construction-request-card__code">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</span>
+                                    <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(item.trangThai || "Tạo mới")}</span>
+                                </div>
+                                <a class="construction-request-card__customer" href="${escapeHtml(buildConstructionDetailUrl(item))}">
+                                    ${escapeHtml(item.tenKhachHang || "Khách hàng chưa xác định")}
+                                </a>
+                                <div class="construction-request-card__line">
+                                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                                    <span>${escapeHtml(item.diaChi || "Chưa có địa chỉ")}</span>
+                                </div>
+                                <div class="construction-request-card__line">
+                                    <i class="fa-solid fa-phone" aria-hidden="true"></i>
+                                    ${phoneHtml}
+                                </div>
+                            </div>
+                            ${mapHtml}
+                        </div>
+                        <div class="construction-request-card__footer">
+                            <div class="construction-request-card__footer-row">
+                                <span><i class="fa-solid fa-calendar-day" aria-hidden="true"></i> YC: ${escapeHtml(item.ngayYeuCau || "-")}</span>
+                                <span><i class="fa-solid fa-calendar-check" aria-hidden="true"></i> TH: ${escapeHtml(item.ngayThucHien || "-")}</span>
+                                <span><i class="fa-solid fa-list-check" aria-hidden="true"></i> ${escapeHtml(item.loaiCongViec || item.noiDungCongViec || "Công việc")}</span>
+                            </div>
+                            <div class="construction-request-card__footer-row">
+                                <span><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> ${escapeHtml(item.tiLeHoanThanh ?? 0)}%</span>
+                                <span class="construction-request-card__assignee"><i class="fa-solid fa-user-check" aria-hidden="true"></i> ${escapeHtml(item.nguoiPhuTrach || "Chưa phân công")}</span>
+                            </div>
+                        </div>
+                    </article>`;
+            };
+
+            const lat2tileRaw = (lat, zoom) => (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * (1 << zoom);
+            const long2tileRaw = (lng, zoom) => (lng + 180) / 360 * (1 << zoom);
+
+            const loadConstructionRequests = async () => {
+                const selectedEmployeeId = getSelectedActionEmployeeId();
+                if (!selectedEmployeeId) {
+                    setConstructionStatus("Chưa xác định được nhân viên để tải phiếu yêu cầu.", "error");
+                    if (constructionList instanceof HTMLElement) {
+                        constructionList.innerHTML = `<div class="construction-checkin-empty">Chưa xác định được nhân viên.</div>`;
+                    }
+                    return;
+                }
+
+                try {
+                    setConstructionStatus("Đang tải phiếu yêu cầu...", "info");
+                    if (constructionRefreshButton instanceof HTMLButtonElement) {
+                        constructionRefreshButton.disabled = true;
+                    }
+                    const url = new URL(root.dataset.constructionRequestsUrl || "", window.location.origin);
+                    url.searchParams.set("employeeId", `${selectedEmployeeId}`);
+                    const response = await fetch(url, {
+                        method: "GET",
+                        headers: { "X-Requested-With": "XMLHttpRequest" },
+                        cache: "no-store"
+                    });
+                    const payload = await response.json().catch(() => null);
+                    if (!response.ok || payload?.succeeded === false) {
+                        throw new Error(payload?.message || "Không thể tải phiếu yêu cầu.");
+                    }
+
+                    if (constructionEmployee instanceof HTMLElement) {
+                        constructionEmployee.textContent = payload.employeeName || `Nhân viên #${selectedEmployeeId}`;
+                    }
+
+                    const items = Array.isArray(payload.items) ? payload.items : [];
+                    if (constructionList instanceof HTMLElement) {
+                        constructionList.innerHTML = items.length > 0
+                            ? items.map(renderConstructionCard).join("")
+                            : `<div class="construction-checkin-empty">Không có phiếu yêu cầu phù hợp.</div>`;
+                    }
+                    setConstructionStatus(items.length > 0 ? `Đã tải ${items.length} phiếu yêu cầu.` : "Không có phiếu yêu cầu phù hợp.", items.length > 0 ? "success" : "info");
+                } catch (error) {
+                    setConstructionStatus(error instanceof Error ? error.message : "Không thể tải phiếu yêu cầu.", "error");
+                    if (constructionList instanceof HTMLElement) {
+                        constructionList.innerHTML = `<div class="construction-checkin-empty">Không thể tải dữ liệu. Vui lòng thử lại.</div>`;
+                    }
+                } finally {
+                    if (constructionRefreshButton instanceof HTMLButtonElement) {
+                        constructionRefreshButton.disabled = false;
+                    }
+                }
+            };
+
+            const openConstructionModal = () => {
+                if (constructionShell instanceof HTMLElement) {
+                    constructionShell.hidden = false;
+                    document.body.classList.add("modal-open");
+                    void loadConstructionRequests();
+                }
+            };
+
+            const closeConstructionModal = () => {
+                if (constructionShell instanceof HTMLElement) {
+                    constructionShell.hidden = true;
+                }
+                if (!(constructionMapShell instanceof HTMLElement) || constructionMapShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            const setConstructionRouteStatus = (message, type = "info") => {
+                if (!(constructionMapRouteStatus instanceof HTMLElement)) {
+                    return;
+                }
+                constructionMapRouteStatus.hidden = !message;
+                constructionMapRouteStatus.dataset.state = type;
+                constructionMapRouteStatus.textContent = message || "";
+            };
+
+            const ensureConstructionMap = () => {
+                if (!(window.L && typeof window.L.map === "function") || !(constructionMapElement instanceof HTMLElement)) {
+                    setConstructionRouteStatus("Không thể khởi tạo bản đồ trên trình duyệt này.", "error");
+                    return false;
+                }
+                if (constructionMap) {
+                    return true;
+                }
+                constructionMap = window.L.map(constructionMapElement, {
+                    zoomControl: true,
+                    attributionControl: true
+                });
+                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap"
+                }).addTo(constructionMap);
+                return true;
+            };
+
+            const syncConstructionMapExternalLink = () => {
+                if (!(constructionMapExternalLink instanceof HTMLAnchorElement) || !activeConstructionLocation) {
+                    return;
+                }
+                constructionMapExternalLink.href = `https://www.google.com/maps/dir/?api=1&destination=${activeConstructionLocation.lat},${activeConstructionLocation.lng}&travelmode=driving`;
+            };
+
+            const openConstructionMap = (trigger) => {
+                if (!(trigger instanceof HTMLElement)) {
+                    return;
+                }
+                const lat = parseConstructionCoordinate(trigger.dataset.lat);
+                const lng = parseConstructionCoordinate(trigger.dataset.lng);
+                if (lat === null || lng === null) {
+                    return;
+                }
+                activeConstructionLocation = {
+                    lat,
+                    lng,
+                    code: trigger.dataset.code || "",
+                    customer: trigger.dataset.customer || "",
+                    address: trigger.dataset.address || ""
+                };
+                if (constructionMapTitle instanceof HTMLElement) {
+                    constructionMapTitle.textContent = activeConstructionLocation.code || "Bản đồ công trình";
+                }
+                if (constructionMapSubtitle instanceof HTMLElement) {
+                    constructionMapSubtitle.textContent = [activeConstructionLocation.customer, activeConstructionLocation.address].filter(Boolean).join(" - ");
+                }
+                if (constructionMapShell instanceof HTMLElement) {
+                    constructionMapShell.hidden = false;
+                    document.body.classList.add("modal-open");
+                }
+                setConstructionRouteStatus("", "info");
+                syncConstructionMapExternalLink();
+                window.requestAnimationFrame(() => {
+                    if (!ensureConstructionMap()) {
+                        return;
+                    }
+                    if (constructionRouteLayer) {
+                        constructionMap.removeLayer(constructionRouteLayer);
+                        constructionRouteLayer = null;
+                    }
+                    const point = [lat, lng];
+                    if (!constructionMapMarker) {
+                        constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                    } else {
+                        constructionMapMarker.setLatLng(point);
+                    }
+                    constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
+                    constructionMap.setView(point, 16);
+                    window.setTimeout(() => constructionMap.invalidateSize(), 120);
+                });
+            };
+
+            const closeConstructionMap = () => {
+                if (constructionMapShell instanceof HTMLElement) {
+                    constructionMapShell.hidden = true;
+                }
+                if (!(constructionShell instanceof HTMLElement) || constructionShell.hidden) {
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            const loadConstructionRoute = async () => {
+                if (!activeConstructionLocation || !navigator.geolocation) {
+                    setConstructionRouteStatus("Không thể lấy GPS hiện tại để chỉ đường.", "error");
+                    return;
+                }
+                try {
+                    if (constructionMapRouteButton instanceof HTMLButtonElement) {
+                        constructionMapRouteButton.disabled = true;
+                    }
+                    setConstructionRouteStatus("Đang lấy vị trí hiện tại và tuyến đường...", "info");
+                    const position = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true,
+                            timeout: 12000,
+                            maximumAge: 0
+                        });
+                    });
+                    if (!ensureConstructionMap()) {
+                        return;
+                    }
+                    const startLat = position.coords.latitude;
+                    const startLng = position.coords.longitude;
+                    const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${activeConstructionLocation.lng},${activeConstructionLocation.lat}?overview=full&geometries=geojson`);
+                    const payload = await response.json().catch(() => null);
+                    const route = Array.isArray(payload?.routes) ? payload.routes[0] : null;
+                    if (!route?.geometry) {
+                        throw new Error("Không tìm thấy tuyến đường phù hợp.");
+                    }
+                    if (constructionRouteLayer) {
+                        constructionMap.removeLayer(constructionRouteLayer);
+                    }
+                    constructionRouteLayer = window.L.geoJSON(route.geometry, {
+                        style: { color: "#0b4f9c", weight: 5, opacity: 0.82 }
+                    }).addTo(constructionMap);
+                    const bounds = constructionRouteLayer.getBounds();
+                    if (bounds.isValid()) {
+                        constructionMap.fitBounds(bounds.pad(0.15));
+                    }
+                    const distanceKm = (route.distance / 1000).toFixed(1);
+                    const durationMinutes = Math.round(route.duration / 60);
+                    setConstructionRouteStatus(`Tuyến đường khoảng ${distanceKm} km, ${durationMinutes} phút.`, "success");
+                } catch (error) {
+                    setConstructionRouteStatus(error instanceof Error ? error.message : "Không thể tải tuyến đường.", "error");
+                } finally {
+                    if (constructionMapRouteButton instanceof HTMLButtonElement) {
+                        constructionMapRouteButton.disabled = false;
+                    }
+                }
+            };
+
             const parsePurchaseCoordinate = (value) => {
                 const parsed = Number.parseFloat(`${value ?? ""}`);
                 return Number.isFinite(parsed) ? parsed : null;
@@ -2613,6 +3027,19 @@
             checkoutButton?.addEventListener("click", () => void openCameraModal("checkout"));
             purchaseCheckinButton?.addEventListener("click", () => void openCameraModal("purchase-checkin"));
             purchaseCheckoutButton?.addEventListener("click", () => void openCameraModal("purchase-checkout"));
+            constructionOpenButton?.addEventListener("click", openConstructionModal);
+            constructionRefreshButton?.addEventListener("click", () => void loadConstructionRequests());
+            constructionCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionModal));
+            constructionMapCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionMap));
+            constructionMapRouteButton?.addEventListener("click", () => void loadConstructionRoute());
+            constructionList?.addEventListener("click", (event) => {
+                const trigger = event.target instanceof Element
+                    ? event.target.closest("[data-construction-map-open]")
+                    : null;
+                if (trigger instanceof HTMLElement) {
+                    openConstructionMap(trigger);
+                }
+            });
             purchaseSpeechButton?.addEventListener("click", togglePurchaseSpeech);
             purchaseDetailTabs.forEach((tab) => tab.addEventListener("click", () => {
                 if (tab instanceof HTMLButtonElement) {
@@ -2697,6 +3124,16 @@
                     && !purchaseDetailShell.hidden) {
                     closePurchaseDetail();
                 }
+                if (event.key === "Escape"
+                    && constructionMapShell instanceof HTMLElement
+                    && !constructionMapShell.hidden) {
+                    closeConstructionMap();
+                }
+                if (event.key === "Escape"
+                    && constructionShell instanceof HTMLElement
+                    && !constructionShell.hidden) {
+                    closeConstructionModal();
+                }
             });
             historyElement?.addEventListener("click", (event) => {
                 const purchaseTrigger = event.target instanceof Element
@@ -2739,6 +3176,9 @@
                 try {
                     setStatus(statusElement, "Đang tải lịch sử chấm công...", "info");
                     await loadHistory();
+                    if (constructionShell instanceof HTMLElement && !constructionShell.hidden) {
+                        await loadConstructionRequests();
+                    }
                     setStatus(statusElement, "Đã tải lịch sử chấm công.", "success");
                 } catch (error) {
                     setStatus(statusElement, error instanceof Error ? error.message : "Không thể tải lịch sử chấm công.", "error");
@@ -2765,6 +3205,9 @@
                 try {
                     setStatus(statusElement, "Đang tải lịch sử chấm công...", "info");
                     await loadHistory();
+                    if (constructionShell instanceof HTMLElement && !constructionShell.hidden) {
+                        await loadConstructionRequests();
+                    }
                     setStatus(statusElement, "Đã tải lịch sử chấm công.", "success");
                 } catch (error) {
                     setStatus(statusElement, error instanceof Error ? error.message : "Không thể tải lịch sử chấm công.", "error");
@@ -2775,6 +3218,9 @@
                 try {
                     setStatus(statusElement, "Đang tải lịch sử chấm công...", "info");
                     await loadHistory();
+                    if (constructionShell instanceof HTMLElement && !constructionShell.hidden) {
+                        await loadConstructionRequests();
+                    }
                     setStatus(statusElement, "Đã tải lịch sử chấm công.", "success");
                 } catch (error) {
                     setStatus(statusElement, error instanceof Error ? error.message : "Không thể tải lịch sử chấm công.", "error");

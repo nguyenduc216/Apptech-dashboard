@@ -225,13 +225,13 @@
                 <thead>
                     <tr>
                         <th>Tiến độ</th>
-                        <th>Mã yêu cầu</th>
                         <th>Khách hàng / Địa điểm</th>
                         <th>Ngày yêu cầu</th>
+                        <th>Trạng thái</th>
+                        <th>Mã yêu cầu</th>
                         <th>Ngày thực hiện</th>
                         <th>Ngày hết hạn</th>
                         <th>Phụ trách</th>
-                        <th>Trạng thái</th>
                         <th>Danh gia</th>
                         <th>Zalo</th>
                         <th class="actions-col">Thao tác</th>
@@ -257,6 +257,21 @@
                                     </div>
                                 </td>
                                 <td>
+                                    <div class="master-data-name">@item.TenKhachHangDisplay</div>
+                                    <div>@item.DiaChiDisplay</div>
+                                    <div class="yeu-cau-secondary-text">
+                                        @(string.IsNullOrWhiteSpace(item.NguoiLienHe) ? "-" : item.NguoiLienHe)
+                                        ·
+                                        @(string.IsNullOrWhiteSpace(item.DienThoai) ? "-" : item.DienThoai)
+                                    </div>
+                                </td>
+                                <td>@(item.NgayYeuCau?.ToString("dd/MM/yyyy", viCulture) ?? "-")</td>
+                                <td>
+                                    <span class="status-pill yeu-cau-status @item.TrangThaiCssClass">
+                                        @item.TrangThaiHienThi
+                                    </span>
+                                </td>
+                                <td>
                                     <a class="master-data-name master-data-name-link"
                                        asp-action="Edit"
                                        asp-route-id="@item.Id"
@@ -273,16 +288,6 @@
                                     </a>
                                     <div class="yeu-cau-secondary-text">@(string.IsNullOrWhiteSpace(item.GhiChu) ? "-" : item.GhiChu)</div>
                                 </td>
-                                <td>
-                                    <div class="master-data-name">@item.TenKhachHangDisplay</div>
-                                    <div>@item.DiaChiDisplay</div>
-                                    <div class="yeu-cau-secondary-text">
-                                        @(string.IsNullOrWhiteSpace(item.NguoiLienHe) ? "-" : item.NguoiLienHe)
-                                        ·
-                                        @(string.IsNullOrWhiteSpace(item.DienThoai) ? "-" : item.DienThoai)
-                                    </div>
-                                </td>
-                                <td>@(item.NgayYeuCau?.ToString("dd/MM/yyyy", viCulture) ?? "-")</td>
                                 <td>@(item.NgayThucHien?.ToString("dd/MM/yyyy", viCulture) ?? "-")</td>
                                 <td>@(item.NgayHetHan?.ToString("dd/MM/yyyy", viCulture) ?? "-")</td>
                                 <td class="yeu-cau-assignee-cell">
@@ -294,11 +299,6 @@
                                     {
                                         @Html.Raw(item.NhanVienThucHien)
                                     }
-                                </td>
-                                <td>
-                                    <span class="status-pill yeu-cau-status @item.TrangThaiCssClass">
-                                        @item.TrangThaiHienThi
-                                    </span>
                                 </td>
                                 <td>
                                     @if (item.HasCustomerRating)

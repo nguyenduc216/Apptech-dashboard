@@ -15,6 +15,7 @@ public class HomeController(
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService,
     IChamCongService chamCongService,
+    IYeuCauService yeuCauService,
     INhanVienService nhanVienService,
     IWebHostEnvironment webHostEnvironment,
     ICommonAuditService commonAuditService) : Controller
@@ -33,6 +34,7 @@ public class HomeController(
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
     private readonly IChamCongService _chamCongService = chamCongService;
+    private readonly IYeuCauService _yeuCauService = yeuCauService;
     private readonly INhanVienService _nhanVienService = nhanVienService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
     private readonly ICommonAuditService _commonAuditService = commonAuditService;
@@ -98,6 +100,71 @@ public class HomeController(
                 .OrderBy(item => item.ThoiDiem ?? DateTime.MaxValue)
                 .ThenBy(item => item.Id)
                 .Select(item => BuildChamCongHistoryJson(item, canAdminManageAttendance))
+        });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> CheckinCongTrinhRequests(int? employeeId)
+    {
+        var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
+        var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(employeeId, currentEmployeeId, HttpContext.RequestAborted);
+        if (targetEmployeeId <= 0)
+        {
+            return Json(new
+            {
+                succeeded = false,
+                message = "Tài khoản chưa liên kết nhân viên nên không thể tải phiếu yêu cầu."
+            });
+        }
+
+        var employeeOptions = await _nhanVienService.GetChamCongEmployeeOptionsAsync(HttpContext.RequestAborted);
+        var employeeName = employeeOptions.FirstOrDefault(item => item.Id == targetEmployeeId)?.HoTen
+            ?? (targetEmployeeId == currentEmployeeId ? User.FindFirstValue("display_name") : null)
+            ?? $"Nhân viên #{targetEmployeeId}";
+
+        var result = await _yeuCauService.GetPagedAsync(
+            keyword: null,
+            statusFilter: null,
+            requestDateFrom: null,
+            requestDateTo: null,
+            executionDateFrom: null,
+            executionDateTo: null,
+            assigneeKeyword: null,
+            workStatusFilter: YeuCauCongViecTrangThaiFilter.TatCa,
+            hasRating: null,
+            ratingScore: null,
+            zaloConnected: null,
+            assignedEmployeeId: targetEmployeeId,
+            page: 1,
+            pageSize: 100,
+            cancellationToken: HttpContext.RequestAborted);
+
+        return Json(new
+        {
+            succeeded = true,
+            employeeId = targetEmployeeId,
+            employeeName,
+            totalCount = result.TotalCount,
+            items = result.Items.Select(item => new
+            {
+                id = item.Id,
+                maYeuCau = item.MaYeuCau,
+                tenKhachHang = item.TenKhachHangDisplay,
+                diaChi = item.DiaChiDisplay,
+                nguoiLienHe = item.NguoiLienHe,
+                dienThoai = item.DienThoai,
+                trangThai = item.TrangThaiHienThi,
+                trangThaiCssClass = item.TrangThaiCssClass,
+                ngayYeuCau = item.NgayYeuCau?.ToString("dd/MM/yyyy"),
+                ngayThucHien = item.NgayThucHien?.ToString("dd/MM/yyyy"),
+                loaiCongViec = item.TenDanhMucDichVu,
+                noiDungCongViec = item.GhiChu,
+                nguoiPhuTrach = item.NhanVienThucHien,
+                tiLeHoanThanh = item.TiLeHoanThanh,
+                latAddress = item.LatAddress,
+                longAddress = item.LongAddress,
+                detailUrl = Url.Action("Edit", "YeuCau", new { id = item.Id, activeTab = "checkin" })
+            })
         });
     }
 

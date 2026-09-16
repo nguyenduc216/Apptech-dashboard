@@ -72,7 +72,7 @@ public class YeuCauController(
     }
 
     [HttpGet]
-    public async Task<IActionResult> Edit(int id, string? keyword, string? statusFilter, string? workStatusFilter, int page = 1)
+    public async Task<IActionResult> Edit(int id, string? keyword, string? statusFilter, string? workStatusFilter, string? activeTab, int page = 1)
     {
         var item = await _yeuCauService.GetByIdAsync(id, HttpContext.RequestAborted);
         if (item is null)
@@ -106,7 +106,7 @@ public class YeuCauController(
             StatusFilter = statusFilter,
             WorkStatusFilter = workStatusFilter,
             Page = Math.Max(page, 1),
-            ActiveTab = "thong-tin"
+            ActiveTab = string.IsNullOrWhiteSpace(activeTab) ? "thong-tin" : activeTab.Trim()
         };
 
         return View("Detail", await BuildDetailModelAsync(form, item.IDDiaDiem, HttpContext.RequestAborted));
