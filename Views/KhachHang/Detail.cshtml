@@ -1308,6 +1308,18 @@
                 updateEditorFullscreenStatus("Đã xóa ghim. Bấm lên bản đồ để đặt lại vị trí.");
             };
 
+            const refreshEditorMapSize = () => {
+                if (!editorMap) {
+                    return;
+                }
+
+                [80, 220, 520].forEach((delay) => {
+                    window.setTimeout(() => {
+                        editorMap.invalidateSize();
+                    }, delay);
+                });
+            };
+
             const ensureEditorMap = () => {
                 if (!(window.L && typeof window.L.map === "function")) {
                     setLocationStatus("Không tải được thư viện bản đồ. Popup chỉnh sửa vẫn mở để bạn cập nhật thông tin, nhưng không thể chỉnh ghim map.", "error");
@@ -1942,6 +1954,7 @@
                         clearEditorPoint();
                         editorMap.setView(defaultCenter, defaultZoom);
                     }
+                    refreshEditorMapSize();
                 }
 
                 updateEditorHint("Bấm lên bản đồ để đặt ghim hoặc gõ địa chỉ để tìm nhanh.");

@@ -7780,6 +7780,52 @@ body.report-fullscreen-open {
     z-index: 0 !important;
 }
 
+.khach-hang-location-map .leaflet-tile,
+.khach-hang-location-map .leaflet-image-layer,
+.khach-hang-location-map-preview-canvas .leaflet-tile,
+.khach-hang-location-map-preview-canvas .leaflet-image-layer,
+.khach-hang-location-viewer-map .leaflet-tile,
+.khach-hang-location-viewer-map .leaflet-image-layer {
+    max-width: none !important;
+    max-height: none !important;
+}
+
+.khach-hang-location-map .leaflet-tile-pane,
+.khach-hang-location-map-preview-canvas .leaflet-tile-pane,
+.khach-hang-location-viewer-map .leaflet-tile-pane {
+    z-index: 200 !important;
+}
+
+.khach-hang-location-map .leaflet-overlay-pane,
+.khach-hang-location-map-preview-canvas .leaflet-overlay-pane,
+.khach-hang-location-viewer-map .leaflet-overlay-pane {
+    z-index: 400 !important;
+}
+
+.khach-hang-location-map .leaflet-shadow-pane,
+.khach-hang-location-map-preview-canvas .leaflet-shadow-pane,
+.khach-hang-location-viewer-map .leaflet-shadow-pane {
+    z-index: 500 !important;
+}
+
+.khach-hang-location-map .leaflet-marker-pane,
+.khach-hang-location-map-preview-canvas .leaflet-marker-pane,
+.khach-hang-location-viewer-map .leaflet-marker-pane {
+    z-index: 600 !important;
+}
+
+.khach-hang-location-map .leaflet-tooltip-pane,
+.khach-hang-location-map-preview-canvas .leaflet-tooltip-pane,
+.khach-hang-location-viewer-map .leaflet-tooltip-pane {
+    z-index: 650 !important;
+}
+
+.khach-hang-location-map .leaflet-popup-pane,
+.khach-hang-location-map-preview-canvas .leaflet-popup-pane,
+.khach-hang-location-viewer-map .leaflet-popup-pane {
+    z-index: 700 !important;
+}
+
 .khach-hang-detail-page {
     display: grid;
     gap: 20px;
