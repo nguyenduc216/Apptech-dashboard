@@ -6,3 +6,4 @@ publish/
 *.user
 *.suo
 artifacts/publish/
+App_Data/DataProtectionKeys/

@@ -455,30 +455,38 @@ public sealed class YeuCauService(
                 WHERE
                     EXISTS (
                         SELECT 1
-                        FROM [{WorkTableName}] AS assignedWork
-                        INNER JOIN [{AssignmentTableName}] AS assignedEmployee ON assignedEmployee.IDYeuCauCongViec = assignedWork.ID
-                        WHERE assignedWork.IDYeuCau = yc.ID
-                          AND assignedEmployee.IDNhanVien = @EmployeeId
+                        FROM [{WorkTableName}] AS pendingWork
+                        WHERE pendingWork.IDYeuCau = yc.ID
+                          AND {BuildWorkStatusExpression("pendingWork")} <> @CompletedWorkStatusFilter
                     )
-                    OR (
-                        @EmployeeName IS NOT NULL
-                        AND (
-                            yc.NhanVienThucHien COLLATE {SearchCollation} LIKE @EmployeeNameLike
-                            OR {BuildSearchExpression("yc.NhanVienThucHien")} LIKE @EmployeeNameNoAccentLike
-                            OR EXISTS (
-                                SELECT 1
-                                FROM [{WorkTableName}] AS nameWork
-                                INNER JOIN [{AssignmentTableName}] AS nameAssign ON nameAssign.IDYeuCauCongViec = nameWork.ID
-                                LEFT JOIN [{EmployeeTableName}] AS nameEmployee ON nameEmployee.ID = nameAssign.IDNhanVien
-                                WHERE nameWork.IDYeuCau = yc.ID
-                                  AND (
-                                    LTRIM(RTRIM(CONCAT(ISNULL(nameEmployee.Ho, N''), N' ', ISNULL(nameEmployee.Ten, N'')))) COLLATE {SearchCollation} LIKE @EmployeeNameLike
-                                    OR {BuildSearchExpression("LTRIM(RTRIM(CONCAT(ISNULL(nameEmployee.Ho, N''), N' ', ISNULL(nameEmployee.Ten, N''))))")} LIKE @EmployeeNameNoAccentLike
-                                  )
+                    AND (
+                        EXISTS (
+                            SELECT 1
+                            FROM [{WorkTableName}] AS assignedWork
+                            INNER JOIN [{AssignmentTableName}] AS assignedEmployee ON assignedEmployee.IDYeuCauCongViec = assignedWork.ID
+                            WHERE assignedWork.IDYeuCau = yc.ID
+                              AND assignedEmployee.IDNhanVien = @EmployeeId
+                        )
+                        OR (
+                            @EmployeeName IS NOT NULL
+                            AND (
+                                yc.NhanVienThucHien COLLATE {SearchCollation} LIKE @EmployeeNameLike
+                                OR {BuildSearchExpression("yc.NhanVienThucHien")} LIKE @EmployeeNameNoAccentLike
+                                OR EXISTS (
+                                    SELECT 1
+                                    FROM [{WorkTableName}] AS nameWork
+                                    INNER JOIN [{AssignmentTableName}] AS nameAssign ON nameAssign.IDYeuCauCongViec = nameWork.ID
+                                    LEFT JOIN [{EmployeeTableName}] AS nameEmployee ON nameEmployee.ID = nameAssign.IDNhanVien
+                                    WHERE nameWork.IDYeuCau = yc.ID
+                                      AND (
+                                        LTRIM(RTRIM(CONCAT(ISNULL(nameEmployee.Ho, N''), N' ', ISNULL(nameEmployee.Ten, N'')))) COLLATE {SearchCollation} LIKE @EmployeeNameLike
+                                        OR {BuildSearchExpression("LTRIM(RTRIM(CONCAT(ISNULL(nameEmployee.Ho, N''), N' ', ISNULL(nameEmployee.Ten, N''))))")} LIKE @EmployeeNameNoAccentLike
+                                      )
+                                )
                             )
                         )
                     )
-                ORDER BY ISNULL(yc.NgayYeuCau, yc.Created_Date) DESC, yc.ID DESC
+                ORDER BY ISNULL(yc.NgayYeuCau, yc.Created_Date) ASC, yc.ID ASC
                 """;
             command.Parameters.Add(new SqlParameter("@Limit", SqlDbType.Int) { Value = limit });
             command.Parameters.Add(new SqlParameter("@EmployeeId", SqlDbType.Int) { Value = employeeId });
@@ -486,6 +494,8 @@ public sealed class YeuCauService(
             command.Parameters.Add(new SqlParameter("@EmployeeNameLike", SqlDbType.NVarChar, 250) { Value = normalizedEmployeeName is null ? DBNull.Value : $"%{normalizedEmployeeName}%" });
             command.Parameters.Add(new SqlParameter("@EmployeeNameNoAccentLike", SqlDbType.NVarChar, 250) { Value = normalizedEmployeeName is null ? DBNull.Value : $"%{NormalizeSearchPattern(normalizedEmployeeName)}%" });
             command.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
+            command.Parameters.Add(new SqlParameter("@DefaultWorkStatusFilter", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.TaoMoi });
+            command.Parameters.Add(new SqlParameter("@CompletedWorkStatusFilter", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
 
             var items = new List<YeuCauListItem>();
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);

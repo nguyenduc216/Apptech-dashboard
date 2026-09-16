@@ -27,9 +27,11 @@ builder.Services.Configure<ZaloOptions>(
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
+        options.Cookie.Name = ".ApptechDashboard.Auth";
         options.LoginPath = "/dang-nhap";
         options.LogoutPath = "/dang-xuat-he-thong";
         options.AccessDeniedPath = "/dang-nhap";
+        options.ExpireTimeSpan = TimeSpan.FromHours(12);
         options.SlidingExpiration = true;
     });
 
@@ -44,10 +46,13 @@ builder.Services.AddSession(options =>
 builder.Services.AddControllersWithViews();
 var dataProtection = builder.Services.AddDataProtection();
 var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
-if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
-{
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
-}
+var resolvedDataProtectionKeyPath = !string.IsNullOrWhiteSpace(dataProtectionKeyPath)
+    ? dataProtectionKeyPath
+    : Path.Combine(builder.Environment.ContentRootPath, "App_Data", "DataProtectionKeys");
+Directory.CreateDirectory(resolvedDataProtectionKeyPath);
+dataProtection
+    .SetApplicationName("ApptechDashboard")
+    .PersistKeysToFileSystem(new DirectoryInfo(resolvedDataProtectionKeyPath));
 builder.Services.AddHttpClient("ZaloOA");
 builder.Services.AddScoped<ISidebarMenuService, SidebarMenuService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();

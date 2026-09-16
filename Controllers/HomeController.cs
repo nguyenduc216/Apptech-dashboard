@@ -39,6 +39,7 @@ public class HomeController(
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
     private readonly ICommonAuditService _commonAuditService = commonAuditService;
 
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> Index(DateTime? chamCongDate = null, [FromQuery] int[] employeeIds = null!)
     {
         var model = DashboardViewModel.BuildSample();
@@ -47,6 +48,7 @@ public class HomeController(
     }
 
     [HttpGet]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> ChamCongHistory(DateTime? date, [FromQuery] int[] employeeIds = null!)
     {
         var employeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
@@ -104,6 +106,7 @@ public class HomeController(
     }
 
     [HttpGet]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> CheckinCongTrinhRequests(int? employeeId)
     {
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);

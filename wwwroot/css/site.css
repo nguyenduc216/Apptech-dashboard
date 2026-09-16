@@ -347,11 +347,15 @@
 }
 
 .construction-map-canvas {
-    min-height: min(68dvh, 620px);
+    display: block;
+    width: 100%;
+    height: min(68dvh, 620px);
+    min-height: 420px;
 }
 
 .construction-map-canvas.leaflet-container {
     z-index: 0;
+    overflow: hidden !important;
 }
 
 @media (min-width: 768px) {
@@ -1990,6 +1994,7 @@ body.menu-open {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     align-items: center;
+    width: 100%;
 }
 
 .cham-cong-actions .primary-button,
@@ -2001,6 +2006,12 @@ body.menu-open {
 }
 
 .purchase-attendance-button {
+    min-height: 48px;
+    min-width: 0;
+    gap: 8px;
+}
+
+.construction-checkin-button {
     min-height: 48px;
     min-width: 0;
     gap: 8px;
@@ -12296,7 +12307,7 @@ body.report-fullscreen-open {
     justify-content: center !important;
 }
 
-@media (max-width: 520px), (max-height: 640px) {
+@media (max-width: 520px) {
     .cham-cong-actions {
         grid-template-columns: 1fr;
     }

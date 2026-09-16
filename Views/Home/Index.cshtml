@@ -319,7 +319,7 @@
                         @(chamCong.OpenCheckin is null && chamCong.CanCheckin ? null : "hidden")>
                     <span class="button-content">
                         <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
-                        <span>Checkin</span>
+                        <span>Apptech</span>
                     </span>
                 </button>
                 <button type="button"
@@ -328,7 +328,7 @@
                         @(chamCong.OpenCheckin is not null ? null : "hidden")>
                     <span class="button-content">
                         <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-                        <span>Checkout</span>
+                        <span>Apptech</span>
                     </span>
                 </button>
                 <button type="button"
@@ -336,21 +336,21 @@
                         data-purchase-checkin
                         @(chamCong.OpenPurchaseCheckin is null && (chamCong.CurrentEmployeeId.HasValue || chamCong.CanSelectEmployees) ? null : "hidden")>
                     <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                    <span>Đi mua hàng</span>
+                    <span>Mua hàng</span>
                 </button>
                 <button type="button"
                         class="secondary-button construction-checkin-button"
                         data-construction-checkin-open
                         @((chamCong.CurrentEmployeeId.HasValue || chamCong.CanSelectEmployees) ? null : "hidden")>
                     <i class="fa-solid fa-helmet-safety" aria-hidden="true"></i>
-                    <span>Checkin công trình</span>
+                    <span>Công trình</span>
                 </button>
                 <button type="button"
                         class="secondary-button purchase-attendance-button is-active"
                         data-purchase-checkout
                         @(chamCong.OpenPurchaseCheckin is not null ? null : "hidden")>
                     <i class="fa-solid fa-cart-flatbed" aria-hidden="true"></i>
-                    <span>Checkout mua hàng</span>
+                    <span>Mua hàng</span>
                 </button>
             </div>
 
@@ -2309,7 +2309,6 @@
                             </div>
                             <div class="construction-request-card__footer-row">
                                 <span><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> ${escapeHtml(item.tiLeHoanThanh ?? 0)}%</span>
-                                <span class="construction-request-card__assignee"><i class="fa-solid fa-user-check" aria-hidden="true"></i> ${escapeHtml(item.nguoiPhuTrach || "Chưa phân công")}</span>
                             </div>
                         </div>
                     </article>`;
@@ -2486,6 +2485,23 @@
                 return true;
             };
 
+            const refreshConstructionMapSize = () => {
+                if (!constructionMap) {
+                    return;
+                }
+
+                [40, 140, 320, 700].forEach((delay) => {
+                    window.setTimeout(() => {
+                        constructionMap.invalidateSize(true);
+                        if (activeConstructionLocation) {
+                            constructionMap.setView([activeConstructionLocation.lat, activeConstructionLocation.lng], Math.max(constructionMap.getZoom(), 16), {
+                                animate: false
+                            });
+                        }
+                    }, delay);
+                });
+            };
+
             const syncConstructionMapExternalLink = () => {
                 if (!(constructionMapExternalLink instanceof HTMLAnchorElement) || !activeConstructionLocation) {
                     return;
@@ -2537,7 +2553,7 @@
                     }
                     constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
                     constructionMap.setView(point, 16);
-                    window.setTimeout(() => constructionMap.invalidateSize(), 120);
+                    refreshConstructionMapSize();
                 });
             };
 
