@@ -163,6 +163,38 @@ public class HomeController(
             pageSize: 100,
             cancellationToken: HttpContext.RequestAborted);
 
+        var itemsById = result.Items.ToDictionary(item => item.Id);
+        if (!string.IsNullOrWhiteSpace(employeeName) &&
+            !employeeName.StartsWith("NhÃ¢n viÃªn #", StringComparison.OrdinalIgnoreCase))
+        {
+            var legacyAssigneeResult = await _yeuCauService.GetPagedAsync(
+                keyword: null,
+                statusFilter: null,
+                requestDateFrom: null,
+                requestDateTo: null,
+                executionDateFrom: null,
+                executionDateTo: null,
+                assigneeKeyword: employeeName,
+                workStatusFilter: YeuCauCongViecTrangThaiFilter.TatCa,
+                hasRating: null,
+                ratingScore: null,
+                zaloConnected: null,
+                assignedEmployeeId: null,
+                page: 1,
+                pageSize: 100,
+                cancellationToken: HttpContext.RequestAborted);
+
+            foreach (var item in legacyAssigneeResult.Items)
+            {
+                itemsById.TryAdd(item.Id, item);
+            }
+        }
+
+        var constructionItems = itemsById.Values
+            .OrderByDescending(item => item.NgayYeuCau ?? item.CreatedDate ?? DateTime.MinValue)
+            .ThenByDescending(item => item.Id)
+            .ToList();
+
         return Json(new
         {
             succeeded = true,
@@ -176,8 +208,8 @@ public class HomeController(
                     hoTen = employee.HoTen
                 })
                 : [],
-            totalCount = result.TotalCount,
-            items = result.Items.Select(item => new
+            totalCount = constructionItems.Count,
+            items = constructionItems.Select(item => new
             {
                 id = item.Id,
                 maYeuCau = item.MaYeuCau,

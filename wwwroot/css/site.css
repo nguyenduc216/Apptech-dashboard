@@ -1964,22 +1964,23 @@ body.menu-open {
 }
 
 .cham-cong-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
     align-items: center;
-    flex-wrap: wrap;
 }
 
-.cham-cong-actions .primary-button {
+.cham-cong-actions .primary-button,
+.cham-cong-actions .secondary-button {
     min-height: 48px;
-    min-width: 220px;
-    flex: 1 1 220px;
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
 }
 
 .purchase-attendance-button {
     min-height: 48px;
-    min-width: 190px;
-    flex: 1 1 190px;
+    min-width: 0;
     gap: 8px;
 }
 
@@ -12274,6 +12275,10 @@ body.report-fullscreen-open {
 }
 
 @media (max-width: 520px), (max-height: 640px) {
+    .cham-cong-actions {
+        grid-template-columns: 1fr;
+    }
+
     [data-cham-cong-camera-shell] .yeu-cau-checkin-body {
         gap: 10px !important;
     }
