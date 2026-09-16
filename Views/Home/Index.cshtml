@@ -1177,9 +1177,9 @@
             };
 
             const createAttendanceTileLayer = () => {
-                const tileLayer = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                const tileLayer = window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
                     maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap contributors"
+                    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
                 });
                 tileLayer.on("tileerror", (event) => {
                     const map = event?.target?._map;
@@ -2340,7 +2340,7 @@
                     boxZoom: false,
                     tap: false
                 });
-                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
                     maxZoom: 19
                 }).addTo(map);
                 window.L.circleMarker([lat, lng], {
@@ -2479,9 +2479,9 @@
                     zoomControl: true,
                     attributionControl: true
                 });
-                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
                     maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap"
+                    attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
                 }).addTo(constructionMap);
                 return true;
             };
