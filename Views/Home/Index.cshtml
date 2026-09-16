@@ -6,6 +6,17 @@
     var isolateChamCongDashboard = true;
     var allChamCongEmployeesSelected = chamCong.EmployeeOptions.Count > 0 &&
         chamCong.SelectedEmployeeIds.Count >= chamCong.EmployeeOptions.Count;
+    var currentChamCongEmployee = chamCong.CurrentEmployeeId.HasValue
+        ? chamCong.EmployeeOptions.FirstOrDefault(employee => employee.Id == chamCong.CurrentEmployeeId.Value)
+        : null;
+    var constructionInitialEmployeeId = chamCong.CanSelectEmployees
+        ? (chamCong.CurrentEmployeeId.HasValue && chamCong.EmployeeOptions.Any(employee => employee.Id == chamCong.CurrentEmployeeId.Value)
+            ? chamCong.CurrentEmployeeId.Value
+            : (chamCong.SelectedEmployeeIds.Count == 1 ? chamCong.SelectedEmployeeIds[0] : chamCong.EmployeeOptions.FirstOrDefault()?.Id ?? 0))
+        : chamCong.CurrentEmployeeId.GetValueOrDefault();
+    var constructionInitialEmployeeName = chamCong.CanSelectEmployees
+        ? (chamCong.EmployeeOptions.FirstOrDefault(employee => employee.Id == constructionInitialEmployeeId)?.HoTen ?? "Chọn nhân viên")
+        : (currentChamCongEmployee?.HoTen ?? (chamCong.CurrentEmployeeId.HasValue ? $"Nhân viên #{chamCong.CurrentEmployeeId.Value}" : "Chưa liên kết nhân viên"));
 
     string GetPriorityClass(string priority) => priority switch
     {
@@ -66,6 +77,7 @@
          data-distance-limit="@(chamCong.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? "")"
          data-current-employee-id="@(chamCong.CurrentEmployeeId?.ToString(invariantCulture) ?? "")"
          data-action-employee-id="@(chamCong.SelectedEmployeeIds.FirstOrDefault(chamCong.CurrentEmployeeId ?? 0).ToString(invariantCulture))"
+         data-construction-employee-id="@(constructionInitialEmployeeId > 0 ? constructionInitialEmployeeId.ToString(invariantCulture) : "")"
          data-can-select-employees="@chamCong.CanSelectEmployees.ToString().ToLowerInvariant()"
          data-can-admin-manage-attendance="@chamCong.CanAdminManageAttendance.ToString().ToLowerInvariant()"
          data-today-date="@DateTime.Today.ToString("yyyy-MM-dd")"
@@ -671,9 +683,30 @@
             <div class="crud-modal-header">
                 <div class="crud-modal-heading">
                     <h2 id="constructionCheckinTitle">Checkin công trình</h2>
+                    <div class="construction-employee-control">
+                        @if (chamCong.CanSelectEmployees)
+                        {
+                            <label class="login-input-shell select-shell construction-employee-select-shell" for="constructionCheckinEmployee">
+                                <i class="fa-solid fa-user-check" aria-hidden="true"></i>
+                                <select id="constructionCheckinEmployee" data-construction-employee-select>
+                                    @foreach (var employee in chamCong.EmployeeOptions)
+                                    {
+                                        <option value="@employee.Id" selected="@(employee.Id == constructionInitialEmployeeId ? "selected" : null)">
+                                            @employee.HoTen
+                                        </option>
+                                    }
+                                </select>
+                                <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                            </label>
+                        }
+                        else
+                        {
+                            <span class="construction-employee-current" data-construction-checkin-employee>@constructionInitialEmployeeName</span>
+                        }
+                    </div>
                     <p class="crud-modal-subtitle">
                         Danh sách phiếu yêu cầu của nhân viên
-                        <strong data-construction-checkin-employee>Nhân viên</strong>
+                        <strong data-construction-checkin-employee-name>@constructionInitialEmployeeName</strong>
                     </p>
                 </div>
                 <button type="button" class="crud-modal-close" data-construction-checkin-close aria-label="Đóng Checkin công trình">
@@ -970,6 +1003,8 @@
             const constructionCloseButtons = root.querySelectorAll("[data-construction-checkin-close]");
             const constructionRefreshButton = root.querySelector("[data-construction-checkin-refresh]");
             const constructionEmployee = root.querySelector("[data-construction-checkin-employee]");
+            const constructionEmployeeName = root.querySelector("[data-construction-checkin-employee-name]");
+            const constructionEmployeeSelect = root.querySelector("[data-construction-employee-select]");
             const constructionStatus = root.querySelector("[data-construction-checkin-status]");
             const constructionList = root.querySelector("[data-construction-checkin-list]");
             const constructionMapShell = root.querySelector("[data-construction-map-shell]");
@@ -2221,13 +2256,6 @@
                 const hasLocation = lat !== null && lng !== null;
                 const statusClass = item.trangThaiCssClass || getConstructionStatusClass(item.trangThai);
                 const phoneHref = normalizePhoneHref(item.dienThoai);
-                const tileZoom = 16;
-                const tileXRaw = hasLocation ? long2tileRaw(lng, tileZoom) : 0;
-                const tileYRaw = hasLocation ? lat2tileRaw(lat, tileZoom) : 0;
-                const tileX = Math.floor(tileXRaw);
-                const tileY = Math.floor(tileYRaw);
-                const markerLeft = Math.round((tileXRaw - tileX) * 100);
-                const markerTop = Math.round((tileYRaw - tileY) * 100);
                 const phoneHtml = phoneHref
                     ? `<a class="construction-request-card__phone" href="tel:${escapeHtml(phoneHref)}" aria-label="Gọi ${escapeHtml(item.dienThoai)}">${escapeHtml(item.dienThoai)}</a>`
                     : `<span class="construction-request-card__muted">Chưa có số điện thoại</span>`;
@@ -2242,8 +2270,7 @@
                                data-lat="${lat}"
                                data-lng="${lng}"
                                aria-label="Mở bản đồ ${escapeHtml(item.tenKhachHang || item.maYeuCau || "công trình")}">
-                            <img src="https://tile.openstreetmap.org/${tileZoom}/${tileX}/${tileY}.png" alt="" loading="lazy" />
-                            <span class="construction-request-card__map-pin" style="left:${markerLeft}%;top:${markerTop}%;" aria-hidden="true"></span>
+                            <span class="construction-request-card__map-canvas" data-construction-map-thumb data-lat="${lat}" data-lng="${lng}"></span>
                             <span class="construction-request-card__map-cta"><i class="fa-solid fa-location-arrow" aria-hidden="true"></i><span>Bản đồ</span></span>
                        </button>`
                     : `<button type="button" class="construction-request-card__map-thumb is-empty" disabled aria-label="Phiếu chưa có vị trí">
@@ -2288,11 +2315,79 @@
                     </article>`;
             };
 
-            const lat2tileRaw = (lat, zoom) => (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * (1 << zoom);
-            const long2tileRaw = (lng, zoom) => (lng + 180) / 360 * (1 << zoom);
+            const initConstructionMapThumb = (element) => {
+                if (!(element instanceof HTMLElement) ||
+                    element.dataset.mapReady === "true" ||
+                    !(window.L && typeof window.L.map === "function")) {
+                    return;
+                }
+                const lat = parseConstructionCoordinate(element.dataset.lat);
+                const lng = parseConstructionCoordinate(element.dataset.lng);
+                if (lat === null || lng === null) {
+                    return;
+                }
+                element.dataset.mapReady = "true";
+                const map = window.L.map(element, {
+                    center: [lat, lng],
+                    zoom: 16,
+                    dragging: false,
+                    zoomControl: false,
+                    attributionControl: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    touchZoom: false,
+                    keyboard: false,
+                    boxZoom: false,
+                    tap: false
+                });
+                window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                    maxZoom: 19
+                }).addTo(map);
+                window.L.circleMarker([lat, lng], {
+                    radius: 7,
+                    color: "#fff",
+                    weight: 3,
+                    fillColor: "#ef4444",
+                    fillOpacity: 1
+                }).addTo(map);
+                window.setTimeout(() => map.invalidateSize(), 80);
+            };
+
+            const syncConstructionMapThumbs = () => {
+                if (!(constructionList instanceof HTMLElement)) {
+                    return;
+                }
+                const thumbnails = Array.from(constructionList.querySelectorAll("[data-construction-map-thumb]"));
+                if ("IntersectionObserver" in window) {
+                    const observer = new IntersectionObserver((entries, currentObserver) => {
+                        entries.forEach((entry) => {
+                            if (!entry.isIntersecting) {
+                                return;
+                            }
+                            initConstructionMapThumb(entry.target);
+                            currentObserver.unobserve(entry.target);
+                        });
+                    }, {
+                        root: constructionList,
+                        rootMargin: "120px"
+                    });
+                    thumbnails.forEach((thumbnail) => observer.observe(thumbnail));
+                    return;
+                }
+                thumbnails.forEach(initConstructionMapThumb);
+            };
+
+            const getConstructionSelectedEmployeeId = () => {
+                if (constructionEmployeeSelect instanceof HTMLSelectElement && constructionEmployeeSelect.value) {
+                    const selected = Number.parseInt(constructionEmployeeSelect.value, 10);
+                    return Number.isFinite(selected) && selected > 0 ? selected : null;
+                }
+                const configured = Number.parseInt(root.dataset.constructionEmployeeId || "", 10);
+                return Number.isFinite(configured) && configured > 0 ? configured : null;
+            };
 
             const loadConstructionRequests = async () => {
-                const selectedEmployeeId = getSelectedActionEmployeeId();
+                const selectedEmployeeId = getConstructionSelectedEmployeeId();
                 if (!selectedEmployeeId) {
                     setConstructionStatus("Chưa xác định được nhân viên để tải phiếu yêu cầu.", "error");
                     if (constructionList instanceof HTMLElement) {
@@ -2321,12 +2416,17 @@
                     if (constructionEmployee instanceof HTMLElement) {
                         constructionEmployee.textContent = payload.employeeName || `Nhân viên #${selectedEmployeeId}`;
                     }
+                    if (constructionEmployeeName instanceof HTMLElement) {
+                        constructionEmployeeName.textContent = payload.employeeName || `Nhân viên #${selectedEmployeeId}`;
+                    }
+                    root.dataset.constructionEmployeeId = `${payload.employeeId || selectedEmployeeId}`;
 
                     const items = Array.isArray(payload.items) ? payload.items : [];
                     if (constructionList instanceof HTMLElement) {
                         constructionList.innerHTML = items.length > 0
                             ? items.map(renderConstructionCard).join("")
                             : `<div class="construction-checkin-empty">Không có phiếu yêu cầu phù hợp.</div>`;
+                        syncConstructionMapThumbs();
                     }
                     setConstructionStatus(items.length > 0 ? `Đã tải ${items.length} phiếu yêu cầu.` : "Không có phiếu yêu cầu phù hợp.", items.length > 0 ? "success" : "info");
                 } catch (error) {
@@ -3029,6 +3129,7 @@
             purchaseCheckoutButton?.addEventListener("click", () => void openCameraModal("purchase-checkout"));
             constructionOpenButton?.addEventListener("click", openConstructionModal);
             constructionRefreshButton?.addEventListener("click", () => void loadConstructionRequests());
+            constructionEmployeeSelect?.addEventListener("change", () => void loadConstructionRequests());
             constructionCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionModal));
             constructionMapCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionMap));
             constructionMapRouteButton?.addEventListener("click", () => void loadConstructionRoute());

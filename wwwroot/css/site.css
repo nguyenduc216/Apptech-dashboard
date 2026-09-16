@@ -55,6 +55,22 @@
     background: #f8fbfd;
 }
 
+.construction-employee-control {
+    margin-top: 10px;
+}
+
+.construction-employee-select-shell {
+    width: min(100%, 320px);
+}
+
+.construction-employee-current {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    font-weight: 800;
+    color: #123b70;
+}
+
 .construction-checkin-status {
     margin: 0;
     flex: 1 1 auto;
@@ -210,6 +226,32 @@
     height: 100%;
     display: block;
     object-fit: cover;
+}
+
+.construction-request-card__map-canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+}
+
+.construction-request-card__map-canvas.leaflet-container {
+    z-index: 0;
+}
+
+.construction-request-card__map-canvas .leaflet-pane,
+.construction-request-card__map-canvas .leaflet-tile,
+.construction-request-card__map-canvas .leaflet-marker-icon,
+.construction-request-card__map-canvas .leaflet-marker-shadow,
+.construction-request-card__map-canvas .leaflet-tile-container,
+.construction-request-card__map-canvas .leaflet-pane > svg,
+.construction-request-card__map-canvas .leaflet-pane > canvas,
+.construction-request-card__map-canvas .leaflet-layer {
+    position: absolute;
+}
+
+.construction-request-card__map-canvas .leaflet-control-container {
+    display: none;
 }
 
 .construction-request-card__map-pin {

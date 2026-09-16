@@ -91,6 +91,7 @@ using (var scope = app.Services.CreateScope())
     var zaloSettingsService = scope.ServiceProvider.GetRequiredService<IZaloSettingsService>();
     await zaloSettingsService.InitializeAsync();
     var permissionCatalogService = scope.ServiceProvider.GetRequiredService<IPermissionCatalogService>();
+    await permissionCatalogService.EnsureChamCongSelectEmployeePermissionsAsync();
     await permissionCatalogService.EnsureYeuCauWorkEmployeePermissionsAsync();
     await permissionCatalogService.EnsureYeuCauCheckinDistancePermissionsAsync();
     await permissionCatalogService.EnsureYeuCauCheckinProxyPermissionsAsync();

@@ -107,18 +107,42 @@ public class HomeController(
     public async Task<IActionResult> CheckinCongTrinhRequests(int? employeeId)
     {
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
-        var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(employeeId, currentEmployeeId, HttpContext.RequestAborted);
+        var canSelectEmployees = await CanSelectChamCongEmployeesAsync(HttpContext.RequestAborted);
+        if (!currentEmployeeId.HasValue && !canSelectEmployees)
+        {
+            return Json(new
+            {
+                succeeded = false,
+                message = "Tài khoản chưa liên kết nhân viên nên không thể xem phiếu yêu cầu."
+            });
+        }
+
+        if (!canSelectEmployees &&
+            employeeId.HasValue &&
+            employeeId.Value > 0 &&
+            employeeId.Value != currentEmployeeId.GetValueOrDefault())
+        {
+            return Forbid();
+        }
+
+        var selectableEmployeeOptions = canSelectEmployees
+            ? await _nhanVienService.GetChamCongEmployeeOptionsAsync(HttpContext.RequestAborted)
+            : [];
+        var selectableEmployeeIds = selectableEmployeeOptions.Select(employee => employee.Id).ToHashSet();
+        var targetEmployeeId = canSelectEmployees
+            ? ResolveConstructionCheckinEmployeeId(employeeId, currentEmployeeId, selectableEmployeeIds)
+            : currentEmployeeId.GetValueOrDefault();
+
         if (targetEmployeeId <= 0)
         {
             return Json(new
             {
                 succeeded = false,
-                message = "Tài khoản chưa liên kết nhân viên nên không thể tải phiếu yêu cầu."
+                message = "Tài khoản chưa liên kết nhân viên nên không thể xem phiếu yêu cầu."
             });
         }
 
-        var employeeOptions = await _nhanVienService.GetChamCongEmployeeOptionsAsync(HttpContext.RequestAborted);
-        var employeeName = employeeOptions.FirstOrDefault(item => item.Id == targetEmployeeId)?.HoTen
+        var employeeName = selectableEmployeeOptions.FirstOrDefault(item => item.Id == targetEmployeeId)?.HoTen
             ?? (targetEmployeeId == currentEmployeeId ? User.FindFirstValue("display_name") : null)
             ?? $"Nhân viên #{targetEmployeeId}";
 
@@ -144,6 +168,14 @@ public class HomeController(
             succeeded = true,
             employeeId = targetEmployeeId,
             employeeName,
+            canSelectEmployees,
+            employeeOptions = canSelectEmployees
+                ? selectableEmployeeOptions.Select(employee => new
+                {
+                    id = employee.Id,
+                    hoTen = employee.HoTen
+                })
+                : [],
             totalCount = result.TotalCount,
             items = result.Items.Select(item => new
             {
@@ -155,8 +187,8 @@ public class HomeController(
                 dienThoai = item.DienThoai,
                 trangThai = item.TrangThaiHienThi,
                 trangThaiCssClass = item.TrangThaiCssClass,
-                ngayYeuCau = item.NgayYeuCau?.ToString("dd/MM/yyyy"),
-                ngayThucHien = item.NgayThucHien?.ToString("dd/MM/yyyy"),
+                ngayYeuCau = FormatDateTimeForConstructionCheckin(item.NgayYeuCau),
+                ngayThucHien = FormatDateTimeForConstructionCheckin(item.NgayThucHien),
                 loaiCongViec = item.TenDanhMucDichVu,
                 noiDungCongViec = item.GhiChu,
                 nguoiPhuTrach = item.NhanVienThucHien,
@@ -843,6 +875,40 @@ public class HomeController(
         };
     }
 
+    private static int ResolveConstructionCheckinEmployeeId(
+        int? requestedEmployeeId,
+        int? currentEmployeeId,
+        IReadOnlySet<int> selectableEmployeeIds)
+    {
+        if (requestedEmployeeId.HasValue &&
+            requestedEmployeeId.Value > 0 &&
+            selectableEmployeeIds.Contains(requestedEmployeeId.Value))
+        {
+            return requestedEmployeeId.Value;
+        }
+
+        if (currentEmployeeId.HasValue &&
+            currentEmployeeId.Value > 0 &&
+            (selectableEmployeeIds.Count == 0 || selectableEmployeeIds.Contains(currentEmployeeId.Value)))
+        {
+            return currentEmployeeId.Value;
+        }
+
+        return selectableEmployeeIds.OrderBy(id => id).FirstOrDefault();
+    }
+
+    private static string? FormatDateTimeForConstructionCheckin(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return value.Value.TimeOfDay == TimeSpan.Zero
+            ? value.Value.ToString("dd/MM/yyyy")
+            : value.Value.ToString("dd/MM/yyyy HH:mm");
+    }
+
     private IReadOnlyList<int> NormalizeSelectedEmployeeIds(
         IReadOnlyCollection<int>? selectedEmployeeIds,
         int? currentEmployeeId,
@@ -932,7 +998,10 @@ public class HomeController(
         }
 
         var permissions = await UserPermissionSession.GetOrLoadAsync(HttpContext, _userPermissionService, cancellationToken);
+        var selectEmployeeCode = NormalizePermissionCode(PermissionCatalogService.ChamCongSelectEmployeePermissionCode);
         return permissions.Any(permission =>
+            string.Equals(permission.PermissionCode, PermissionCatalogService.ChamCongSelectEmployeePermissionCode, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(NormalizePermissionCode(permission.PermissionCode), selectEmployeeCode, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(permission.PermissionCode, "Dashboard_View_CheckIn", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(permission.PermissionCode, "Dasboard_View_CheckIn", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(NormalizePermissionCode(permission.PermissionCode), "dasboardviewcheckin", StringComparison.OrdinalIgnoreCase) ||

@@ -7,6 +7,7 @@ namespace ApptechDashboard.Services;
 
 public interface IPermissionCatalogService
 {
+    Task EnsureChamCongSelectEmployeePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureYeuCauWorkEmployeePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureYeuCauCheckinDistancePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureYeuCauCheckinProxyPermissionsAsync(CancellationToken cancellationToken = default);
@@ -24,6 +25,7 @@ public sealed class PermissionCatalogService(
     public const string DeleteWorkEmployeePermissionCode = "YeuCau_WorkEmployee_Delete";
     public const string ToggleCheckinDistancePermissionCode = "YeuCau_CheckinDistance_Update";
     public const string CheckinProxyManagePermissionCode = "YeuCau_CheckinProxy_Manage";
+    public const string ChamCongSelectEmployeePermissionCode = "ChamCong_SelectEmployee";
     public const string WorkReportViewPermissionCode = "Report_Work_View";
     public const string ZaloManagementViewPermissionCode = "Zalo_Manage_View";
     public const string DanhMucDichVuViewPermissionCode = "DanhMucDichVu_View";
@@ -34,6 +36,66 @@ public sealed class PermissionCatalogService(
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly ILogger<PermissionCatalogService> _logger = logger;
+
+    public async Task EnsureChamCongSelectEmployeePermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
+                ? _connectionString
+                : _sqlOptions.BuildConnectionString();
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                DECLARE @FunctionId int;
+
+                SELECT TOP (1) @FunctionId = ID
+                FROM [TblChucNang]
+                WHERE MaChucNang IN (N'Dashboard', N'Home_Index', N'ChamCong')
+                   OR URL IN (N'/trang-chu', N'/Home', N'/')
+                   OR TenChucNang COLLATE Latin1_General_100_CI_AI LIKE N'%Chấm công%'
+                   OR TenChucNang COLLATE Latin1_General_100_CI_AI LIKE N'%Cham cong%'
+                ORDER BY
+                    CASE
+                        WHEN MaChucNang = N'Dashboard' THEN 0
+                        WHEN MaChucNang = N'ChamCong' THEN 1
+                        WHEN URL = N'/trang-chu' THEN 2
+                        ELSE 3
+                    END,
+                    ID;
+
+                IF @FunctionId IS NULL
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, TenChucNang, MieuTa, URL, ThuTuHienThi, TrangThaiSuDung)
+                    VALUES (N'Dashboard', N'Dashboard', N'Trang chủ và chấm công', N'/trang-chu', N'1', 1);
+
+                    SET @FunctionId = CONVERT(int, SCOPE_IDENTITY());
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @PermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, @PermissionName, @PermissionCode, @PermissionDescription);
+                END;
+                """;
+            command.Parameters.Add(new SqlParameter("@PermissionCode", SqlDbType.NVarChar, 250) { Value = ChamCongSelectEmployeePermissionCode });
+            command.Parameters.Add(new SqlParameter("@PermissionName", SqlDbType.NVarChar, 250) { Value = "Chọn nhân viên chấm công" });
+            command.Parameters.Add(new SqlParameter("@PermissionDescription", SqlDbType.NVarChar, 500) { Value = "Cho phép chọn nhân viên khác khi xem hoặc chấm công." });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure attendance employee selector permissions.");
+        }
+    }
 
     public async Task EnsureYeuCauWorkEmployeePermissionsAsync(CancellationToken cancellationToken = default)
     {
