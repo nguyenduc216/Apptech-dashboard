@@ -80,10 +80,13 @@
 - Test admin/delegated permission: cung di qua `CanSelectChamCongEmployeesAsync`; khong hard-code chi Admin.
 
 ## 16. Commit hash
-- Bao cao trong phan tra loi cuoi sau khi commit.
+- Code/security fix commit da push: `bf58d32ab664566db43124ac556c617d2a4b00df`.
+- Commit cu cua lan trien khai ban dau: `49e05f122160172b71b7ac1a9b3aef97e3be988f`.
+- SHA commit report metadata moi nhat duoc bao trong phan tra loi cuoi.
 
 ## 17. Deploy/publish result
-- Khong deploy/publish vi repository khong co yeu cau workflow publish trong turn nay.
+- Da push len `origin/main`.
+- Khong deploy/publish IIS vi repository khong co yeu cau workflow publish trong turn nay.
 
 ## 18. Cac van de con ton tai
 - Browser/manual QA bi chan trong moi truong nay vi Computer Use bao `Browser is not available` cho ca Chrome va in-app browser.
