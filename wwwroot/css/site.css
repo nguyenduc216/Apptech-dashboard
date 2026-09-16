@@ -45,12 +45,20 @@
     overflow: hidden;
 }
 
+.construction-checkin-shell .crud-modal-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(148px, 0.26fr) 56px;
+    align-items: start;
+    gap: 14px;
+}
+
+.construction-checkin-shell .crud-modal-heading {
+    min-width: 0;
+}
+
 .construction-checkin-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 16px;
+    display: block;
+    padding: 0 16px 12px;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
     background: #f8fbfd;
 }
@@ -73,7 +81,14 @@
 
 .construction-checkin-status {
     margin: 0;
-    flex: 1 1 auto;
+    width: 100%;
+}
+
+.construction-checkin-refresh {
+    min-height: 56px;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
 }
 
 .construction-checkin-list {
@@ -347,14 +362,21 @@
 }
 
 @media (max-width: 430px) {
-    .construction-checkin-toolbar {
-        align-items: stretch;
-        flex-direction: column;
-        padding: 10px;
+    .construction-checkin-shell .crud-modal-header {
+        grid-template-columns: minmax(0, 1fr) 48px;
+        align-items: start;
+    }
+
+    .construction-checkin-shell .crud-modal-heading {
+        grid-column: 1 / -1;
     }
 
     .construction-checkin-refresh {
-        width: 100%;
+        min-height: 48px;
+    }
+
+    .construction-checkin-toolbar {
+        padding: 10px;
     }
 
     .construction-checkin-list {

@@ -29,6 +29,12 @@ public interface IYeuCauService
 
     Task<YeuCauListItem?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<YeuCauListItem>> GetConstructionCheckinRequestsAsync(
+        int employeeId,
+        string? employeeName,
+        int limit = 100,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<YeuCauNhanVienOption>> GetNhanVienOptionsAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<YeuCauCongViecOption>> GetWorkOptionsAsync(CancellationToken cancellationToken = default);
@@ -378,6 +384,122 @@ public sealed class YeuCauService(
         {
             _logger.LogError(ex, "Failed to load TblYeuCau item {Id}.", id);
             return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<YeuCauListItem>> GetConstructionCheckinRequestsAsync(
+        int employeeId,
+        string? employeeName,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (employeeId <= 0)
+        {
+            return [];
+        }
+
+        limit = Math.Clamp(limit, 1, 200);
+        var normalizedEmployeeName = string.IsNullOrWhiteSpace(employeeName) ? null : employeeName.Trim();
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureWorkMetadataColumnsAsync(connection, cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP (@Limit)
+                    yc.ID,
+                    yc.MaYeuCau,
+                    yc.IDKhachHang,
+                    yc.NgayYeuCau,
+                    yc.IDDiaDiem,
+                    yc.IDDanhMucDichVu,
+                    dv.TenDichVu AS TenDanhMucDichVu,
+                    yc.GhiChu,
+                    yc.NhanVienThucHien,
+                    yc.TrangThaiYeuCau,
+                    yc.NgayThucHien,
+                    yc.NgayHetHan,
+                    yc.NgayHoanThanh,
+                    yc.NgayHenTiepTheo,
+                    CAST(ISNULL(yc.CheckinTheoKhoangCach, 0) AS bit) AS CheckinTheoKhoangCach,
+                    yc.Created_Date,
+                    yc.Created_By,
+                    yc.Updated_Date,
+                    yc.Updated_By,
+                    kh.TenKhachHang,
+                    dd.DiaChi,
+                    dd.NguoiLienHe,
+                    dd.DienThoai,
+                    dd.LongAddress,
+                    dd.LatAddress,
+                    ISNULL(workStats.SoCongViec, 0) AS SoCongViec,
+                    ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh,
+                    CAST(NULL AS int) AS CustomerRatingScore,
+                    CAST(NULL AS datetime2) AS CustomerRatingSubmittedAt,
+                    CAST(0 AS bit) AS HasCustomerRating,
+                    CAST(0 AS bit) AS ZaloConnected,
+                    CAST(NULL AS nvarchar(250)) AS ZaloDisplayName,
+                    CAST(NULL AS nvarchar(50)) AS ZaloPhoneNumber
+                FROM [{TableName}] AS yc
+                LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
+                LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
+                LEFT JOIN [TblDanhMucDichVu] AS dv ON dv.ID = yc.IDDanhMucDichVu
+                OUTER APPLY (
+                    SELECT
+                        COUNT(1) AS SoCongViec,
+                        SUM(CASE WHEN ycvc.TrangThaiCongViec = @CompletedWorkStatus THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
+                    FROM [{WorkTableName}] AS ycvc
+                    WHERE ycvc.IDYeuCau = yc.ID
+                ) AS workStats
+                WHERE
+                    EXISTS (
+                        SELECT 1
+                        FROM [{WorkTableName}] AS assignedWork
+                        INNER JOIN [{AssignmentTableName}] AS assignedEmployee ON assignedEmployee.IDYeuCauCongViec = assignedWork.ID
+                        WHERE assignedWork.IDYeuCau = yc.ID
+                          AND assignedEmployee.IDNhanVien = @EmployeeId
+                    )
+                    OR (
+                        @EmployeeName IS NOT NULL
+                        AND (
+                            yc.NhanVienThucHien COLLATE {SearchCollation} LIKE @EmployeeNameLike
+                            OR {BuildSearchExpression("yc.NhanVienThucHien")} LIKE @EmployeeNameNoAccentLike
+                            OR EXISTS (
+                                SELECT 1
+                                FROM [{WorkTableName}] AS nameWork
+                                INNER JOIN [{AssignmentTableName}] AS nameAssign ON nameAssign.IDYeuCauCongViec = nameWork.ID
+                                LEFT JOIN [{EmployeeTableName}] AS nameEmployee ON nameEmployee.ID = nameAssign.IDNhanVien
+                                WHERE nameWork.IDYeuCau = yc.ID
+                                  AND (
+                                    LTRIM(RTRIM(CONCAT(ISNULL(nameEmployee.Ho, N''), N' ', ISNULL(nameEmployee.Ten, N'')))) COLLATE {SearchCollation} LIKE @EmployeeNameLike
+                                    OR {BuildSearchExpression("LTRIM(RTRIM(CONCAT(ISNULL(nameEmployee.Ho, N''), N' ', ISNULL(nameEmployee.Ten, N''))))")} LIKE @EmployeeNameNoAccentLike
+                                  )
+                            )
+                        )
+                    )
+                ORDER BY ISNULL(yc.NgayYeuCau, yc.Created_Date) DESC, yc.ID DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@Limit", SqlDbType.Int) { Value = limit });
+            command.Parameters.Add(new SqlParameter("@EmployeeId", SqlDbType.Int) { Value = employeeId });
+            command.Parameters.Add(new SqlParameter("@EmployeeName", SqlDbType.NVarChar, 250) { Value = ToDbValue(normalizedEmployeeName) });
+            command.Parameters.Add(new SqlParameter("@EmployeeNameLike", SqlDbType.NVarChar, 250) { Value = normalizedEmployeeName is null ? DBNull.Value : $"%{normalizedEmployeeName}%" });
+            command.Parameters.Add(new SqlParameter("@EmployeeNameNoAccentLike", SqlDbType.NVarChar, 250) { Value = normalizedEmployeeName is null ? DBNull.Value : $"%{NormalizeSearchPattern(normalizedEmployeeName)}%" });
+            command.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
+
+            var items = new List<YeuCauListItem>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                items.Add(MapItem(reader));
+            }
+
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load construction checkin requests for employee {EmployeeId}.", employeeId);
+            return [];
         }
     }
 

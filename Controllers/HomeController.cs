@@ -146,54 +146,11 @@ public class HomeController(
             ?? (targetEmployeeId == currentEmployeeId ? User.FindFirstValue("display_name") : null)
             ?? $"Nhân viên #{targetEmployeeId}";
 
-        var result = await _yeuCauService.GetPagedAsync(
-            keyword: null,
-            statusFilter: null,
-            requestDateFrom: null,
-            requestDateTo: null,
-            executionDateFrom: null,
-            executionDateTo: null,
-            assigneeKeyword: null,
-            workStatusFilter: YeuCauCongViecTrangThaiFilter.TatCa,
-            hasRating: null,
-            ratingScore: null,
-            zaloConnected: null,
-            assignedEmployeeId: targetEmployeeId,
-            page: 1,
-            pageSize: 100,
+        var constructionItems = await _yeuCauService.GetConstructionCheckinRequestsAsync(
+            targetEmployeeId,
+            employeeName,
+            limit: 100,
             cancellationToken: HttpContext.RequestAborted);
-
-        var itemsById = result.Items.ToDictionary(item => item.Id);
-        if (!string.IsNullOrWhiteSpace(employeeName) &&
-            !employeeName.StartsWith("NhÃ¢n viÃªn #", StringComparison.OrdinalIgnoreCase))
-        {
-            var legacyAssigneeResult = await _yeuCauService.GetPagedAsync(
-                keyword: null,
-                statusFilter: null,
-                requestDateFrom: null,
-                requestDateTo: null,
-                executionDateFrom: null,
-                executionDateTo: null,
-                assigneeKeyword: employeeName,
-                workStatusFilter: YeuCauCongViecTrangThaiFilter.TatCa,
-                hasRating: null,
-                ratingScore: null,
-                zaloConnected: null,
-                assignedEmployeeId: null,
-                page: 1,
-                pageSize: 100,
-                cancellationToken: HttpContext.RequestAborted);
-
-            foreach (var item in legacyAssigneeResult.Items)
-            {
-                itemsById.TryAdd(item.Id, item);
-            }
-        }
-
-        var constructionItems = itemsById.Values
-            .OrderByDescending(item => item.NgayYeuCau ?? item.CreatedDate ?? DateTime.MinValue)
-            .ThenByDescending(item => item.Id)
-            .ToList();
 
         return Json(new
         {
