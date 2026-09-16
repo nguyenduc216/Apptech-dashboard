@@ -9,6 +9,7 @@ namespace ApptechDashboard.Controllers;
 [Authorize]
 public class NhapKhoController(
     INhapKhoService nhapKhoService,
+    IHangHoaService hangHoaService,
     INhapXuatImageService nhapXuatImageService,
     IWebHostEnvironment webHostEnvironment,
     ILogger<NhapKhoController> logger) : Controller
@@ -24,6 +25,7 @@ public class NhapKhoController(
     private const int DefaultPageSize = 10;
     private const long MaxImageSizeInBytes = 5 * 1024 * 1024;
     private readonly INhapKhoService _nhapKhoService = nhapKhoService;
+    private readonly IHangHoaService _hangHoaService = hangHoaService;
     private readonly INhapXuatImageService _nhapXuatImageService = nhapXuatImageService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
     private readonly ILogger<NhapKhoController> _logger = logger;
@@ -215,6 +217,37 @@ public class NhapKhoController(
         TempData["StatusMessage"] = "Cập nhật hình ảnh phiếu nhập kho thành công.";
         TempData["StatusType"] = "success";
         return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.StatusFilter, model.Page, model.Id));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreatePhanLoai([FromForm] NhapKhoCreatePhanLoaiRequest request)
+    {
+        var result = await _hangHoaService.CreatePhanLoaiAsync(
+            request.HangHoaId,
+            request.TenPhanLoai,
+            request.TrangThaiSuDung,
+            HttpContext.RequestAborted);
+
+        if (!result.Succeeded || result.Item is null)
+        {
+            return BadRequest(new
+            {
+                succeeded = false,
+                errorMessage = result.ErrorMessage ?? "Không thể thêm phân loại hàng hóa."
+            });
+        }
+
+        return Json(new
+        {
+            succeeded = true,
+            item = new
+            {
+                id = result.Item.Id,
+                hangHoaId = result.Item.HangHoaId,
+                label = result.Item.Label
+            }
+        });
     }
 
     [HttpPost]
