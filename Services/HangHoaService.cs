@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Text;
 using ApptechDashboard.Configuration;
 using ApptechDashboard.Models;
@@ -25,6 +25,12 @@ public interface IHangHoaService
     Task<(bool Succeeded, string? ErrorMessage, int? Id)> CreateAsync(
         HangHoaFormModel model,
         string currentUser,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Succeeded, string? ErrorMessage, HangHoaPhanLoaiCreatedItem? Item)> CreatePhanLoaiAsync(
+        int hangHoaId,
+        string? tenPhanLoai,
+        bool trangThaiSuDung,
         CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage)> UpdateAsync(
@@ -342,6 +348,81 @@ public sealed class HangHoaService(
         }
     }
 
+    public async Task<(bool Succeeded, string? ErrorMessage, HangHoaPhanLoaiCreatedItem? Item)> CreatePhanLoaiAsync(
+        int hangHoaId,
+        string? tenPhanLoai,
+        bool trangThaiSuDung,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedName = NormalizeComparisonKey(tenPhanLoai);
+        if (hangHoaId <= 0)
+        {
+            return (false, "Vui lòng chọn hàng hóa trước khi thêm phân loại.", null);
+        }
+
+        if (normalizedName is null)
+        {
+            return (false, "Tên phân loại không được để trống.", null);
+        }
+
+        if (normalizedName.Length > 250)
+        {
+            return (false, "Tên phân loại tối đa 250 ký tự.", null);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsurePhanLoaiTableAsync(connection, null, cancellationToken);
+
+            if (!await HangHoaExistsAsync(connection, hangHoaId, cancellationToken))
+            {
+                return (false, "Không tìm thấy hàng hóa cần thêm phân loại.", null);
+            }
+
+            if (await FindPhanLoaiByNameAsync(connection, hangHoaId, normalizedName, cancellationToken) is not null)
+            {
+                return (false, "Tên phân loại đã tồn tại trong hàng hóa này.", null);
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                INSERT INTO [{PhanLoaiTableName}] (
+                    IDHangHoa,
+                    TenPhanLoai,
+                    TrangThaiSuDung
+                )
+                VALUES (
+                    @IDHangHoa,
+                    @TenPhanLoai,
+                    @TrangThaiSuDung
+                );
+
+                SELECT CAST(SCOPE_IDENTITY() AS int);
+                """;
+            command.Parameters.Add(new SqlParameter("@IDHangHoa", SqlDbType.Int) { Value = hangHoaId });
+            command.Parameters.Add(new SqlParameter("@TenPhanLoai", SqlDbType.NVarChar, 250) { Value = normalizedName });
+            command.Parameters.Add(new SqlParameter("@TrangThaiSuDung", SqlDbType.Bit) { Value = trangThaiSuDung });
+
+            var newId = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
+            if (newId <= 0)
+            {
+                return (false, "Không thể thêm phân loại hàng hóa.", null);
+            }
+
+            return (true, null, new HangHoaPhanLoaiCreatedItem
+            {
+                Id = newId,
+                HangHoaId = hangHoaId,
+                Label = normalizedName
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create TblHangHoaPhanLoai for TblHangHoa {Id}.", hangHoaId);
+            return (false, "Không thể thêm phân loại hàng hóa lúc này.", null);
+        }
+    }
     public async Task<(bool Succeeded, string? ErrorMessage)> UpdateAsync(
         HangHoaFormModel model,
         string currentUser,
@@ -1209,6 +1290,42 @@ public sealed class HangHoaService(
         return existingId is null ? null : "Tên hàng hóa đã tồn tại.";
     }
 
+    private static async Task<bool> HangHoaExistsAsync(
+        SqlConnection connection,
+        int hangHoaId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT TOP (1) 1
+            FROM [{TableName}]
+            WHERE ID = @ID
+              AND ISNULL(TrangThaiSuDung, 1) = 1
+            """;
+        command.Parameters.Add(new SqlParameter("@ID", SqlDbType.Int) { Value = hangHoaId });
+
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
+    private static async Task<int?> FindPhanLoaiByNameAsync(
+        SqlConnection connection,
+        int hangHoaId,
+        string tenPhanLoai,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT TOP (1) ID
+            FROM [{PhanLoaiTableName}]
+            WHERE IDHangHoa = @IDHangHoa
+              AND UPPER(LTRIM(RTRIM(TenPhanLoai))) = UPPER(@TenPhanLoai)
+            """;
+        command.Parameters.Add(new SqlParameter("@IDHangHoa", SqlDbType.Int) { Value = hangHoaId });
+        command.Parameters.Add(new SqlParameter("@TenPhanLoai", SqlDbType.NVarChar, 250) { Value = tenPhanLoai });
+
+        var existingId = await command.ExecuteScalarAsync(cancellationToken);
+        return existingId is null ? null : Convert.ToInt32(existingId);
+    }
     private static async Task<(Dictionary<string, List<HangHoaImportExistingItem>> ByCode, Dictionary<string, List<HangHoaImportExistingItem>> ByName)> LoadHangHoaImportLookupAsync(
         SqlConnection connection,
         SqlTransaction transaction,

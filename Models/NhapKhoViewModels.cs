@@ -193,6 +193,13 @@ public sealed class NhapKhoDeleteModel
     public int Page { get; set; } = 1;
 }
 
+public sealed class NhapKhoCreatePhanLoaiRequest
+{
+    public int HangHoaId { get; set; }
+    public string? TenPhanLoai { get; set; }
+    public bool TrangThaiSuDung { get; set; } = true;
+}
+
 public sealed class NhapKhoLookupOption
 {
     public int Id { get; set; }

@@ -496,7 +496,9 @@
                                                     }
                                                 </td>
                                                 <td class="detail-field-cell @(phanLoaiHasError ? "has-error" : "")">
-                                                    <span class="login-input-shell select-shell">
+                                                    <div class="nhap-kho-phan-loai-combo">
+
+                                                        <span class="login-input-shell select-shell">
                                                         <select name="Form.Details[@index].PhanLoaiHangHoaId"
                                                                 class="@(phanLoaiHasError ? "input-validation-error" : null)"
                                                                 data-detail-phan-loai-hang-hoa-id
@@ -510,7 +512,22 @@
                                                             }
                                                         </select>
                                                         <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
-                                                    </span>
+
+                                                        </span>
+
+                                                        @if (isEditable)
+
+                                                        {
+
+                                                            <button type="button" class="table-action-button nhap-kho-phan-loai-add" title="Thêm phân loại" aria-label="Thêm phân loại" data-add-phan-loai>
+
+                                                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+
+                                                            </button>
+
+                                                        }
+
+                                                    </div>
                                                     @foreach (var message in phanLoaiErrors)
                                                     {
                                                         <span class="login-field-error detail-field-error">@message</span>
@@ -552,7 +569,7 @@
                                                            name="Form.Details[@index].SoChungTu"
                                                            value="@detail.SoChungTu"
                                                            maxlength="50"
-                                                           placeholder="Sá»‘ chá»©ng tá»«"
+                                                           placeholder="Số chứng từ"
                                                            aria-invalid="@(soChungTuHasError ? "true" : "false")"
                                                            data-detail-document-number
                                                            readonly="@(!isEditable ? "readonly" : null)" />
@@ -870,7 +887,9 @@
                         </span>
                     </td>
                     <td class="detail-field-cell">
-                        <span class="login-input-shell select-shell">
+                        <div class="nhap-kho-phan-loai-combo">
+
+                            <span class="login-input-shell select-shell">
                             <select name="Form.Details[__index__].PhanLoaiHangHoaId" data-detail-phan-loai-hang-hoa-id required>
                                 <option value="">Chọn phân loại</option>
                                 @foreach (var option in Model.PhanLoaiHangHoaOptions)
@@ -879,7 +898,16 @@
                                 }
                             </select>
                             <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
-                        </span>
+
+                            </span>
+
+                            <button type="button" class="table-action-button nhap-kho-phan-loai-add" title="Thêm phân loại" aria-label="Thêm phân loại" data-add-phan-loai>
+
+                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+
+                            </button>
+
+                        </div>
                     </td>
                     <td class="detail-field-cell">
                         <input class="xuat-kho-quantity-input" type="text" name="Form.Details[__index__].SoLuongNhap" value="1" inputmode="decimal" pattern="^\d+([.,]\d+)?$" required data-detail-quantity />
@@ -941,6 +969,44 @@
                     </td>
                 </tr>
             </template>
+
+            <div class="crud-modal-shell nhap-kho-phan-loai-modal-shell" data-phan-loai-modal-shell hidden>
+                <div class="crud-modal-backdrop" aria-hidden="true" data-phan-loai-close></div>
+                <section class="crud-modal nhap-kho-phan-loai-modal" role="dialog" aria-modal="true" aria-labelledby="nhap-kho-phan-loai-title">
+                    <div class="crud-modal-header">
+                        <div class="crud-modal-heading">
+                            <h2 id="nhap-kho-phan-loai-title">Thêm phân loại hàng hóa</h2>
+                            <p class="crud-modal-subtitle" data-phan-loai-hang-hoa-name></p>
+                        </div>
+                        <button type="button" class="menu-nav-button crud-close-button" data-phan-loai-close aria-label="Đóng popup">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="crud-form nhap-kho-phan-loai-form">
+                        <label class="login-field">
+                            <span>Tên phân loại</span>
+                            <span class="login-input-shell">
+                                <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                                <input type="text" maxlength="250" autocomplete="off" data-phan-loai-name-input />
+                            </span>
+                        </label>
+                        <label class="login-checkbox nhap-kho-phan-loai-status">
+                            <input type="checkbox" checked data-phan-loai-status-input />
+                            <span>Kích hoạt</span>
+                        </label>
+                        <div class="page-alert error nhap-kho-phan-loai-error" data-phan-loai-error hidden></div>
+                    </div>
+                    <div class="crud-modal-actions">
+                        <button type="button" class="secondary-button" data-phan-loai-close>Hủy</button>
+                        <button type="button" class="primary-button" data-phan-loai-save>
+                            <span class="button-content">
+                                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                <span>Lưu phân loại</span>
+                            </span>
+                        </button>
+                    </div>
+                </section>
+            </div>
         </section>
     </div>
 }
@@ -954,6 +1020,17 @@
             const empty = root?.querySelector("[data-nhap-kho-detail-empty]");
             const addButton = root?.querySelector("[data-nhap-kho-add-detail]");
             const isReadonly = root?.dataset.readonly === "true";
+            const createPhanLoaiUrl = "@Url.Action("CreatePhanLoai", "NhapKho")";
+            const form = root?.closest("form");
+            const requestToken = form?.querySelector('input[name="__RequestVerificationToken"]')?.value || "";
+            const phanLoaiModalShell = document.querySelector("[data-phan-loai-modal-shell]");
+            const phanLoaiHangHoaName = phanLoaiModalShell?.querySelector("[data-phan-loai-hang-hoa-name]");
+            const phanLoaiNameInput = phanLoaiModalShell?.querySelector("[data-phan-loai-name-input]");
+            const phanLoaiStatusInput = phanLoaiModalShell?.querySelector("[data-phan-loai-status-input]");
+            const phanLoaiError = phanLoaiModalShell?.querySelector("[data-phan-loai-error]");
+            const phanLoaiSaveButton = phanLoaiModalShell?.querySelector("[data-phan-loai-save]");
+            let activePhanLoaiRow = null;
+            let isSavingPhanLoai = false;
 
             if (!(root instanceof HTMLElement) ||
                 !(list instanceof HTMLElement) ||
@@ -1220,6 +1297,89 @@
                 field.removeAttribute("aria-invalid");
                 cell.querySelectorAll(".detail-field-error").forEach((error) => error.remove());
             };
+            const showClientToast = (message, type = "info") => {
+                let toast = document.querySelector("[data-nhap-kho-client-toast]");
+                if (!(toast instanceof HTMLElement)) {
+                    toast = document.createElement("div");
+                    toast.className = "floating-status-toast";
+                    toast.dataset.nhapKhoClientToast = "";
+                    toast.setAttribute("role", "status");
+                    toast.setAttribute("aria-live", "polite");
+                    document.querySelector(".master-data-page")?.prepend(toast);
+                }
+
+                toast.className = `floating-status-toast ${type}`;
+                toast.innerHTML = `
+                    <div class="floating-status-toast-icon" aria-hidden="true">
+                        <i class="fa-solid ${type === "error" ? "fa-circle-exclamation" : type === "success" ? "fa-circle-check" : "fa-circle-info"}"></i>
+                    </div>
+                    <div class="floating-status-toast-body">
+                        <strong>${type === "error" ? "Có lỗi xảy ra" : type === "success" ? "Thành công" : "Thông báo"}</strong>
+                        <span></span>
+                    </div>`;
+                toast.querySelector("span").textContent = message;
+                window.setTimeout(() => toast.remove(), 4500);
+            };
+            const setPhanLoaiError = (message) => {
+                if (!(phanLoaiError instanceof HTMLElement)) {
+                    return;
+                }
+
+                phanLoaiError.textContent = message || "";
+                phanLoaiError.hidden = !message;
+            };
+            const closePhanLoaiModal = () => {
+                if (phanLoaiModalShell instanceof HTMLElement) {
+                    phanLoaiModalShell.hidden = true;
+                }
+                activePhanLoaiRow = null;
+                isSavingPhanLoai = false;
+                if (phanLoaiSaveButton instanceof HTMLButtonElement) {
+                    phanLoaiSaveButton.disabled = false;
+                    phanLoaiSaveButton.classList.remove("is-processing");
+                }
+                setPhanLoaiError("");
+            };
+            const openPhanLoaiModal = (row) => {
+                const hangHoaSelect = row.querySelector("[data-detail-hang-hoa-id]");
+                if (!(hangHoaSelect instanceof HTMLSelectElement) || !hangHoaSelect.value) {
+                    showClientToast("Vui lòng chọn hàng hóa trước khi thêm phân loại.", "error");
+                    return;
+                }
+
+                activePhanLoaiRow = row;
+                if (phanLoaiHangHoaName instanceof HTMLElement) {
+                    phanLoaiHangHoaName.textContent = `Hàng hóa: ${hangHoaSelect.selectedOptions[0]?.textContent?.trim() || "-"}`;
+                }
+                if (phanLoaiNameInput instanceof HTMLInputElement) {
+                    phanLoaiNameInput.value = "";
+                }
+                if (phanLoaiStatusInput instanceof HTMLInputElement) {
+                    phanLoaiStatusInput.checked = true;
+                }
+                setPhanLoaiError("");
+                if (phanLoaiModalShell instanceof HTMLElement) {
+                    phanLoaiModalShell.hidden = false;
+                    window.setTimeout(() => phanLoaiNameInput instanceof HTMLInputElement && phanLoaiNameInput.focus(), 0);
+                }
+            };
+            const appendPhanLoaiOption = (select, item) => {
+                if (!(select instanceof HTMLSelectElement) || !item?.id || !item?.hangHoaId) {
+                    return;
+                }
+
+                const value = `${item.id}`;
+                let option = Array.from(select.options).find((candidate) => candidate.value === value);
+                if (!(option instanceof HTMLOptionElement)) {
+                    option = document.createElement("option");
+                    option.value = value;
+                    select.appendChild(option);
+                }
+
+                option.textContent = item.label || value;
+                option.dataset.hangHoaId = `${item.hangHoaId}`;
+                option.hidden = Boolean(select.value) && option.dataset.hangHoaId !== select.closest("[data-nhap-kho-detail-row]")?.querySelector("[data-detail-hang-hoa-id]")?.value;
+            };
             const attachRow = (row) => {
                 syncDetailRowOrder(row);
                 row.querySelectorAll("input, select").forEach((field) => {
@@ -1243,6 +1403,10 @@
                 const phanLoaiSelect = row.querySelector("[data-detail-phan-loai-hang-hoa-id]");
                 const loaiHinhSelect = row.querySelector("[data-detail-loai-hinh-nhap]");
                 const loaiHinhHidden = row.querySelector("[data-detail-loai-hinh-nhap-hidden]");
+                const addPhanLoaiButton = row.querySelector("[data-add-phan-loai]");
+                if (addPhanLoaiButton instanceof HTMLButtonElement) {
+                    addPhanLoaiButton.addEventListener("click", () => openPhanLoaiModal(row));
+                }
                 if (hangHoaSelect instanceof HTMLSelectElement && donViTinhSelect instanceof HTMLSelectElement) {
                     const syncLoaiHinhNhap = () => {
                         const selected = hangHoaSelect.selectedOptions[0];
@@ -1261,12 +1425,18 @@
                         }
 
                         const hangHoaId = hangHoaSelect.value;
+                        const placeholder = phanLoaiSelect.options[0];
+                        if (placeholder instanceof HTMLOptionElement) {
+                            placeholder.textContent = hangHoaId ? "Chọn phân loại" : "Chọn hàng hóa trước";
+                        }
                         Array.from(phanLoaiSelect.options).forEach((option) => {
                             option.hidden = Boolean(option.value) && option.dataset.hangHoaId !== hangHoaId;
                         });
-                        if (resetValue || (phanLoaiSelect.value && phanLoaiSelect.selectedOptions[0]?.hidden)) {
+                        const selectedOption = phanLoaiSelect.selectedOptions[0];
+                        if (resetValue || !hangHoaId || (phanLoaiSelect.value && selectedOption?.dataset.hangHoaId !== hangHoaId)) {
                             phanLoaiSelect.value = "";
                         }
+                        phanLoaiSelect.disabled = !hangHoaId || isReadonly;
                         window.ApptechLiveSelect?.refresh(phanLoaiSelect);
                     };
                     const syncDonViTinh = () => {
@@ -1357,6 +1527,83 @@
                     formatMoneyInput(salePriceInput, true);
                 }
             };
+
+            phanLoaiModalShell?.querySelectorAll("[data-phan-loai-close]").forEach((button) => {
+                button.addEventListener("click", closePhanLoaiModal);
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape" && phanLoaiModalShell instanceof HTMLElement && !phanLoaiModalShell.hidden) {
+                    closePhanLoaiModal();
+                }
+            });
+            phanLoaiSaveButton?.addEventListener("click", async () => {
+                if (isSavingPhanLoai || !(activePhanLoaiRow instanceof HTMLElement)) {
+                    return;
+                }
+
+                const hangHoaSelect = activePhanLoaiRow.querySelector("[data-detail-hang-hoa-id]");
+                const phanLoaiSelect = activePhanLoaiRow.querySelector("[data-detail-phan-loai-hang-hoa-id]");
+                const tenPhanLoai = phanLoaiNameInput instanceof HTMLInputElement ? phanLoaiNameInput.value.trim() : "";
+                if (!(hangHoaSelect instanceof HTMLSelectElement) || !hangHoaSelect.value) {
+                    setPhanLoaiError("Vui lòng chọn hàng hóa trước khi thêm phân loại.");
+                    return;
+                }
+
+                if (!tenPhanLoai) {
+                    setPhanLoaiError("Tên phân loại không được để trống.");
+                    phanLoaiNameInput instanceof HTMLInputElement && phanLoaiNameInput.focus();
+                    return;
+                }
+
+                isSavingPhanLoai = true;
+                if (phanLoaiSaveButton instanceof HTMLButtonElement) {
+                    phanLoaiSaveButton.disabled = true;
+                    phanLoaiSaveButton.classList.add("is-processing");
+                }
+                setPhanLoaiError("");
+
+                const body = new FormData();
+                body.append("__RequestVerificationToken", requestToken);
+                body.append("HangHoaId", hangHoaSelect.value);
+                body.append("TenPhanLoai", tenPhanLoai);
+                body.append("TrangThaiSuDung", phanLoaiStatusInput instanceof HTMLInputElement && phanLoaiStatusInput.checked ? "true" : "false");
+
+                try {
+                    const response = await fetch(createPhanLoaiUrl, {
+                        method: "POST",
+                        body,
+                        headers: { "X-Requested-With": "XMLHttpRequest" }
+                    });
+                    const data = await response.json().catch(() => null);
+                    if (!response.ok || !data?.succeeded || !data.item) {
+                        throw new Error(data?.errorMessage || "Không thể thêm phân loại hàng hóa.");
+                    }
+
+                    getRows().forEach((row) => {
+                        const select = row.querySelector("[data-detail-phan-loai-hang-hoa-id]");
+                        appendPhanLoaiOption(select, data.item);
+                        window.ApptechLiveSelect?.refresh(select);
+                    });
+
+                    if (phanLoaiSelect instanceof HTMLSelectElement) {
+                        phanLoaiSelect.value = `${data.item.id}`;
+                        phanLoaiSelect.disabled = false;
+                        clearFieldError(phanLoaiSelect);
+                        phanLoaiSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                        window.ApptechLiveSelect?.refresh(phanLoaiSelect);
+                    }
+
+                    closePhanLoaiModal();
+                    showClientToast("Đã thêm phân loại hàng hóa.", "success");
+                } catch (error) {
+                    isSavingPhanLoai = false;
+                    if (phanLoaiSaveButton instanceof HTMLButtonElement) {
+                        phanLoaiSaveButton.disabled = false;
+                        phanLoaiSaveButton.classList.remove("is-processing");
+                    }
+                    setPhanLoaiError(error instanceof Error ? error.message : "Không thể thêm phân loại hàng hóa.");
+                }
+            });
 
             syncDetailHeaderOrder();
             getRows().forEach(attachRow);

@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     (() => {
         const backLockKey = "apptechNoBack";
         const allowedUrlKey = "apptech:lastAllowedUrl";

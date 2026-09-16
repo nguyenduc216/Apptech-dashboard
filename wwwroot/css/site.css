@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --navy-950: #052f26;
     --navy-900: #0a4a3d;
     --navy-800: #0d6955;
@@ -12847,4 +12847,47 @@ body {
     .crud-modal-shell.purchase-detail-shell .purchase-detail-map {
         height: min(58vh, 460px);
     }
+}
+
+
+.nhap-kho-phan-loai-combo {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) 38px;
+    gap: 8px;
+    align-items: center;
+    min-width: 210px;
+}
+
+.nhap-kho-phan-loai-combo .login-input-shell {
+    min-width: 0;
+}
+
+.nhap-kho-phan-loai-add {
+    color: #0d6d54;
+    background: rgba(12, 179, 134, 0.1);
+}
+
+.nhap-kho-phan-loai-add:hover,
+.nhap-kho-phan-loai-add:focus-visible {
+    background: rgba(12, 179, 134, 0.18);
+}
+
+.nhap-kho-phan-loai-modal-shell {
+    z-index: 1800;
+}
+
+.nhap-kho-phan-loai-modal {
+    width: min(520px, calc(100vw - 28px));
+}
+
+.nhap-kho-phan-loai-form {
+    gap: 14px;
+}
+
+.nhap-kho-phan-loai-status {
+    width: max-content;
+}
+
+.nhap-kho-phan-loai-error {
+    margin: 0;
 }

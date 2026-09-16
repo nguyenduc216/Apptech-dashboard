@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 
 namespace ApptechDashboard.Models;
@@ -80,6 +80,13 @@ public sealed class HangHoaPhanLoaiModel
     public string? TenPhanLoai { get; set; }
 
     public bool TrangThaiSuDung { get; set; } = true;
+}
+
+public sealed class HangHoaPhanLoaiCreatedItem
+{
+    public int Id { get; set; }
+    public int HangHoaId { get; set; }
+    public string Label { get; set; } = string.Empty;
 }
 
 public sealed class HangHoaDeleteModel
