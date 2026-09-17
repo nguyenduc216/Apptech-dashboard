@@ -99,7 +99,7 @@ public class YeuCauController(
             TrangThaiYeuCau = YeuCauTrangThaiCatalog.Normalize(item.TrangThaiYeuCau),
             NgayThucHien = item.NgayThucHien?.Date,
             NgayHetHan = item.NgayHetHan?.Date,
-            NgayHoanThanh = item.NgayHoanThanh?.Date,
+            NgayHoanThanh = item.NgayHoanThanh,
             NgayHenTiepTheo = item.NgayHenTiepTheo?.Date,
             CongViecs = works.ToList(),
             Keyword = keyword,
@@ -176,6 +176,44 @@ public class YeuCauController(
             workStatusFilter = model.WorkStatusFilter,
             page = Math.Max(model.Page, 1)
         });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Complete([Bind(Prefix = "Form")] YeuCauCompleteModel model)
+    {
+        var routeValues = new
+        {
+            id = model.Id,
+            keyword = model.Keyword,
+            statusFilter = model.StatusFilter,
+            workStatusFilter = model.WorkStatusFilter,
+            activeTab = string.IsNullOrWhiteSpace(model.ActiveTab) ? "thong-tin" : model.ActiveTab,
+            page = Math.Max(model.Page, 1)
+        };
+
+        if (model.Id <= 0)
+        {
+            TempData["StatusMessage"] = "Không xác định được phiếu yêu cầu cần hoàn thành.";
+            TempData["StatusType"] = "error";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (!await CanUpdateRequestAsync(HttpContext.RequestAborted))
+        {
+            TempData["StatusMessage"] = "Bạn không có quyền cập nhật phiếu yêu cầu.";
+            TempData["StatusType"] = "error";
+            return RedirectToAction(nameof(Edit), routeValues);
+        }
+
+        var result = await _yeuCauService.CompleteAsync(model.Id, GetCurrentAuditUser(), HttpContext.RequestAborted);
+        TempData["StatusMessage"] = result.Succeeded
+            ? result.AlreadyCompleted
+                ? "Phiếu yêu cầu đã được hoàn thành trước đó."
+                : "Đã hoàn thành phiếu yêu cầu."
+            : result.ErrorMessage ?? "Không thể hoàn thành phiếu yêu cầu.";
+        TempData["StatusType"] = result.Succeeded ? "success" : "error";
+        return RedirectToAction(nameof(Edit), routeValues);
     }
 
     [HttpPost]
@@ -807,6 +845,7 @@ public class YeuCauController(
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(cancellationToken);
         var isAdmin = await IsCurrentUserAdminAsync(cancellationToken);
         var canManageCheckinProxy = isAdmin || await CanManageCheckinProxyAsync(cancellationToken);
+        var canUpdateRequest = isAdmin || await CanUpdateRequestAsync(cancellationToken);
         var canToggleCheckinDistanceConstraint = await CanToggleCheckinDistanceConstraintAsync(cancellationToken);
         if (!form.Id.HasValue && !canToggleCheckinDistanceConstraint)
         {
@@ -852,6 +891,7 @@ public class YeuCauController(
             CurrentEmployeeId = currentEmployeeId,
             CurrentUserIsAdmin = isAdmin,
             CanManageCheckinProxy = canManageCheckinProxy,
+            CanUpdateRequest = canUpdateRequest,
             CanToggleCheckinDistanceConstraint = canToggleCheckinDistanceConstraint,
             CheckinDistanceLimitMeters = checkinDistanceLimitMeters,
             CustomerRating = customerRating,
@@ -1424,6 +1464,27 @@ public class YeuCauController(
                 permission.PermissionCode,
                 PermissionCatalogService.CheckinProxyManagePermissionCode,
                 StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<bool> CanUpdateRequestAsync(CancellationToken cancellationToken)
+    {
+        if (await IsCurrentUserAdminAsync(cancellationToken))
+        {
+            return true;
+        }
+
+        var permissions = await UserPermissionSession.GetOrLoadAsync(
+            HttpContext,
+            _userPermissionService,
+            cancellationToken);
+
+        return permissions.Any(permission =>
+            (permission.FunctionCode.Contains("YeuCau", StringComparison.OrdinalIgnoreCase) ||
+             permission.FunctionName.Contains("Yêu cầu", StringComparison.OrdinalIgnoreCase) ||
+             permission.FunctionUrl.Contains("YeuCau", StringComparison.OrdinalIgnoreCase)) &&
+            (permission.PermissionCode.Contains("Update", StringComparison.OrdinalIgnoreCase) ||
+             permission.PermissionName.Contains("Cập nhật", StringComparison.OrdinalIgnoreCase) ||
+             permission.PermissionName.Contains("Sửa", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool HasPositiveDistanceLimit(decimal? value) => value.HasValue && value.Value > 0;

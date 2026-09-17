@@ -8,6 +8,14 @@ using Microsoft.Extensions.Options;
 
 namespace ApptechDashboard.Services;
 
+public sealed record YeuCauCompleteResult(
+    bool Succeeded,
+    bool AlreadyCompleted,
+    string? ErrorMessage,
+    DateTime? CompletedAt,
+    int UpdatedWorkCount,
+    int CancelledWorkCount);
+
 public interface IYeuCauService
 {
     Task<(IReadOnlyList<YeuCauListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
@@ -74,6 +82,11 @@ public interface IYeuCauService
 
     Task<(bool Succeeded, string? ErrorMessage)> UpdateAsync(
         YeuCauFormModel model,
+        string currentUser,
+        CancellationToken cancellationToken = default);
+
+    Task<YeuCauCompleteResult> CompleteAsync(
+        int requestId,
         string currentUser,
         CancellationToken cancellationToken = default);
 
@@ -972,6 +985,18 @@ public sealed class YeuCauService(
                 return (false, "Không tìm thấy yêu cầu để cập nhật.");
             }
 
+            await using (var completionCommand = connection.CreateCommand())
+            {
+                completionCommand.Transaction = transaction;
+                completionCommand.CommandText = $"SELECT NgayHoanThanh FROM [{TableName}] WHERE ID = @Id";
+                completionCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = model.Id.Value });
+                var existingCompletion = await completionCommand.ExecuteScalarAsync(cancellationToken);
+                if (existingCompletion is DateTime completedAt)
+                {
+                    model.NgayHoanThanh = completedAt;
+                }
+            }
+
             var validationError = await ValidateBusinessRulesAsync(connection, transaction, model, cancellationToken);
             if (validationError is not null)
             {
@@ -1028,6 +1053,154 @@ public sealed class YeuCauService(
         {
             _logger.LogError(ex, "Failed to update TblYeuCau {Id}.", model.Id);
             return (false, "Không thể cập nhật yêu cầu lúc này.");
+        }
+    }
+
+    public async Task<YeuCauCompleteResult> CompleteAsync(
+        int requestId,
+        string currentUser,
+        CancellationToken cancellationToken = default)
+    {
+        if (requestId <= 0)
+        {
+            return new(false, false, "Không xác định được phiếu yêu cầu cần hoàn thành.", null, 0, 0);
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+            string? requestCode;
+            string? currentStatus;
+            DateTime? existingCompletedAt;
+            await using (var readCommand = connection.CreateCommand())
+            {
+                readCommand.Transaction = transaction;
+                readCommand.CommandText = $"""
+                    SELECT MaYeuCau, TrangThaiYeuCau, NgayHoanThanh
+                    FROM [{TableName}] WITH (UPDLOCK, HOLDLOCK)
+                    WHERE ID = @Id
+                    """;
+                readCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = requestId });
+                await using var reader = await readCommand.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return new(false, false, "Không tìm thấy phiếu yêu cầu cần hoàn thành.", null, 0, 0);
+                }
+
+                requestCode = GetNullableString(reader, "MaYeuCau");
+                currentStatus = GetNullableString(reader, "TrangThaiYeuCau");
+                existingCompletedAt = GetNullableDateTime(reader, "NgayHoanThanh");
+            }
+
+            var normalizedStatus = YeuCauTrangThaiCatalog.Normalize(currentStatus);
+            if (normalizedStatus == YeuCauTrangThaiCatalog.HoanThanh)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return new(true, true, null, existingCompletedAt, 0, 0);
+            }
+
+            if (normalizedStatus == YeuCauTrangThaiCatalog.Huy)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return new(false, false, "Phiếu yêu cầu đã hủy nên không thể hoàn thành.", null, 0, 0);
+            }
+
+            DateTime completedAt;
+            await using (var timeCommand = connection.CreateCommand())
+            {
+                timeCommand.Transaction = transaction;
+                timeCommand.CommandText = "SELECT GETDATE();";
+                completedAt = Convert.ToDateTime(await timeCommand.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+            }
+
+            int cancelledWorkCount;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = transaction;
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    FROM [{WorkTableName}]
+                    WHERE IDYeuCau = @Id
+                      AND LTRIM(RTRIM(ISNULL(TrangThaiCongViec, ''))) IN (@CancelledStatus, @LegacyCancelledStatus)
+                    """;
+                countCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = requestId });
+                countCommand.Parameters.Add(new SqlParameter("@CancelledStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Huy });
+                countCommand.Parameters.Add(new SqlParameter("@LegacyCancelledStatus", SqlDbType.NVarChar, 50) { Value = "Huỷ" });
+                cancelledWorkCount = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+            }
+
+            int updatedWorkCount;
+            await using (var workCommand = connection.CreateCommand())
+            {
+                workCommand.Transaction = transaction;
+                workCommand.CommandText = $"""
+                    UPDATE [{WorkTableName}]
+                    SET TrangThaiCongViec = @CompletedWorkStatus,
+                        Updated_Date = @CompletedAt,
+                        Updated_By = @UpdatedBy
+                    WHERE IDYeuCau = @Id
+                      AND LTRIM(RTRIM(ISNULL(TrangThaiCongViec, ''))) NOT IN (@CompletedWorkStatus, @CancelledStatus, @LegacyCancelledStatus)
+                    """;
+                workCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = requestId });
+                workCommand.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
+                workCommand.Parameters.Add(new SqlParameter("@CancelledStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Huy });
+                workCommand.Parameters.Add(new SqlParameter("@LegacyCancelledStatus", SqlDbType.NVarChar, 50) { Value = "Huỷ" });
+                workCommand.Parameters.Add(new SqlParameter("@CompletedAt", SqlDbType.DateTime) { Value = completedAt });
+                workCommand.Parameters.Add(new SqlParameter("@UpdatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
+                updatedWorkCount = await workCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await using (var requestCommand = connection.CreateCommand())
+            {
+                requestCommand.Transaction = transaction;
+                requestCommand.CommandText = $"""
+                    UPDATE [{TableName}]
+                    SET TrangThaiYeuCau = @CompletedStatus,
+                        NgayHoanThanh = @CompletedAt,
+                        Updated_Date = @CompletedAt,
+                        Updated_By = @UpdatedBy
+                    WHERE ID = @Id
+                    """;
+                requestCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = requestId });
+                requestCommand.Parameters.Add(new SqlParameter("@CompletedStatus", SqlDbType.NVarChar, 250) { Value = YeuCauTrangThaiCatalog.HoanThanh });
+                requestCommand.Parameters.Add(new SqlParameter("@CompletedAt", SqlDbType.DateTime) { Value = completedAt });
+                requestCommand.Parameters.Add(new SqlParameter("@UpdatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
+                await requestCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await _commonAuditService.WriteAsync(
+                connection,
+                transaction,
+                new CommonAuditEntry(
+                    "YEU_CAU",
+                    "COMPLETE",
+                    "YEU_CAU",
+                    requestId.ToString(CultureInfo.InvariantCulture),
+                    requestCode,
+                    "Hoàn thành phiếu yêu cầu.",
+                    currentUser,
+                    Data: new
+                    {
+                        RequestId = requestId,
+                        OldStatus = normalizedStatus,
+                        NewStatus = YeuCauTrangThaiCatalog.HoanThanh,
+                        CompletedAt = completedAt,
+                        UpdatedWorkCount = updatedWorkCount,
+                        CancelledWorkCount = cancelledWorkCount,
+                        CurrentUser = currentUser
+                    }),
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+            return new(true, false, null, completedAt, updatedWorkCount, cancelledWorkCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to complete TblYeuCau {Id}.", requestId);
+            return new(false, false, "Không thể hoàn thành phiếu yêu cầu lúc này.", null, 0, 0);
         }
     }
 
@@ -2941,7 +3114,7 @@ public sealed class YeuCauService(
         command.Parameters.Add(new SqlParameter("@TrangThaiYeuCau", SqlDbType.NVarChar, 250) { Value = YeuCauTrangThaiCatalog.Normalize(model.TrangThaiYeuCau) });
         command.Parameters.Add(new SqlParameter("@NgayThucHien", SqlDbType.DateTime) { Value = ToDbValue(model.NgayThucHien?.Date) });
         command.Parameters.Add(new SqlParameter("@NgayHetHan", SqlDbType.DateTime) { Value = ToDbValue(model.NgayHetHan?.Date) });
-        command.Parameters.Add(new SqlParameter("@NgayHoanThanh", SqlDbType.DateTime) { Value = ToDbValue(model.NgayHoanThanh?.Date) });
+        command.Parameters.Add(new SqlParameter("@NgayHoanThanh", SqlDbType.DateTime) { Value = ToDbValue(model.NgayHoanThanh) });
         command.Parameters.Add(new SqlParameter("@NgayHenTiepTheo", SqlDbType.DateTime) { Value = ToDbValue(model.NgayHenTiepTheo?.Date) });
         command.Parameters.Add(new SqlParameter("@CheckinTheoKhoangCach", SqlDbType.Bit) { Value = model.CheckinTheoKhoangCach });
         command.Parameters.Add(new SqlParameter("@UpdatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });

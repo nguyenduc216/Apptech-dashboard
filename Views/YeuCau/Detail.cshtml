@@ -49,6 +49,9 @@
     var hasCheckinDistanceLimit = Model.CheckinDistanceLimitMeters.HasValue && Model.CheckinDistanceLimitMeters.Value > 0;
     var canToggleCheckinDistanceConstraint = Model.CanToggleCheckinDistanceConstraint;
     var canManageCheckinProxy = Model.CanManageCheckinProxy;
+    var canCompleteRequest = Model.IsEditMode &&
+        Model.CanUpdateRequest &&
+        YeuCauTrangThaiCatalog.Normalize(Model.Form.TrangThaiYeuCau) is not YeuCauTrangThaiCatalog.HoanThanh and not YeuCauTrangThaiCatalog.Huy;
     var checkinByDistanceValue = (hasCheckinDistanceLimit && Model.Form.CheckinTheoKhoangCach).ToString().ToLowerInvariant();
     var defaultCheckinEmployeeId = Model.CurrentEmployeeId.HasValue && assignedCheckinEmployees.Any(employee => employee.NhanVienId == Model.CurrentEmployeeId)
         ? Model.CurrentEmployeeId
@@ -178,6 +181,17 @@
                     </button>
                 }
 
+                @if (canCompleteRequest)
+                {
+                    <button type="button"
+                            class="primary-button yeu-cau-complete-button"
+                            asp-permission-action="update"
+                            data-complete-open>
+                        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                        <span>Hoàn thành</span>
+                    </button>
+                }
+
                 <button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditMode ? "update" : "insert")" data-processing-button data-processing-text="Đang lưu">
                     <span class="button-content">
                         <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
@@ -208,7 +222,12 @@
         {
             var rating = Model.CustomerRating;
             var zaloProfile = Model.CustomerZaloProfile;
-            <article class="panel yeu-cau-zalo-rating-panel">
+            <article class="panel yeu-cau-zalo-rating-panel crud-tab-panel @(activeTab == "danh-gia" ? "is-active" : "")"
+                     data-tab-panel
+                     data-tab="danh-gia"
+                     data-rating-tab-panel
+                     role="tabpanel"
+                     @(activeTab == "danh-gia" ? null : "hidden")>
                 <div class="yeu-cau-zalo-rating-card @(rating?.HasRating == true && rating.RatingScore <= 2 ? "is-warning" : null)">
                     <div class="yeu-cau-zalo-rating-heading">
                         <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-star" aria-hidden="true"></i></span>
@@ -315,6 +334,19 @@
                         <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
                         <span>Checkin</span>
                     </button>
+
+                    @if (Model.IsEditMode)
+                    {
+                        <button type="button"
+                                class="crud-tab-button @(activeTab == "danh-gia" ? "is-active" : "")"
+                                data-tab-button
+                                data-tab="danh-gia"
+                                role="tab"
+                                aria-selected="@(activeTab == "danh-gia" ? "true" : "false")">
+                            <i class="fa-solid fa-star" aria-hidden="true"></i>
+                            <span>Đánh giá</span>
+                        </button>
+                    }
                 </div>
 
                 <div class="crud-tab-panel @(activeTab == "thong-tin" ? "is-active" : "")"
@@ -531,6 +563,10 @@
                                         <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
                                         <input asp-for="Form.NgayHoanThanh" type="date" />
                                     </span>
+                                    @if (Model.Form.NgayHoanThanh.HasValue)
+                                    {
+                                        <small class="yeu-cau-completion-datetime">Ghi nhận: @Model.Form.NgayHoanThanh.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                                    }
                                     <span asp-validation-for="Form.NgayHoanThanh" class="login-field-error"></span>
                                 </label>
 
@@ -1770,6 +1806,50 @@
             </section>
         </div>
 
+        @if (canCompleteRequest)
+        {
+            <div class="crud-modal-shell" data-complete-shell hidden>
+                <div class="crud-modal-backdrop" aria-hidden="true" data-complete-close></div>
+                <section class="crud-modal yeu-cau-complete-modal" role="dialog" aria-modal="true" aria-labelledby="yeu-cau-complete-title">
+                    <div class="crud-modal-header">
+                        <div class="crud-modal-heading">
+                            <h2 id="yeu-cau-complete-title">Xác nhận hoàn thành phiếu</h2>
+                            <p class="crud-modal-subtitle">Bạn có chắc muốn hoàn thành phiếu yêu cầu này?</p>
+                        </div>
+                        <button type="button" class="menu-nav-button crud-close-button" aria-label="Đóng xác nhận" data-complete-close>
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="yeu-cau-complete-modal-body">
+                        <ul>
+                            <li>Phiếu yêu cầu sẽ chuyển sang trạng thái Hoàn thành.</li>
+                            <li>Ngày giờ hoàn thành được ghi nhận theo thời điểm hiện tại.</li>
+                            <li>Tất cả công việc chưa bị Hủy sẽ chuyển sang Hoàn thành.</li>
+                        </ul>
+                        <div class="crud-modal-actions">
+                            <button type="button" class="secondary-button" data-complete-close>Hủy</button>
+                            <button type="submit"
+                                    class="primary-button"
+                                    asp-action="Complete"
+                                    formmethod="post"
+                                    data-complete-confirm
+                                    data-processing-button
+                                    data-processing-text="Đang hoàn thành">
+                                <span class="button-content">
+                                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                                    <span>Đồng ý hoàn thành</span>
+                                </span>
+                                <span class="button-processing" aria-hidden="true">
+                                    <span class="button-processing-dot"></span>
+                                    <span class="button-processing-text">Đang hoàn thành</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        }
+
         <div class="crud-modal-shell zalo-qr-modal-shell" data-zalo-qr-shell hidden>
             <div class="crud-modal-backdrop" aria-hidden="true" data-zalo-qr-close></div>
             <section class="crud-modal zalo-qr-modal" role="dialog" aria-modal="true" aria-labelledby="zalo-qr-title">
@@ -1856,6 +1936,13 @@
         .yeu-cau-rating-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px; border: 1px solid #d9e9e5; border-radius: 7px; background: #fff; }
         .yeu-cau-rating-item small { grid-column: 1 / -1; color: #607b76; }
         .yeu-cau-zalo-rating-hint { margin: 0; color: #607b76; line-height: 1.45; }
+        .yeu-cau-zalo-rating-panel[data-rating-tab-panel] { display: none; }
+        .crud-tabs > .yeu-cau-zalo-rating-panel[data-rating-tab-panel].is-active { display: grid; }
+        .yeu-cau-complete-button { background: #08735f; }
+        .yeu-cau-complete-modal { width: min(560px, calc(100% - 24px)); }
+        .yeu-cau-complete-modal-body { display: grid; gap: 18px; padding: 20px; }
+        .yeu-cau-complete-modal-body ul { display: grid; gap: 9px; margin: 0; padding-left: 20px; color: #365f58; line-height: 1.45; }
+        .yeu-cau-completion-datetime { color: #08735f; font-weight: 700; }
         @@media (max-width: 680px) {
             .zalo-qr-body { grid-template-columns: 1fr; padding: 16px; }
             .zalo-qr-image-shell { width: min(280px, 100%); justify-self: center; }
@@ -1876,6 +1963,30 @@
             if (!(root instanceof HTMLFormElement)) {
                 return;
             }
+
+            const completeOpenButton = root.querySelector("[data-complete-open]");
+            const completeShell = root.querySelector("[data-complete-shell]");
+            const completeCloseButtons = completeShell?.querySelectorAll("[data-complete-close]") ?? [];
+            const ratingTabPanel = root.querySelector("[data-rating-tab-panel]");
+            const tabGroup = root.querySelector("[data-tab-group]");
+            if (ratingTabPanel instanceof HTMLElement && tabGroup instanceof HTMLElement) {
+                tabGroup.appendChild(ratingTabPanel);
+            }
+
+            const closeCompleteModal = () => {
+                if (completeShell instanceof HTMLElement) {
+                    completeShell.hidden = true;
+                    document.body.classList.remove("modal-open");
+                }
+            };
+
+            completeOpenButton?.addEventListener("click", () => {
+                if (completeShell instanceof HTMLElement) {
+                    completeShell.hidden = false;
+                    document.body.classList.add("modal-open");
+                }
+            });
+            completeCloseButtons.forEach((button) => button.addEventListener("click", closeCompleteModal));
 
             const zaloQrOpenButtons = root.querySelectorAll("[data-zalo-qr-open]");
             const zaloQrShell = root.querySelector("[data-zalo-qr-shell]");
@@ -6080,6 +6191,11 @@
             });
 
             document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape" && completeShell instanceof HTMLElement && !completeShell.hidden) {
+                    closeCompleteModal();
+                    return;
+                }
+
                 if (event.key === "Escape" && !workPickerShell.hidden) {
                     closeWorkPicker();
                     return;
@@ -6128,6 +6244,10 @@
             syncWorkProgress();
 
             root.addEventListener("submit", (event) => {
+                if (event.submitter instanceof HTMLElement && event.submitter.matches("[data-complete-confirm]")) {
+                    return;
+                }
+
                 updateWorkIndexes();
                 syncWorkEmployeesJson();
                 persistCollapseState();

@@ -662,6 +662,16 @@ public sealed class YeuCauDeleteModel
     public int Page { get; set; } = 1;
 }
 
+public sealed class YeuCauCompleteModel
+{
+    public int Id { get; set; }
+    public string? Keyword { get; set; }
+    public string? StatusFilter { get; set; }
+    public string? WorkStatusFilter { get; set; }
+    public int Page { get; set; } = 1;
+    public string ActiveTab { get; set; } = "thong-tin";
+}
+
 public sealed class YeuCauCheckinItem
 {
     public int Id { get; set; }
@@ -783,6 +793,7 @@ public sealed class YeuCauDetailViewModel
     public bool CurrentUserIsAdmin { get; set; }
     public bool CanManageCheckinProxy { get; set; }
     public bool CanToggleCheckinDistanceConstraint { get; set; }
+    public bool CanUpdateRequest { get; set; }
     public decimal? CheckinDistanceLimitMeters { get; set; }
     public RequestRatingInfo? CustomerRating { get; set; }
     public CustomerZaloProfileInfo? CustomerZaloProfile { get; set; }
