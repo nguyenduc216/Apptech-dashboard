@@ -1063,11 +1063,17 @@
             let purchaseDetailMap = null;
             let purchaseDetailMarkers = [];
             let constructionMap = null;
+            let constructionTileLayer = null;
             let constructionMapMarker = null;
             let constructionCoordinateCandidateMarker = null;
             let constructionCoordinateCandidate = null;
             let activeConstructionMapTrigger = null;
             let constructionRouteLayer = null;
+            let constructionMapResizeObserver = null;
+            let constructionMapResizeTimer = null;
+            let constructionMapInitializationFrame = null;
+            let constructionTileRetryUsed = false;
+            let constructionThumbnailObserver = null;
             let activeConstructionLocation = null;
             let speechRecognition = null;
             let isPurchaseSpeechSupported = true;
@@ -2391,9 +2397,12 @@
                 if (!(constructionList instanceof HTMLElement)) {
                     return;
                 }
-                const thumbnails = Array.from(constructionList.querySelectorAll("[data-construction-map-thumb]"));
+                constructionThumbnailObserver?.disconnect();
+                constructionThumbnailObserver = null;
+                const thumbnails = Array.from(constructionList.querySelectorAll("[data-construction-map-thumb]"))
+                    .filter((thumbnail) => thumbnail.dataset.mapReady !== "true");
                 if ("IntersectionObserver" in window) {
-                    const observer = new IntersectionObserver((entries, currentObserver) => {
+                    constructionThumbnailObserver = new IntersectionObserver((entries, currentObserver) => {
                         entries.forEach((entry) => {
                             if (!entry.isIntersecting) {
                                 return;
@@ -2403,9 +2412,10 @@
                         });
                     }, {
                         root: constructionList,
-                        rootMargin: "120px"
+                        rootMargin: "40px",
+                        threshold: 0.01
                     });
-                    thumbnails.forEach((thumbnail) => observer.observe(thumbnail));
+                    thumbnails.forEach((thumbnail) => constructionThumbnailObserver.observe(thumbnail));
                     return;
                 }
                 thumbnails.forEach(initConstructionMapThumb);
@@ -2596,6 +2606,42 @@
                 constructionMapRouteStatus.textContent = message || "";
             };
 
+            const destroyConstructionMap = () => {
+                if (constructionMapInitializationFrame !== null) {
+                    window.cancelAnimationFrame(constructionMapInitializationFrame);
+                    constructionMapInitializationFrame = null;
+                }
+                if (constructionMapResizeTimer !== null) {
+                    window.clearTimeout(constructionMapResizeTimer);
+                    constructionMapResizeTimer = null;
+                }
+                constructionMapResizeObserver?.disconnect();
+                constructionMapResizeObserver = null;
+                constructionTileLayer?.off();
+                if (constructionMap) {
+                    constructionMap.off();
+                    constructionMap.remove();
+                }
+                constructionMap = null;
+                constructionTileLayer = null;
+                constructionMapMarker = null;
+                constructionCoordinateCandidateMarker = null;
+                constructionRouteLayer = null;
+                constructionCoordinateCandidate = null;
+                constructionTileRetryUsed = false;
+            };
+
+            const refreshConstructionMapSize = () => {
+                if (!constructionMap || !(constructionMapElement instanceof HTMLElement)) {
+                    return;
+                }
+                const bounds = constructionMapElement.getBoundingClientRect();
+                if (bounds.width <= 0 || bounds.height <= 0) {
+                    return;
+                }
+                constructionMap.invalidateSize({ animate: false, pan: false, debounceMoveend: true });
+            };
+
             const ensureConstructionMap = () => {
                 if (!(window.L && typeof window.L.map === "function") || !(constructionMapElement instanceof HTMLElement)) {
                     setConstructionRouteStatus("Không thể khởi tạo bản đồ trên trình duyệt này.", "error");
@@ -2604,34 +2650,72 @@
                 if (constructionMap) {
                     return true;
                 }
+                const bounds = constructionMapElement.getBoundingClientRect();
+                if (bounds.width <= 0 || bounds.height <= 0) {
+                    return false;
+                }
                 constructionMap = window.L.map(constructionMapElement, {
                     zoomControl: true,
                     attributionControl: true
                 });
-                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+                constructionTileLayer = window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19,
                     attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
-                }).addTo(constructionMap);
+                });
+                constructionTileLayer.on("tileerror", () => {
+                    if (constructionTileRetryUsed || !constructionMap || !constructionTileLayer) {
+                        return;
+                    }
+                    constructionTileRetryUsed = true;
+                    window.requestAnimationFrame(() => {
+                        if (constructionMap && constructionTileLayer) {
+                            refreshConstructionMapSize();
+                            constructionTileLayer.redraw();
+                        }
+                    });
+                });
+                constructionTileLayer.addTo(constructionMap);
+                if ("ResizeObserver" in window) {
+                    constructionMapResizeObserver = new ResizeObserver(() => {
+                        if (constructionMapResizeTimer !== null) {
+                            window.clearTimeout(constructionMapResizeTimer);
+                        }
+                        constructionMapResizeTimer = window.setTimeout(() => {
+                            constructionMapResizeTimer = null;
+                            refreshConstructionMapSize();
+                        }, 150);
+                    });
+                    constructionMapResizeObserver.observe(constructionMapElement);
+                }
                 return true;
             };
 
-            const refreshConstructionMapSize = () => {
-                if (!constructionMap) {
+            const initializeConstructionMapWhenSized = (lat, lng, attempt = 0) => {
+                if (!(constructionMapShell instanceof HTMLElement) || constructionMapShell.hidden ||
+                    !(constructionMapElement instanceof HTMLElement)) {
                     return;
                 }
-
-                [40, 140, 320, 700].forEach((delay) => {
-                    window.setTimeout(() => {
-                        constructionMap.invalidateSize(true);
-                        if (activeConstructionLocation &&
-                            activeConstructionLocation.lat !== null &&
-                            activeConstructionLocation.lng !== null) {
-                            constructionMap.setView([activeConstructionLocation.lat, activeConstructionLocation.lng], Math.max(constructionMap.getZoom(), 16), {
-                                animate: false
-                            });
-                        }
-                    }, delay);
-                });
+                const bounds = constructionMapElement.getBoundingClientRect();
+                if ((bounds.width <= 0 || bounds.height <= 0) && attempt < 10) {
+                    constructionMapInitializationFrame = window.requestAnimationFrame(() => {
+                        initializeConstructionMapWhenSized(lat, lng, attempt + 1);
+                    });
+                    return;
+                }
+                constructionMapInitializationFrame = null;
+                if (!ensureConstructionMap()) {
+                    setConstructionRouteStatus("Không thể khởi tạo bản đồ vì vùng hiển thị chưa sẵn sàng.", "error");
+                    return;
+                }
+                if (lat !== null && lng !== null) {
+                    const point = [lat, lng];
+                    constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                    constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
+                    constructionMap.setView(point, 16);
+                } else {
+                    constructionMap.setView([16.0471, 108.2068], 6);
+                }
+                window.requestAnimationFrame(refreshConstructionMapSize);
             };
 
             const syncConstructionMapExternalLink = () => {
@@ -2703,42 +2787,24 @@
                     constructionMapShell.hidden = false;
                     document.body.classList.add("modal-open");
                 }
+                constructionThumbnailObserver?.disconnect();
+                constructionThumbnailObserver = null;
+                destroyConstructionMap();
                 setConstructionRouteStatus("", "info");
                 syncConstructionMapExternalLink();
-                window.requestAnimationFrame(() => {
-                    if (!ensureConstructionMap()) {
-                        return;
-                    }
-                    if (constructionRouteLayer) {
-                        constructionMap.removeLayer(constructionRouteLayer);
-                        constructionRouteLayer = null;
-                    }
-                    if (lat !== null && lng !== null) {
-                        const point = [lat, lng];
-                        if (!constructionMapMarker) {
-                            constructionMapMarker = window.L.marker(point).addTo(constructionMap);
-                        } else {
-                            constructionMapMarker.setLatLng(point);
-                        }
-                        constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
-                        constructionMap.setView(point, 16);
-                    } else {
-                        if (constructionMapMarker) {
-                            constructionMap.removeLayer(constructionMapMarker);
-                            constructionMapMarker = null;
-                        }
-                        constructionMap.setView([16.0471, 108.2068], 6);
-                    }
-                    refreshConstructionMapSize();
+                constructionMapInitializationFrame = window.requestAnimationFrame(() => {
+                    initializeConstructionMapWhenSized(lat, lng);
                 });
             };
 
             const closeConstructionMap = () => {
+                clearConstructionCoordinateCandidate();
+                destroyConstructionMap();
                 if (constructionMapShell instanceof HTMLElement) {
                     constructionMapShell.hidden = true;
                 }
-                clearConstructionCoordinateCandidate();
                 activeConstructionMapTrigger = null;
+                syncConstructionMapThumbs();
                 if (!(constructionShell instanceof HTMLElement) || constructionShell.hidden) {
                     document.body.classList.remove("modal-open");
                 }
