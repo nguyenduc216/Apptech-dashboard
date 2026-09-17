@@ -2659,8 +2659,6 @@ body.menu-open {
 
 .construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-pane,
 .construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-tile,
-.construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-marker-icon,
-.construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-marker-shadow,
 .construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-tile-container,
 .construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-pane > svg,
 .construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-pane > canvas,
@@ -2683,6 +2681,33 @@ body.menu-open {
 .construction-map-fullscreen-shell .construction-map-fullscreen-canvas .leaflet-image-layer {
     max-width: none !important;
     max-height: none !important;
+}
+
+.construction-location-marker {
+    background: transparent !important;
+    border: 0 !important;
+}
+
+.construction-location-marker__pin {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: #1677c8;
+    color: #ffffff;
+    border: 3px solid #ffffff;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.3);
+}
+
+.construction-location-marker__pin i {
+    transform: rotate(45deg);
+    font-size: 16px;
+}
+
+.construction-location-marker--candidate .construction-location-marker__pin {
+    background: #0cb386;
 }
 
 .construction-map-fullscreen-shell .construction-coordinate-audit {

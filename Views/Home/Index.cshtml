@@ -1080,6 +1080,20 @@
             const defaultCenter = [12.2388, 109.1967];
             const defaultZoom = 13;
             const focusZoom = 16;
+            const constructionLocationIcon = window.L?.divIcon({
+                className: "construction-location-marker",
+                html: '<div class="construction-location-marker__pin"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></div>',
+                iconSize: [36, 44],
+                iconAnchor: [18, 42],
+                popupAnchor: [0, -38]
+            });
+            const constructionGpsCandidateIcon = window.L?.divIcon({
+                className: "construction-location-marker construction-location-marker--candidate",
+                html: '<div class="construction-location-marker__pin"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i></div>',
+                iconSize: [36, 44],
+                iconAnchor: [18, 42],
+                popupAnchor: [0, -38]
+            });
 
             refreshGpsButton?.querySelector("span")?.replaceChildren(document.createTextNode("L\u1EA5y GPS"));
 
@@ -2771,7 +2785,9 @@
                     activeConstructionLocation.lng !== null) {
                     const point = [activeConstructionLocation.lat, activeConstructionLocation.lng];
                     if (!constructionMapMarker) {
-                        constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                        constructionMapMarker = window.L.marker(point, {
+                            icon: constructionLocationIcon
+                        }).addTo(constructionMap);
                     } else {
                         constructionMapMarker.setLatLng(point);
                     }
@@ -2963,12 +2979,8 @@
                     };
                     const point = [constructionCoordinateCandidate.lat, constructionCoordinateCandidate.lng];
                     if (!constructionCoordinateCandidateMarker) {
-                        constructionCoordinateCandidateMarker = window.L.circleMarker(point, {
-                            radius: 9,
-                            color: "#ffffff",
-                            weight: 3,
-                            fillColor: "#0ea5e9",
-                            fillOpacity: 1
+                        constructionCoordinateCandidateMarker = window.L.marker(point, {
+                            icon: constructionGpsCandidateIcon
                         }).addTo(constructionMap);
                     } else {
                         constructionCoordinateCandidateMarker.setLatLng(point);
@@ -3057,7 +3069,9 @@
                     if (constructionMapMarker) {
                         constructionMapMarker.setLatLng([lat, lng]);
                     } else if (constructionMap) {
-                        constructionMapMarker = window.L.marker([lat, lng]).addTo(constructionMap);
+                        constructionMapMarker = window.L.marker([lat, lng], {
+                            icon: constructionLocationIcon
+                        }).addTo(constructionMap);
                     }
                     constructionMapMarker?.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
                     constructionMap?.setView([lat, lng], 17);
