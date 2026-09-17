@@ -350,22 +350,6 @@
     margin-left: auto;
 }
 
-.construction-map-shell .construction-map-modal {
-    width: min(100vw - 28px, 980px);
-}
-
-.construction-map-canvas {
-    display: block;
-    width: 100%;
-    height: min(68dvh, 620px);
-    min-height: 420px;
-}
-
-.construction-map-canvas.leaflet-container {
-    z-index: 0;
-    overflow: hidden !important;
-}
-
 .construction-coordinate-audit {
     color: #667085;
     font-size: 0.82rem;

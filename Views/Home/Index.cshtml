@@ -725,37 +725,36 @@
         </section>
     </div>
 
-    <div class="crud-modal-shell construction-map-shell" data-construction-map-shell hidden>
+    <div class="crud-modal-shell" data-construction-map-shell hidden>
         <div class="crud-modal-backdrop" aria-hidden="true" data-construction-map-close></div>
-        <section class="crud-modal khach-hang-location-viewer construction-map-modal" role="dialog" aria-modal="true" aria-labelledby="constructionMapTitle">
+        <section class="crud-modal khach-hang-location-viewer" role="dialog" aria-modal="true" aria-labelledby="constructionMapTitle">
             <div class="crud-modal-header">
                 <div class="crud-modal-heading">
                     <h2 id="constructionMapTitle" data-construction-map-title>Bản đồ công trình</h2>
                     <p class="crud-modal-subtitle" data-construction-map-subtitle>Vị trí khách hàng</p>
                 </div>
-                <button type="button" class="crud-modal-close" data-construction-map-close aria-label="Đóng bản đồ công trình">
-                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                <button type="button" class="menu-nav-button crud-close-button" data-construction-map-close aria-label="Đóng bản đồ công trình">
+                    <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="khach-hang-location-viewer-body">
+            <div class="crud-form khach-hang-location-viewer-body">
                 <div class="khach-hang-location-viewer-map-shell">
-                    <div class="khach-hang-location-map khach-hang-location-viewer-map construction-map-canvas" data-construction-map></div>
-                    <div class="khach-hang-location-viewer-map-actions">
-                        <button type="button" class="khach-hang-location-map-action" data-construction-coordinate-capture hidden>
+                    <div class="khach-hang-location-map khach-hang-location-viewer-map" data-construction-map></div>
+                    <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ công trình">
+                        <button type="button" class="menu-nav-button khach-hang-location-map-action" data-construction-coordinate-capture aria-label="Lấy tọa độ hiện tại" title="Lấy tọa độ hiện tại" hidden>
                             <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
-                            <span>Lấy tọa độ hiện tại</span>
                         </button>
-                        <button type="button" class="khach-hang-location-map-action" data-construction-map-route>
+                        <button type="button" class="menu-nav-button khach-hang-location-map-action" data-construction-map-route aria-label="Chỉ đường" title="Chỉ đường">
                             <i class="fa-solid fa-route" aria-hidden="true"></i>
-                            <span>Chỉ đường</span>
                         </button>
-                        <a class="khach-hang-location-map-action"
+                        <a class="menu-nav-button khach-hang-location-map-action"
                            href="#"
                            target="_blank"
                            rel="noopener noreferrer"
+                           aria-label="Mở Google Maps"
+                           title="Mở Google Maps"
                            data-construction-map-external>
                             <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
-                            <span>Mở Google Maps</span>
                         </a>
                     </div>
                     <div class="khach-hang-location-viewer-status" data-construction-map-route-status hidden></div>
@@ -1063,19 +1062,11 @@
             let purchaseDetailMap = null;
             let purchaseDetailMarkers = [];
             let constructionMap = null;
-            let constructionTileLayer = null;
             let constructionMapMarker = null;
             let constructionCoordinateCandidateMarker = null;
             let constructionCoordinateCandidate = null;
             let activeConstructionMapTrigger = null;
             let constructionRouteLayer = null;
-            let constructionMapResizeObserver = null;
-            let constructionMapResizeTimer = null;
-            let constructionMapInitializationFrame = null;
-            let constructionTileLoadCount = 0;
-            let constructionTileErrorCount = 0;
-            let constructionFallbackTileLoadCount = 0;
-            let constructionTileFallbackActivated = false;
             let constructionThumbnailObserver = null;
             let activeConstructionLocation = null;
             let speechRecognition = null;
@@ -1084,8 +1075,6 @@
             const defaultCenter = [12.2388, 109.1967];
             const defaultZoom = 13;
             const focusZoom = 16;
-            const CONSTRUCTION_TILE_PRIMARY = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
-            const CONSTRUCTION_TILE_FALLBACK = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
             refreshGpsButton?.querySelector("span")?.replaceChildren(document.createTextNode("L\u1EA5y GPS"));
 
@@ -2380,14 +2369,6 @@
                     .forEach(destroyConstructionMapThumb);
             };
 
-            const getActiveConstructionThumbnailMapCount = () => {
-                if (!(constructionList instanceof HTMLElement)) {
-                    return 0;
-                }
-                return Array.from(constructionList.querySelectorAll("[data-construction-map-thumb]"))
-                    .filter((element) => !!element._constructionThumbMap).length;
-            };
-
             const initConstructionMapThumb = (element) => {
                 if (!(element instanceof HTMLElement) ||
                     element.dataset.mapReady === "true" ||
@@ -2413,7 +2394,7 @@
                     boxZoom: false,
                     tap: false
                 });
-                window.L.tileLayer(CONSTRUCTION_TILE_PRIMARY, {
+                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 18,
                     updateWhenIdle: true,
                     updateWhenZooming: false,
@@ -2655,156 +2636,53 @@
                 constructionMapRouteStatus.textContent = message || "";
             };
 
-            const destroyConstructionMap = () => {
-                if (constructionMapInitializationFrame !== null) {
-                    window.cancelAnimationFrame(constructionMapInitializationFrame);
-                    constructionMapInitializationFrame = null;
-                }
-                if (constructionMapResizeTimer !== null) {
-                    window.clearTimeout(constructionMapResizeTimer);
-                    constructionMapResizeTimer = null;
-                }
-                constructionMapResizeObserver?.disconnect();
-                constructionMapResizeObserver = null;
-                constructionTileLayer?.off();
-                if (constructionMap) {
-                    constructionMap.off();
-                    constructionMap.remove();
-                }
-                constructionMap = null;
-                constructionTileLayer = null;
-                constructionMapMarker = null;
-                constructionCoordinateCandidateMarker = null;
-                constructionRouteLayer = null;
-                constructionCoordinateCandidate = null;
-                constructionTileLoadCount = 0;
-                constructionTileErrorCount = 0;
-                constructionFallbackTileLoadCount = 0;
-                constructionTileFallbackActivated = false;
-            };
-
-            const refreshConstructionMapSize = () => {
-                if (!constructionMap || !(constructionMapElement instanceof HTMLElement)) {
-                    return;
-                }
-                const bounds = constructionMapElement.getBoundingClientRect();
-                if (bounds.width <= 0 || bounds.height <= 0) {
-                    return;
-                }
-                constructionMap.invalidateSize({ animate: false, pan: false, debounceMoveend: true });
-            };
-
-            const logConstructionTileDiagnostics = (provider) => {
-                console.debug("[ConstructionMap] tile", {
-                    provider,
-                    loadCount: provider === "fallback" ? constructionFallbackTileLoadCount : constructionTileLoadCount,
-                    errorCount: constructionTileErrorCount,
-                    activeThumbnailMaps: getActiveConstructionThumbnailMapCount()
-                });
-            };
-
-            const createConstructionTileLayer = (url, provider) => {
-                const tileLayer = window.L.tileLayer(url, {
-                    maxZoom: 19,
-                    updateWhenIdle: true,
-                    updateWhenZooming: false,
-                    keepBuffer: 1,
-                    attribution: provider === "primary"
-                        ? "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
-                        : "&copy; OpenStreetMap contributors"
-                });
-                tileLayer.on("tileload", () => {
-                    if (provider === "fallback") {
-                        constructionFallbackTileLoadCount += 1;
-                    } else {
-                        constructionTileLoadCount += 1;
-                    }
-                });
-                tileLayer.on("load", () => logConstructionTileDiagnostics(provider));
-                tileLayer.on("tileerror", () => {
-                    constructionTileErrorCount += 1;
-                    logConstructionTileDiagnostics(provider);
-                    if (provider === "primary" && constructionTileErrorCount >= 3 && !constructionTileFallbackActivated) {
-                        switchConstructionTileProvider(CONSTRUCTION_TILE_FALLBACK);
-                    }
-                });
-                return tileLayer;
-            };
-
-            const switchConstructionTileProvider = (url) => {
-                if (!constructionMap || constructionTileFallbackActivated) {
-                    return;
-                }
-                constructionTileFallbackActivated = true;
-                console.debug("[ConstructionMap] switching tile provider to fallback");
-                if (constructionTileLayer) {
-                    constructionTileLayer.off();
-                    constructionMap.removeLayer(constructionTileLayer);
-                }
-                constructionTileLayer = createConstructionTileLayer(url, "fallback");
-                constructionTileLayer.addTo(constructionMap);
-                refreshConstructionMapSize();
-            };
-
             const ensureConstructionMap = () => {
                 if (!(window.L && typeof window.L.map === "function") || !(constructionMapElement instanceof HTMLElement)) {
                     setConstructionRouteStatus("Không thể khởi tạo bản đồ trên trình duyệt này.", "error");
                     return false;
                 }
                 if (constructionMap) {
+                    window.setTimeout(() => constructionMap.invalidateSize(), 120);
                     return true;
                 }
-                const bounds = constructionMapElement.getBoundingClientRect();
-                if (bounds.width <= 0 || bounds.height <= 0) {
-                    return false;
-                }
                 constructionMap = window.L.map(constructionMapElement, {
-                    zoomControl: true,
-                    attributionControl: true
+                    zoomControl: true
                 });
-                constructionTileLayer = createConstructionTileLayer(CONSTRUCTION_TILE_PRIMARY, "primary");
-                constructionTileLayer.addTo(constructionMap);
-                if ("ResizeObserver" in window) {
-                    constructionMapResizeObserver = new ResizeObserver(() => {
-                        if (constructionMapResizeTimer !== null) {
-                            window.clearTimeout(constructionMapResizeTimer);
-                        }
-                        constructionMapResizeTimer = window.setTimeout(() => {
-                            constructionMapResizeTimer = null;
-                            refreshConstructionMapSize();
-                        }, 150);
-                    });
-                    constructionMapResizeObserver.observe(constructionMapElement);
-                }
+                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
+                }).addTo(constructionMap);
+                constructionMap.setView([16.0471, 108.2068], 6);
+                window.setTimeout(() => constructionMap.invalidateSize(), 120);
                 return true;
             };
 
-            const initializeConstructionMapWhenSized = (lat, lng, attempt = 0) => {
-                if (!(constructionMapShell instanceof HTMLElement) || constructionMapShell.hidden ||
-                    !(constructionMapElement instanceof HTMLElement)) {
+            const syncConstructionMap = (zoom = 16) => {
+                if (!(constructionMapShell instanceof HTMLElement) || constructionMapShell.hidden) {
                     return;
                 }
-                const bounds = constructionMapElement.getBoundingClientRect();
-                if ((bounds.width <= 0 || bounds.height <= 0) && attempt < 10) {
-                    constructionMapInitializationFrame = window.requestAnimationFrame(() => {
-                        initializeConstructionMapWhenSized(lat, lng, attempt + 1);
-                    });
-                    return;
-                }
-                constructionMapInitializationFrame = null;
                 if (!ensureConstructionMap()) {
-                    setConstructionRouteStatus("Không thể khởi tạo bản đồ vì vùng hiển thị chưa sẵn sàng.", "error");
                     return;
                 }
-                if (lat !== null && lng !== null) {
-                    const point = [lat, lng];
-                    constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                if (activeConstructionLocation &&
+                    activeConstructionLocation.lat !== null &&
+                    activeConstructionLocation.lng !== null) {
+                    const point = [activeConstructionLocation.lat, activeConstructionLocation.lng];
+                    if (!constructionMapMarker) {
+                        constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                    } else {
+                        constructionMapMarker.setLatLng(point);
+                    }
                     constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
-                    constructionMap.setView(point, 16);
+                    constructionMap.setView(point, zoom);
                 } else {
+                    if (constructionMapMarker) {
+                        constructionMap.removeLayer(constructionMapMarker);
+                        constructionMapMarker = null;
+                    }
                     constructionMap.setView([16.0471, 108.2068], 6);
                 }
-                window.requestAnimationFrame(refreshConstructionMapSize);
+                window.setTimeout(() => constructionMap.invalidateSize(), 100);
             };
 
             const syncConstructionMapExternalLink = () => {
@@ -2878,23 +2756,22 @@
                 }
                 constructionThumbnailObserver?.disconnect();
                 constructionThumbnailObserver = null;
-                const activeThumbnailMapsBeforeFullscreen = getActiveConstructionThumbnailMapCount();
                 destroyAllConstructionMapThumbs();
-                console.debug("[ConstructionMap] fullscreen isolation", {
-                    activeThumbnailMapsBeforeFullscreen,
-                    activeThumbnailMaps: getActiveConstructionThumbnailMapCount()
-                });
-                destroyConstructionMap();
+                if (constructionRouteLayer && constructionMap) {
+                    constructionMap.removeLayer(constructionRouteLayer);
+                    constructionRouteLayer = null;
+                }
                 setConstructionRouteStatus("", "info");
                 syncConstructionMapExternalLink();
-                constructionMapInitializationFrame = window.requestAnimationFrame(() => {
-                    initializeConstructionMapWhenSized(lat, lng);
-                });
+                syncConstructionMap();
             };
 
             const closeConstructionMap = () => {
                 clearConstructionCoordinateCandidate();
-                destroyConstructionMap();
+                if (constructionRouteLayer && constructionMap) {
+                    constructionMap.removeLayer(constructionRouteLayer);
+                    constructionRouteLayer = null;
+                }
                 if (constructionMapShell instanceof HTMLElement) {
                     constructionMapShell.hidden = true;
                 }
@@ -3114,6 +2991,7 @@
                     const bounds = constructionRouteLayer.getBounds();
                     if (bounds.isValid()) {
                         constructionMap.fitBounds(bounds.pad(0.15));
+                        window.setTimeout(() => constructionMap.invalidateSize(), 100);
                     }
                     const distanceKm = (route.distance / 1000).toFixed(1);
                     const durationMinutes = Math.round(route.duration / 60);
