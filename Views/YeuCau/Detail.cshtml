@@ -218,90 +218,6 @@
             </div>
         }
 
-        @if (Model.IsEditMode)
-        {
-            var rating = Model.CustomerRating;
-            var zaloProfile = Model.CustomerZaloProfile;
-            <article class="panel yeu-cau-zalo-rating-panel crud-tab-panel @(activeTab == "danh-gia" ? "is-active" : "")"
-                     data-tab-panel
-                     data-tab="danh-gia"
-                     data-rating-tab-panel
-                     role="tabpanel"
-                     @(activeTab == "danh-gia" ? null : "hidden")>
-                <div class="yeu-cau-zalo-rating-card @(rating?.HasRating == true && rating.RatingScore <= 2 ? "is-warning" : null)">
-                    <div class="yeu-cau-zalo-rating-heading">
-                        <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-star" aria-hidden="true"></i></span>
-                        <div>
-                            <h3>Danh gia cua khach hang</h3>
-                            <p>@(rating?.HasRating == true ? "Khach hang da gui danh gia chat luong cong viec." : "Khach hang chua danh gia phieu nay.")</p>
-                        </div>
-                    </div>
-                    @if (rating?.HasRating == true)
-                    {
-                        <div class="yeu-cau-rating-score" aria-label="Diem danh gia">
-                            @for (var score = 1; score <= 5; score++)
-                            {
-                                <i class="fa-solid fa-star @(score <= rating.RatingScore ? "is-active" : null)" aria-hidden="true"></i>
-                            }
-                            <strong>@rating.RatingScore/5</strong>
-                        </div>
-                        <dl class="yeu-cau-zalo-rating-meta">
-                            <div><dt>Thoi gian</dt><dd>@(rating.SubmittedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
-                            <div><dt>Nguon</dt><dd>@(string.IsNullOrWhiteSpace(rating.Source) ? "ZaloQr" : rating.Source)</dd></div>
-                            <div><dt>Ghi chu</dt><dd>@(string.IsNullOrWhiteSpace(rating.Note) ? "-" : rating.Note)</dd></div>
-                            <div><dt>Nhan xet</dt><dd>@(string.IsNullOrWhiteSpace(rating.CustomerComment) ? "-" : rating.CustomerComment)</dd></div>
-                        </dl>
-                        @if (rating.Items.Count > 0)
-                        {
-                            <div class="yeu-cau-rating-item-list">
-                                @foreach (var item in rating.Items)
-                                {
-                                    <div class="yeu-cau-rating-item">
-                                        <strong>@item.WorkName</strong>
-                                        <span>@item.RatingScore/5</span>
-                                        <small>@(string.IsNullOrWhiteSpace(item.Note) ? "-" : item.Note)</small>
-                                    </div>
-                                }
-                            </div>
-                        }
-                    }
-                    else
-                    {
-                        <button type="button" class="secondary-button" data-zalo-qr-open>
-                            <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
-                            <span>Gui QR danh gia Zalo</span>
-                        </button>
-                    }
-                </div>
-
-                <div class="yeu-cau-zalo-rating-card">
-                    <div class="yeu-cau-zalo-rating-heading">
-                        <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
-                        <div>
-                            <h3>Thong tin Zalo</h3>
-                            <p>@(zaloProfile?.Connected == true ? "Da ket noi Zalo OA." : "Chua ket noi Zalo OA.")</p>
-                        </div>
-                    </div>
-                    <span class="status-pill @(zaloProfile?.Connected == true ? "completed" : "pending")">
-                        @(zaloProfile?.Connected == true ? "Da ket noi Zalo OA" : "Chua ket noi Zalo")
-                    </span>
-                    @if (zaloProfile?.Connected == true)
-                    {
-                        <dl class="yeu-cau-zalo-rating-meta">
-                            <div><dt>Zalo User ID</dt><dd>@zaloProfile.ZaloUserId</dd></div>
-                            <div><dt>Ten Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloDisplayName) ? "-" : zaloProfile.ZaloDisplayName)</dd></div>
-                            <div><dt>So dien thoai Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloPhoneNumber) ? "-" : zaloProfile.ZaloPhoneNumber)</dd></div>
-                            <div><dt>Lan tuong tac gan nhat</dt><dd>@(zaloProfile.LastInteractionAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
-                        </dl>
-                    }
-                    else
-                    {
-                        <p class="yeu-cau-zalo-rating-hint">Gui QR Zalo de khach ket noi va danh gia. Neu khach da co Zalo ID, QR se vao thang trang danh gia.</p>
-                    }
-                </div>
-            </article>
-        }
-
         <article class="panel khach-hang-detail-panel">
             <div class="crud-tabs khach-hang-detail-tabs" data-tab-group>
                 <div class="crud-tab-list" role="tablist" aria-label="Nhóm thông tin yêu cầu">
@@ -1242,6 +1158,89 @@
                         </div>
                     }
                 </div>
+            @if (Model.IsEditMode)
+            {
+                var rating = Model.CustomerRating;
+                var zaloProfile = Model.CustomerZaloProfile;
+                <article class="panel yeu-cau-zalo-rating-panel crud-tab-panel @(activeTab == "danh-gia" ? "is-active" : "")"
+                         data-tab-panel
+                         data-tab="danh-gia"
+                         data-rating-tab-panel
+                         role="tabpanel"
+                         @(activeTab == "danh-gia" ? null : "hidden")>
+                    <div class="yeu-cau-zalo-rating-card @(rating?.HasRating == true && rating.RatingScore <= 2 ? "is-warning" : null)">
+                        <div class="yeu-cau-zalo-rating-heading">
+                            <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-star" aria-hidden="true"></i></span>
+                            <div>
+                                <h3>Danh gia cua khach hang</h3>
+                                <p>@(rating?.HasRating == true ? "Khach hang da gui danh gia chat luong cong viec." : "Khach hang chua danh gia phieu nay.")</p>
+                            </div>
+                        </div>
+                        @if (rating?.HasRating == true)
+                        {
+                            <div class="yeu-cau-rating-score" aria-label="Diem danh gia">
+                                @for (var score = 1; score <= 5; score++)
+                                {
+                                    <i class="fa-solid fa-star @(score <= rating.RatingScore ? "is-active" : null)" aria-hidden="true"></i>
+                                }
+                                <strong>@rating.RatingScore/5</strong>
+                            </div>
+                            <dl class="yeu-cau-zalo-rating-meta">
+                                <div><dt>Thoi gian</dt><dd>@(rating.SubmittedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
+                                <div><dt>Nguon</dt><dd>@(string.IsNullOrWhiteSpace(rating.Source) ? "ZaloQr" : rating.Source)</dd></div>
+                                <div><dt>Ghi chu</dt><dd>@(string.IsNullOrWhiteSpace(rating.Note) ? "-" : rating.Note)</dd></div>
+                                <div><dt>Nhan xet</dt><dd>@(string.IsNullOrWhiteSpace(rating.CustomerComment) ? "-" : rating.CustomerComment)</dd></div>
+                            </dl>
+                            @if (rating.Items.Count > 0)
+                            {
+                                <div class="yeu-cau-rating-item-list">
+                                    @foreach (var item in rating.Items)
+                                    {
+                                        <div class="yeu-cau-rating-item">
+                                            <strong>@item.WorkName</strong>
+                                            <span>@item.RatingScore/5</span>
+                                            <small>@(string.IsNullOrWhiteSpace(item.Note) ? "-" : item.Note)</small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <button type="button" class="secondary-button" data-zalo-qr-open>
+                                <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                                <span>Gui QR danh gia Zalo</span>
+                            </button>
+                        }
+                    </div>
+
+                    <div class="yeu-cau-zalo-rating-card">
+                        <div class="yeu-cau-zalo-rating-heading">
+                            <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
+                            <div>
+                                <h3>Thong tin Zalo</h3>
+                                <p>@(zaloProfile?.Connected == true ? "Da ket noi Zalo OA." : "Chua ket noi Zalo OA.")</p>
+                            </div>
+                        </div>
+                        <span class="status-pill @(zaloProfile?.Connected == true ? "completed" : "pending")">
+                            @(zaloProfile?.Connected == true ? "Da ket noi Zalo OA" : "Chua ket noi Zalo")
+                        </span>
+                        @if (zaloProfile?.Connected == true)
+                        {
+                            <dl class="yeu-cau-zalo-rating-meta">
+                                <div><dt>Zalo User ID</dt><dd>@zaloProfile.ZaloUserId</dd></div>
+                                <div><dt>Ten Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloDisplayName) ? "-" : zaloProfile.ZaloDisplayName)</dd></div>
+                                <div><dt>So dien thoai Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloPhoneNumber) ? "-" : zaloProfile.ZaloPhoneNumber)</dd></div>
+                                <div><dt>Lan tuong tac gan nhat</dt><dd>@(zaloProfile.LastInteractionAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
+                            </dl>
+                        }
+                        else
+                        {
+                            <p class="yeu-cau-zalo-rating-hint">Gui QR Zalo de khach ket noi va danh gia. Neu khach da co Zalo ID, QR se vao thang trang danh gia.</p>
+                        }
+                    </div>
+                </article>
+            }
             </div>
         </article>
 
@@ -1936,8 +1935,6 @@
         .yeu-cau-rating-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px; border: 1px solid #d9e9e5; border-radius: 7px; background: #fff; }
         .yeu-cau-rating-item small { grid-column: 1 / -1; color: #607b76; }
         .yeu-cau-zalo-rating-hint { margin: 0; color: #607b76; line-height: 1.45; }
-        .yeu-cau-zalo-rating-panel[data-rating-tab-panel] { display: none; }
-        .crud-tabs > .yeu-cau-zalo-rating-panel[data-rating-tab-panel].is-active { display: grid; }
         .yeu-cau-complete-button { background: #08735f; }
         .yeu-cau-complete-modal { width: min(560px, calc(100% - 24px)); }
         .yeu-cau-complete-modal-body { display: grid; gap: 18px; padding: 20px; }
@@ -1967,12 +1964,6 @@
             const completeOpenButton = root.querySelector("[data-complete-open]");
             const completeShell = root.querySelector("[data-complete-shell]");
             const completeCloseButtons = completeShell?.querySelectorAll("[data-complete-close]") ?? [];
-            const ratingTabPanel = root.querySelector("[data-rating-tab-panel]");
-            const tabGroup = root.querySelector("[data-tab-group]");
-            if (ratingTabPanel instanceof HTMLElement && tabGroup instanceof HTMLElement) {
-                tabGroup.appendChild(ratingTabPanel);
-            }
-
             const closeCompleteModal = () => {
                 if (completeShell instanceof HTMLElement) {
                     completeShell.hidden = true;

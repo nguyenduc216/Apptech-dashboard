@@ -1139,6 +1139,7 @@ public sealed class YeuCauService(
                 workCommand.CommandText = $"""
                     UPDATE [{WorkTableName}]
                     SET TrangThaiCongViec = @CompletedWorkStatus,
+                        CheckoutTime = ISNULL(CheckoutTime, @CompletedAt),
                         Updated_Date = @CompletedAt,
                         Updated_By = @UpdatedBy
                     WHERE IDYeuCau = @Id
