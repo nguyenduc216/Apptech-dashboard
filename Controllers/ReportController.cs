@@ -12,11 +12,13 @@ namespace ApptechDashboard.Controllers;
 public class ReportController(
     IChamCongReportService chamCongReportService,
     ICongViecReportService congViecReportService,
+    ISimpleExcelService simpleExcelService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService) : Controller
 {
     private readonly IChamCongReportService _chamCongReportService = chamCongReportService;
     private readonly ICongViecReportService _congViecReportService = congViecReportService;
+    private readonly ISimpleExcelService _simpleExcelService = simpleExcelService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
 
@@ -51,6 +53,52 @@ public class ReportController(
         ViewData["Title"] = "Báo cáo công việc";
         ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Công việc";
         return View(model);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportChamCong([FromQuery] ChamCongReportQuery query)
+    {
+        if (!await CanViewChamCongReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var today = DateTime.Today;
+        var model = await _chamCongReportService.GetMonthlyReportAsync(
+            query.Month.GetValueOrDefault(today.Month),
+            query.Year.GetValueOrDefault(today.Year),
+            query.Tab,
+            query.EmployeeIds,
+            HttpContext.RequestAborted);
+        var tabName = model.ActiveTab switch
+        {
+            "di-tre-ve-som" => "di-tre-ve-som",
+            "checkin-out" => "checkin-out",
+            _ => "gio-cong"
+        };
+        return File(
+            _simpleExcelService.BuildChamCongReport(model),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"bao-cao-cham-cong-{tabName}-{model.Year}-{model.Month:00}.xlsx");
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportCongViec([FromQuery] CongViecReportQuery query)
+    {
+        if (!await CanViewCongViecReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var model = await _congViecReportService.GetReportAsync(
+            query.DateFrom,
+            query.DateTo,
+            query.EmployeeIds,
+            HttpContext.RequestAborted);
+        return File(
+            _simpleExcelService.BuildCongViecReport(model),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"bao-cao-cong-viec-{model.DateFrom:yyyyMMdd}-{model.DateTo:yyyyMMdd}.xlsx");
     }
 
     private async Task<bool> CanViewChamCongReportAsync(CancellationToken cancellationToken)

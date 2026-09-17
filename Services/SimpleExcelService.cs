@@ -19,6 +19,8 @@ public interface ISimpleExcelService
     byte[] BuildHangHoaTemplate();
     IReadOnlyList<HangHoaImportRow> ReadHangHoaTemplate(Stream stream);
     byte[] BuildHangHoaImportResult(IReadOnlyList<HangHoaImportRowResult> rows);
+    byte[] BuildChamCongReport(ChamCongReportViewModel model);
+    byte[] BuildCongViecReport(CongViecReportViewModel model);
 }
 
 public sealed class SimpleExcelService : ISimpleExcelService
@@ -205,6 +207,78 @@ public sealed class SimpleExcelService : ISimpleExcelService
         }).ToArray();
 
         return BuildWorkbook("KetQuaImportHangHoa", headers, values);
+    }
+
+    public byte[] BuildChamCongReport(ChamCongReportViewModel model)
+    {
+        var dayHeaders = model.Days.Select(day => $"{day.Day} {day.WeekdayLabel}").ToArray();
+        var (sheetName, totalHeader) = model.ActiveTab switch
+        {
+            "di-tre-ve-som" => ("DiTreVeSom", "Tổng phút đi trễ/về sớm"),
+            "checkin-out" => ("CheckinOut", "Tổng checkin/out"),
+            _ => ("GioCong", "Tổng giờ trong tháng")
+        };
+        var headers = new[] { "TT", "Họ và tên", "Chức vụ" }
+            .Concat(dayHeaders)
+            .Append(totalHeader)
+            .ToArray();
+        var rows = model.Employees.Select((employee, index) =>
+        {
+            var values = new List<string?>
+            {
+                (index + 1).ToString(CultureInfo.InvariantCulture),
+                employee.HoTen,
+                employee.ChucVu
+            };
+
+            foreach (var day in model.Days)
+            {
+                values.Add(model.ActiveTab switch
+                {
+                    "di-tre-ve-som" => employee.LateEarlyMinutesByDay.TryGetValue(day.Day, out var minutes)
+                        ? minutes.ToString(CultureInfo.InvariantCulture)
+                        : null,
+                    "checkin-out" => employee.CountsByDay.TryGetValue(day.Day, out var count)
+                        ? $"{count.CheckinCount}/{count.CheckoutCount}"
+                        : null,
+                    _ => employee.HoursByDay.TryGetValue(day.Day, out var hours)
+                        ? hours.ToString("0.##", CultureInfo.InvariantCulture)
+                        : null
+                });
+            }
+
+            values.Add(model.ActiveTab switch
+            {
+                "di-tre-ve-som" => employee.TotalLateEarlyMinutes.ToString(CultureInfo.InvariantCulture),
+                "checkin-out" => $"{employee.TotalCheckinCount}/{employee.TotalCheckoutCount}",
+                _ => employee.TotalHours.ToString("0.##", CultureInfo.InvariantCulture)
+            });
+            return (IReadOnlyList<string?>)values;
+        }).ToArray();
+
+        return BuildWorkbook(sheetName, headers, rows);
+    }
+
+    public byte[] BuildCongViecReport(CongViecReportViewModel model)
+    {
+        var headers = new[]
+        {
+            "TT", "Nhân viên", "Mã phiếu yêu cầu", "Tên khách hàng",
+            "Địa điểm", "Ngày yêu cầu", "Công việc", "Trạng thái"
+        };
+        var rows = model.Details.Select((item, index) => (IReadOnlyList<string?>)new string?[]
+        {
+            (index + 1).ToString(CultureInfo.InvariantCulture),
+            item.EmployeeName,
+            item.MaYeuCau,
+            item.TenKhachHang,
+            item.DiaDiem,
+            item.NgayYeuCau?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            item.TenCongViec,
+            item.TrangThaiCongViec
+        }).ToArray();
+
+        return BuildWorkbook("BaoCaoCongViec", headers, rows);
     }
 
     private static byte[] BuildTemplate(string sheetName, params string[] headers)
