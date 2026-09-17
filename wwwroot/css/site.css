@@ -4566,6 +4566,7 @@ body.report-fullscreen-open {
 }
 
 .cham-cong-attendance-line {
+    position: relative;
     display: grid;
     grid-template-columns: 58px minmax(0, 1fr);
     gap: 8px;
@@ -4573,11 +4574,30 @@ body.report-fullscreen-open {
     height: auto;
     min-height: 72px;
     max-height: none;
-    padding: 6px 8px;
+    padding: 6px 38px 6px 8px;
     border-radius: 8px;
     border: 1px solid rgba(10, 74, 61, 0.12);
     background: rgba(245, 250, 248, 0.94);
     overflow: hidden;
+}
+
+.cham-cong-activity-type {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    display: inline-grid !important;
+    place-items: center;
+    width: 25px;
+    height: 25px;
+    margin: 0 !important;
+    border: 1px solid rgba(5, 117, 92, 0.28);
+    border-radius: 6px;
+    background: #d9f7ed;
+    color: #05755c;
+    font-size: 0.75rem;
+    line-height: 1;
+    box-shadow: 0 2px 6px rgba(6, 79, 63, 0.12);
+    z-index: 1;
 }
 
 .cham-cong-attendance-line.is-checkin,
@@ -4670,20 +4690,32 @@ body.report-fullscreen-open {
 .cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-customer-event,
 .cham-cong-attendance-line.is-customer-event.is-checkin,
 .cham-cong-attendance-line.is-customer-event.is-checkout-complete {
-    border-color: rgba(37, 99, 235, 0.42);
-    background: rgba(219, 234, 254, 0.9);
-    color: #1e3a8a;
+    border-color: rgba(202, 138, 4, 0.46);
+    background: rgba(254, 249, 195, 0.9);
+    color: #713f12;
 }
 
 .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong,
 .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong i,
 .cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong,
 .cham-cong-timeline-item.is-pending .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong i {
-    color: #1d4ed8;
+    color: #a16207;
 }
 
 .cham-cong-attendance-line.is-customer-event .cham-cong-request-chip {
-    color: #1e40af;
+    color: #854d0e;
+}
+
+.cham-cong-attendance-line.is-customer-event .cham-cong-activity-type {
+    border-color: rgba(202, 138, 4, 0.38);
+    background: #facc15;
+    color: #713f12;
+}
+
+.cham-cong-attendance-line.is-purchase-event .cham-cong-activity-type {
+    border-color: rgba(3, 105, 161, 0.3);
+    background: #dbeafe;
+    color: #0369a1;
 }
 
 .cham-cong-timeline-item.has-purchase-checkin {

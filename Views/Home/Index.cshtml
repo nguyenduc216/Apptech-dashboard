@@ -220,6 +220,8 @@
                                         : entry.IsCheckout ? "Checkout" : "Checkin";
                                     var metaText = isCustomerCheckin ? item.MaYeuCau : isPurchaseCheckin ? "Mua hàng" : "AppTech";
                                     var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang đi" : "Hoàn tất";
+                                    var activityTypeLabel = isPurchaseCheckin ? "Đi mua hàng" : isCustomerCheckin ? "Chấm công công trình" : "Chấm công";
+                                    var activityTypeIcon = isPurchaseCheckin ? "fa-cart-shopping" : isCustomerCheckin ? "fa-screwdriver-wrench" : "fa-user-check";
                                     <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && !isPurchaseCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event")"
                                              @(isPurchaseCheckin ? "data-purchase-detail-open" : null)
                                              data-purchase-id="@(isPurchaseCheckin ? item.Id.ToString(invariantCulture) : null)"
@@ -238,6 +240,9 @@
                                              data-purchase-quick="@(isPurchaseCheckin ? item.IsQuickPurchase.ToString().ToLowerInvariant() : null)"
                                              data-purchase-open="@(isPurchaseCheckin ? item.IsOpen.ToString().ToLowerInvariant() : null)"
                                              data-purchase-can-delete="@(isPurchaseCheckin ? chamCong.CanAdminManageAttendance.ToString().ToLowerInvariant() : null)">
+                                        <span class="cham-cong-activity-type" title="@activityTypeLabel" aria-label="@activityTypeLabel">
+                                            <i class="fa-solid @activityTypeIcon" aria-hidden="true"></i>
+                                        </span>
                                         <div class="cham-cong-entry-photo">
                                             @if (!string.IsNullOrWhiteSpace(entry.ImagePath))
                                             {
@@ -2206,6 +2211,8 @@
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
                     const lineClass = event.isCheckout ? "is-checkout-complete" : "is-checkin";
                     const iconClass = isPurchaseCheckin ? "fa-cart-shopping" : event.isCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                    const activityTypeLabel = isPurchaseCheckin ? "Đi mua hàng" : isCustomerCheckin ? "Chấm công công trình" : "Chấm công";
+                    const activityTypeIcon = isPurchaseCheckin ? "fa-cart-shopping" : isCustomerCheckin ? "fa-screwdriver-wrench" : "fa-user-check";
                     const label = isPurchaseCheckin
                         ? item.isQuickPurchase ? "mua hàng nhanh" : event.isCheckout ? "checkout mua hàng" : "check-in mua hàng"
                         : event.isCheckout ? "checkout" : "checkin";
@@ -2214,6 +2221,9 @@
                         : '<i class="fa-solid fa-image" aria-hidden="true"></i>';
                     return `
                         <section class="cham-cong-attendance-line ${lineClass} ${isViolation ? "is-attendance-violation" : ""} ${isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event"}" ${buildPurchaseDetailAttributes(item, employeeName)}>
+                            <span class="cham-cong-activity-type" title="${activityTypeLabel}" aria-label="${activityTypeLabel}">
+                                <i class="fa-solid ${activityTypeIcon}" aria-hidden="true"></i>
+                            </span>
                             <div class="cham-cong-entry-photo">${photo}</div>
                             <div class="cham-cong-entry-content">
                                 <strong><i class="fa-solid ${iconClass}" aria-hidden="true"></i>${escapeHtml(event.timeText || "--:--")}</strong>
