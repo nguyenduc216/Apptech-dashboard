@@ -566,7 +566,7 @@
                         value: option.value || "",
                         searchText: normalizeLiveSelectTerm(`${option.textContent || ""} ${option.value || ""}`)
                     }))
-                    .filter((item) => !normalizedQuery || item.searchText.includes(normalizedQuery));
+                    .filter((item) => !item.option.hidden && (!normalizedQuery || item.searchText.includes(normalizedQuery)));
 
                 optionsNode.innerHTML = "";
                 optionButtons = [];
@@ -777,7 +777,7 @@
                 childList: true,
                 subtree: true,
                 attributes: true,
-                attributeFilter: ["disabled", "label", "selected", "value"]
+                attributeFilter: ["disabled", "hidden", "label", "selected", "value"]
             });
 
             liveSelectStates.set(select, state);
