@@ -58,6 +58,13 @@ public interface IYeuCauService
         string currentUser,
         CancellationToken cancellationToken = default);
 
+    Task<(bool Succeeded, string? ErrorMessage)> ReplaceLocationCoordinatesAsync(
+        int idDiaDiem,
+        decimal longAddress,
+        decimal latAddress,
+        string currentUser,
+        CancellationToken cancellationToken = default);
+
     Task<string> GenerateNextCodeAsync(DateTime? requestDate, CancellationToken cancellationToken = default);
 
     Task<(bool Succeeded, string? ErrorMessage, int? Id)> CreateAsync(
@@ -236,6 +243,8 @@ public sealed class YeuCauService(
                     dd.DienThoai,
                     dd.LongAddress,
                     dd.LatAddress,
+                    dd.Updated_LongLat_Date,
+                    dd.Updated_LongLat_By,
                     ISNULL(workStats.SoCongViec, 0) AS SoCongViec,
                     ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh,
                     ratingStats.RatingScore AS CustomerRatingScore,
@@ -333,6 +342,8 @@ public sealed class YeuCauService(
                     dd.DienThoai,
                     dd.LongAddress,
                     dd.LatAddress,
+                    dd.Updated_LongLat_Date,
+                    dd.Updated_LongLat_By,
                     ISNULL(workStats.SoCongViec, 0) AS SoCongViec,
                     ISNULL(workStats.SoCongViecHoanThanh, 0) AS SoCongViecHoanThanh,
                     ratingStats.RatingScore AS CustomerRatingScore,
@@ -440,7 +451,16 @@ public sealed class YeuCauService(
                     CAST(0 AS bit) AS HasCustomerRating,
                     CAST(0 AS bit) AS ZaloConnected,
                     CAST(NULL AS nvarchar(250)) AS ZaloDisplayName,
-                    CAST(NULL AS nvarchar(50)) AS ZaloPhoneNumber
+                    CAST(NULL AS nvarchar(50)) AS ZaloPhoneNumber,
+                    dd.Updated_LongLat_Date,
+                    dd.Updated_LongLat_By,
+                    CAST(CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM [{WorkTableName}] AS permissionWork
+                        INNER JOIN [{AssignmentTableName}] AS permissionAssign ON permissionAssign.IDYeuCauCongViec = permissionWork.ID
+                        WHERE permissionWork.IDYeuCau = yc.ID
+                          AND permissionAssign.IDNhanVien = @EmployeeId
+                    ) THEN 1 ELSE 0 END AS bit) AS CanUpdateLocationCoordinates
                 FROM [{TableName}] AS yc
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = yc.IDKhachHang
                 LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = yc.IDDiaDiem
@@ -501,7 +521,11 @@ public sealed class YeuCauService(
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                items.Add(MapItem(reader));
+                var item = MapItem(reader);
+                item.UpdatedLongLatDate = GetNullableDateTime(reader, "Updated_LongLat_Date");
+                item.UpdatedLongLatBy = GetNullableString(reader, "Updated_LongLat_By");
+                item.CanUpdateLocationCoordinates = GetNullableBoolean(reader, "CanUpdateLocationCoordinates") ?? false;
+                items.Add(item);
             }
 
             return items;
@@ -652,6 +676,8 @@ public sealed class YeuCauService(
                     dd.DienThoai,
                     dd.LongAddress,
                     dd.LatAddress,
+                    dd.Updated_LongLat_Date,
+                    dd.Updated_LongLat_By,
                     CAST(ISNULL(dd.TrangThaiSuDung, 1) AS bit) AS TrangThaiSuDung
                 FROM [{LocationTableName}] AS dd
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = dd.IDKhachHang
@@ -706,6 +732,8 @@ public sealed class YeuCauService(
                     dd.DienThoai,
                     dd.LongAddress,
                     dd.LatAddress,
+                    dd.Updated_LongLat_Date,
+                    dd.Updated_LongLat_By,
                     CAST(ISNULL(dd.TrangThaiSuDung, 1) AS bit) AS TrangThaiSuDung
                 FROM [{LocationTableName}] AS dd
                 LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = dd.IDKhachHang
@@ -730,6 +758,39 @@ public sealed class YeuCauService(
         string currentUser,
         CancellationToken cancellationToken = default)
     {
+        return await SaveLocationCoordinatesAsync(
+            idDiaDiem,
+            longAddress,
+            latAddress,
+            currentUser,
+            onlyWhenMissing: true,
+            cancellationToken);
+    }
+
+    public async Task<(bool Succeeded, string? ErrorMessage)> ReplaceLocationCoordinatesAsync(
+        int idDiaDiem,
+        decimal longAddress,
+        decimal latAddress,
+        string currentUser,
+        CancellationToken cancellationToken = default)
+    {
+        return await SaveLocationCoordinatesAsync(
+            idDiaDiem,
+            longAddress,
+            latAddress,
+            currentUser,
+            onlyWhenMissing: false,
+            cancellationToken);
+    }
+
+    private async Task<(bool Succeeded, string? ErrorMessage)> SaveLocationCoordinatesAsync(
+        int idDiaDiem,
+        decimal longAddress,
+        decimal latAddress,
+        string currentUser,
+        bool onlyWhenMissing,
+        CancellationToken cancellationToken)
+    {
         if (idDiaDiem <= 0)
         {
             return (false, "Khong xac dinh duoc dia diem can cap nhat toa do.");
@@ -752,8 +813,7 @@ public sealed class YeuCauService(
                     Updated_LongLat_Date = GETDATE(),
                     Updated_LongLat_By = @UpdatedLongLatBy
                 WHERE ID = @IDDiaDiem
-                  AND LongAddress IS NULL
-                  AND LatAddress IS NULL
+                  {(onlyWhenMissing ? "AND LongAddress IS NULL AND LatAddress IS NULL" : string.Empty)}
                 """;
             command.Parameters.Add(new SqlParameter("@IDDiaDiem", SqlDbType.Int) { Value = idDiaDiem });
             command.Parameters.Add(new SqlParameter("@LongAddress", SqlDbType.Decimal) { Precision = 18, Scale = 10, Value = longAddress });
@@ -763,7 +823,7 @@ public sealed class YeuCauService(
             var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
             return affectedRows > 0
                 ? (true, null)
-                : (false, "Dia diem da co toa do hoac khong ton tai.");
+                : (false, onlyWhenMissing ? "Dia diem da co toa do hoac khong ton tai." : "Dia diem khong ton tai.");
         }
         catch (Exception ex)
         {
@@ -1072,6 +1132,8 @@ public sealed class YeuCauService(
                 dd.DienThoai,
                 dd.LongAddress,
                 dd.LatAddress,
+                dd.Updated_LongLat_Date,
+                dd.Updated_LongLat_By,
                 CAST(ISNULL(dd.TrangThaiSuDung, 1) AS bit) AS TrangThaiSuDung
             FROM [{LocationTableName}] AS dd
             LEFT JOIN [{CustomerTableName}] AS kh ON kh.ID = dd.IDKhachHang
@@ -2960,6 +3022,8 @@ public sealed class YeuCauService(
             DienThoai = GetNullableString(reader, "DienThoai"),
             LongAddress = GetNullableDecimal(reader, "LongAddress"),
             LatAddress = GetNullableDecimal(reader, "LatAddress"),
+            UpdatedLongLatDate = GetNullableDateTime(reader, "Updated_LongLat_Date"),
+            UpdatedLongLatBy = GetNullableString(reader, "Updated_LongLat_By"),
             TrangThaiSuDung = GetNullableBoolean(reader, "TrangThaiSuDung") ?? true
         };
     }

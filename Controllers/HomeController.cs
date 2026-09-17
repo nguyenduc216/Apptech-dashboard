@@ -113,6 +113,7 @@ public class HomeController(
     {
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
         var canSelectEmployees = await CanSelectChamCongEmployeesAsync(HttpContext.RequestAborted);
+        var canAdminManageAttendance = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
         if (!currentEmployeeId.HasValue && !canSelectEmployees)
         {
             return Json(new
@@ -239,8 +240,92 @@ public class HomeController(
                 tiLeHoanThanh = item.TiLeHoanThanh,
                 latAddress = item.LatAddress,
                 longAddress = item.LongAddress,
-                detailUrl = Url.Action("Edit", "YeuCau", new { id = item.Id, activeTab = "checkin" })
+                locationId = item.IDDiaDiem,
+                canUpdateLocationCoordinates = canAdminManageAttendance || item.CanUpdateLocationCoordinates,
+                updatedLongLatBy = item.UpdatedLongLatBy,
+                updatedLongLatDate = item.UpdatedLongLatDate?.ToString("dd/MM/yyyy HH:mm"),
+                detailUrl = Url.Action("Edit", "YeuCau", new { id = item.Id, activeTab = "cong-viec" })
             })
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateConstructionLocationCoordinates(
+        [FromForm] ConstructionLocationCoordinateUpdateRequest model)
+    {
+        if (model.RequestId <= 0 || model.LocationId <= 0)
+        {
+            return BadRequest(new { succeeded = false, message = "Không xác định được phiếu yêu cầu hoặc địa điểm." });
+        }
+
+        if (!model.Latitude.HasValue ||
+            !model.Longitude.HasValue ||
+            model.Latitude.Value is < -90m or > 90m ||
+            model.Longitude.Value is < -180m or > 180m)
+        {
+            return BadRequest(new { succeeded = false, message = "Tọa độ không hợp lệ." });
+        }
+
+        var request = await _yeuCauService.GetByIdAsync(model.RequestId, HttpContext.RequestAborted);
+        if (request is null)
+        {
+            return NotFound(new { succeeded = false, message = "Không tìm thấy phiếu yêu cầu." });
+        }
+
+        if (request.IDDiaDiem != model.LocationId)
+        {
+            return BadRequest(new { succeeded = false, message = "Địa điểm không thuộc phiếu yêu cầu đang chọn." });
+        }
+
+        var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
+        var isAdmin = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
+        var isAssigned = currentEmployeeId.HasValue &&
+            await _yeuCauService.IsEmployeeAssignedToRequestAsync(
+                model.RequestId,
+                currentEmployeeId.Value,
+                HttpContext.RequestAborted);
+        if (!isAdmin && !isAssigned)
+        {
+            Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Json(new { succeeded = false, message = "Bạn không có quyền cập nhật tọa độ địa điểm này." });
+        }
+
+        var result = await _yeuCauService.ReplaceLocationCoordinatesAsync(
+            model.LocationId,
+            model.Longitude.Value,
+            model.Latitude.Value,
+            GetAuditUserName(),
+            HttpContext.RequestAborted);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new
+            {
+                succeeded = false,
+                message = result.ErrorMessage ?? "Không thể cập nhật tọa độ công trình."
+            });
+        }
+
+        var updatedLocation = await _yeuCauService.GetLocationByIdAsync(model.LocationId, HttpContext.RequestAborted);
+        if (updatedLocation is null)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                succeeded = false,
+                message = "Đã cập nhật nhưng không thể tải lại thông tin tọa độ."
+            });
+        }
+
+        return Json(new
+        {
+            succeeded = true,
+            requestId = model.RequestId,
+            locationId = model.LocationId,
+            latAddress = updatedLocation.LatAddress,
+            longAddress = updatedLocation.LongAddress,
+            updatedLongLatBy = updatedLocation.UpdatedLongLatBy,
+            updatedLongLatDate = updatedLocation.UpdatedLongLatDate?.ToString("dd/MM/yyyy HH:mm"),
+            message = "Đã cập nhật tọa độ công trình."
         });
     }
 
@@ -781,7 +866,8 @@ public class HomeController(
 
     private string GetAuditUserName()
     {
-        return User.Identity?.Name ??
+        return User.FindFirstValue("display_name") ??
+            User.Identity?.Name ??
             User.FindFirstValue(ClaimTypes.Name) ??
             User.FindFirstValue(ClaimTypes.NameIdentifier) ??
             "system";

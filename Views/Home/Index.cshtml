@@ -74,6 +74,7 @@
          data-purchase-checkout-url="@Url.Action("MuaHangCheckout", "Home")"
          data-purchase-delete-url="@Url.Action("MuaHangDelete", "Home")"
          data-construction-requests-url="@Url.Action("CheckinCongTrinhRequests", "Home")"
+         data-construction-coordinate-update-url="@Url.Action("UpdateConstructionLocationCoordinates", "Home")"
          data-distance-limit="@(chamCong.CheckinDistanceLimitMeters?.ToString(invariantCulture) ?? "")"
          data-current-employee-id="@(chamCong.CurrentEmployeeId?.ToString(invariantCulture) ?? "")"
          data-action-employee-id="@(chamCong.SelectedEmployeeIds.FirstOrDefault(chamCong.CurrentEmployeeId ?? 0).ToString(invariantCulture))"
@@ -740,6 +741,10 @@
                 <div class="khach-hang-location-viewer-map-shell">
                     <div class="khach-hang-location-map khach-hang-location-viewer-map construction-map-canvas" data-construction-map></div>
                     <div class="khach-hang-location-viewer-map-actions">
+                        <button type="button" class="khach-hang-location-map-action" data-construction-coordinate-capture hidden>
+                            <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
+                            <span>Lấy tọa độ hiện tại</span>
+                        </button>
                         <button type="button" class="khach-hang-location-map-action" data-construction-map-route>
                             <i class="fa-solid fa-route" aria-hidden="true"></i>
                             <span>Chỉ đường</span>
@@ -754,6 +759,18 @@
                         </a>
                     </div>
                     <div class="khach-hang-location-viewer-status" data-construction-map-route-status hidden></div>
+                    <div class="construction-coordinate-audit" data-construction-coordinate-audit></div>
+                    <div class="construction-coordinate-confirm" data-construction-coordinate-confirm hidden>
+                        <p data-construction-coordinate-confirm-copy></p>
+                        <div class="construction-coordinate-confirm__actions">
+                            <button type="button" class="primary-button" data-construction-coordinate-save>
+                                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                                <span>Cập nhật tọa độ</span>
+                            </button>
+                            <button type="button" class="secondary-button" data-construction-coordinate-cancel>Hủy</button>
+                        </div>
+                    </div>
+                    @Html.AntiForgeryToken()
                 </div>
             </div>
         </section>
@@ -1015,6 +1032,12 @@
             const constructionMapRouteButton = root.querySelector("[data-construction-map-route]");
             const constructionMapExternalLink = root.querySelector("[data-construction-map-external]");
             const constructionMapRouteStatus = root.querySelector("[data-construction-map-route-status]");
+            const constructionCoordinateCaptureButton = root.querySelector("[data-construction-coordinate-capture]");
+            const constructionCoordinateAudit = root.querySelector("[data-construction-coordinate-audit]");
+            const constructionCoordinateConfirm = root.querySelector("[data-construction-coordinate-confirm]");
+            const constructionCoordinateConfirmCopy = root.querySelector("[data-construction-coordinate-confirm-copy]");
+            const constructionCoordinateSaveButton = root.querySelector("[data-construction-coordinate-save]");
+            const constructionCoordinateCancelButton = root.querySelector("[data-construction-coordinate-cancel]");
             let constructionEmployeeChangedByUser = false;
             let constructionRequestController = null;
             let constructionRequestSequence = 0;
@@ -1041,6 +1064,9 @@
             let purchaseDetailMarkers = [];
             let constructionMap = null;
             let constructionMapMarker = null;
+            let constructionCoordinateCandidateMarker = null;
+            let constructionCoordinateCandidate = null;
+            let activeConstructionMapTrigger = null;
             let constructionRouteLayer = null;
             let activeConstructionLocation = null;
             let speechRecognition = null;
@@ -2245,11 +2271,11 @@
                 const baseUrl = item.detailUrl || `/YeuCau/Edit/${item.id}`;
                 try {
                     const url = new URL(baseUrl, window.location.origin);
-                    url.searchParams.set("activeTab", "checkin");
+                    url.searchParams.set("activeTab", "cong-viec");
                     return `${url.pathname}${url.search}${url.hash}`;
                 } catch {
                     const separator = baseUrl.includes("?") ? "&" : "?";
-                    return `${baseUrl}${separator}activeTab=checkin`;
+                    return `${baseUrl}${separator}activeTab=cong-viec`;
                 }
             };
 
@@ -2262,23 +2288,30 @@
                 const phoneHtml = phoneHref
                     ? `<a class="construction-request-card__phone" href="tel:${escapeHtml(phoneHref)}" aria-label="Gọi ${escapeHtml(item.dienThoai)}">${escapeHtml(item.dienThoai)}</a>`
                     : `<span class="construction-request-card__muted">Chưa có số điện thoại</span>`;
-                const mapHtml = hasLocation
-                    ? `<button type="button"
-                               class="construction-request-card__map-thumb"
-                               data-construction-map-open
+                const canUpdateLocation = item.canUpdateLocationCoordinates === true;
+                const canOpenMap = hasLocation || (canUpdateLocation && item.locationId);
+                const mapData = `data-construction-map-open
                                data-id="${escapeHtml(item.id)}"
+                               data-location-id="${escapeHtml(item.locationId || "")}"
                                data-code="${escapeHtml(item.maYeuCau || "")}"
                                data-customer="${escapeHtml(item.tenKhachHang || "")}"
                                data-address="${escapeHtml(item.diaChi || "")}"
-                               data-lat="${lat}"
-                               data-lng="${lng}"
+                               data-lat="${lat ?? ""}"
+                               data-lng="${lng ?? ""}"
+                               data-can-update-coordinate="${canUpdateLocation}"
+                               data-updated-long-lat-by="${escapeHtml(item.updatedLongLatBy || "")}"
+                               data-updated-long-lat-date="${escapeHtml(item.updatedLongLatDate || "")}"`;
+                const mapHtml = hasLocation
+                    ? `<button type="button"
+                               class="construction-request-card__map-thumb"
+                               ${mapData}
                                aria-label="Mở bản đồ ${escapeHtml(item.tenKhachHang || item.maYeuCau || "công trình")}">
                             <span class="construction-request-card__map-canvas" data-construction-map-thumb data-lat="${lat}" data-lng="${lng}"></span>
                             <span class="construction-request-card__map-cta"><i class="fa-solid fa-location-arrow" aria-hidden="true"></i><span>Bản đồ</span></span>
                        </button>`
-                    : `<button type="button" class="construction-request-card__map-thumb is-empty" disabled aria-label="Phiếu chưa có vị trí">
+                    : `<button type="button" class="construction-request-card__map-thumb is-empty" ${canOpenMap ? mapData : "disabled"} aria-label="Phiếu chưa có vị trí">
                             <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-                            <span>Chưa có vị trí</span>
+                            <span>${canOpenMap ? "Gắn vị trí" : "Chưa có vị trí"}</span>
                        </button>`;
 
                 return `
@@ -2309,9 +2342,6 @@
                                 <span><i class="fa-solid fa-calendar-day" aria-hidden="true"></i> YC: ${escapeHtml(item.ngayYeuCau || "-")}</span>
                                 <span><i class="fa-solid fa-calendar-check" aria-hidden="true"></i> TH: ${escapeHtml(item.ngayThucHien || "-")}</span>
                                 <span><i class="fa-solid fa-list-check" aria-hidden="true"></i> ${escapeHtml(item.loaiCongViec || item.noiDungCongViec || "Công việc")}</span>
-                            </div>
-                            <div class="construction-request-card__footer-row">
-                                <span><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> ${escapeHtml(item.tiLeHoanThanh ?? 0)}%</span>
                             </div>
                         </div>
                     </article>`;
@@ -2345,13 +2375,15 @@
                 window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19
                 }).addTo(map);
-                window.L.circleMarker([lat, lng], {
+                const marker = window.L.circleMarker([lat, lng], {
                     radius: 7,
                     color: "#fff",
                     weight: 3,
                     fillColor: "#ef4444",
                     fillOpacity: 1
                 }).addTo(map);
+                element._constructionThumbMap = map;
+                element._constructionThumbMarker = marker;
                 window.setTimeout(() => map.invalidateSize(), 80);
             };
 
@@ -2591,7 +2623,9 @@
                 [40, 140, 320, 700].forEach((delay) => {
                     window.setTimeout(() => {
                         constructionMap.invalidateSize(true);
-                        if (activeConstructionLocation) {
+                        if (activeConstructionLocation &&
+                            activeConstructionLocation.lat !== null &&
+                            activeConstructionLocation.lng !== null) {
                             constructionMap.setView([activeConstructionLocation.lat, activeConstructionLocation.lng], Math.max(constructionMap.getZoom(), 16), {
                                 animate: false
                             });
@@ -2604,7 +2638,33 @@
                 if (!(constructionMapExternalLink instanceof HTMLAnchorElement) || !activeConstructionLocation) {
                     return;
                 }
+                const hasCoordinates = activeConstructionLocation.lat !== null && activeConstructionLocation.lng !== null;
+                constructionMapExternalLink.hidden = !hasCoordinates;
+                if (!hasCoordinates) {
+                    constructionMapExternalLink.removeAttribute("href");
+                    return;
+                }
                 constructionMapExternalLink.href = `https://www.google.com/maps/dir/?api=1&destination=${activeConstructionLocation.lat},${activeConstructionLocation.lng}&travelmode=driving`;
+            };
+
+            const updateConstructionCoordinateAudit = (updatedBy, updatedDate) => {
+                if (!(constructionCoordinateAudit instanceof HTMLElement)) {
+                    return;
+                }
+                constructionCoordinateAudit.textContent = updatedBy && updatedDate
+                    ? `Cập nhật tọa độ gần nhất: ${updatedBy} · ${updatedDate}`
+                    : "Chưa có thông tin cập nhật tọa độ.";
+            };
+
+            const clearConstructionCoordinateCandidate = () => {
+                constructionCoordinateCandidate = null;
+                if (constructionMap && constructionCoordinateCandidateMarker) {
+                    constructionMap.removeLayer(constructionCoordinateCandidateMarker);
+                }
+                constructionCoordinateCandidateMarker = null;
+                if (constructionCoordinateConfirm instanceof HTMLElement) {
+                    constructionCoordinateConfirm.hidden = true;
+                }
             };
 
             const openConstructionMap = (trigger) => {
@@ -2613,16 +2673,26 @@
                 }
                 const lat = parseConstructionCoordinate(trigger.dataset.lat);
                 const lng = parseConstructionCoordinate(trigger.dataset.lng);
-                if (lat === null || lng === null) {
-                    return;
-                }
+                const locationId = Number.parseInt(trigger.dataset.locationId || "", 10);
                 activeConstructionLocation = {
                     lat,
                     lng,
+                    requestId: Number.parseInt(trigger.dataset.id || "", 10),
+                    locationId: Number.isFinite(locationId) ? locationId : 0,
+                    canUpdate: trigger.dataset.canUpdateCoordinate === "true",
                     code: trigger.dataset.code || "",
                     customer: trigger.dataset.customer || "",
                     address: trigger.dataset.address || ""
                 };
+                activeConstructionMapTrigger = trigger;
+                clearConstructionCoordinateCandidate();
+                updateConstructionCoordinateAudit(trigger.dataset.updatedLongLatBy || "", trigger.dataset.updatedLongLatDate || "");
+                if (constructionCoordinateCaptureButton instanceof HTMLButtonElement) {
+                    constructionCoordinateCaptureButton.hidden = !activeConstructionLocation.canUpdate;
+                }
+                if (constructionMapRouteButton instanceof HTMLButtonElement) {
+                    constructionMapRouteButton.hidden = lat === null || lng === null;
+                }
                 if (constructionMapTitle instanceof HTMLElement) {
                     constructionMapTitle.textContent = activeConstructionLocation.code || "Bản đồ công trình";
                 }
@@ -2643,14 +2713,22 @@
                         constructionMap.removeLayer(constructionRouteLayer);
                         constructionRouteLayer = null;
                     }
-                    const point = [lat, lng];
-                    if (!constructionMapMarker) {
-                        constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                    if (lat !== null && lng !== null) {
+                        const point = [lat, lng];
+                        if (!constructionMapMarker) {
+                            constructionMapMarker = window.L.marker(point).addTo(constructionMap);
+                        } else {
+                            constructionMapMarker.setLatLng(point);
+                        }
+                        constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
+                        constructionMap.setView(point, 16);
                     } else {
-                        constructionMapMarker.setLatLng(point);
+                        if (constructionMapMarker) {
+                            constructionMap.removeLayer(constructionMapMarker);
+                            constructionMapMarker = null;
+                        }
+                        constructionMap.setView([16.0471, 108.2068], 6);
                     }
-                    constructionMapMarker.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
-                    constructionMap.setView(point, 16);
                     refreshConstructionMapSize();
                 });
             };
@@ -2659,13 +2737,187 @@
                 if (constructionMapShell instanceof HTMLElement) {
                     constructionMapShell.hidden = true;
                 }
+                clearConstructionCoordinateCandidate();
+                activeConstructionMapTrigger = null;
                 if (!(constructionShell instanceof HTMLElement) || constructionShell.hidden) {
                     document.body.classList.remove("modal-open");
                 }
             };
 
+            const getConstructionGpsErrorMessage = (error) => {
+                if (error?.code === 1) {
+                    return "Trình duyệt chưa được cấp quyền truy cập vị trí.";
+                }
+                if (error?.code === 2) {
+                    return "Không xác định được vị trí hiện tại.";
+                }
+                if (error?.code === 3) {
+                    return "Quá thời gian lấy vị trí. Vui lòng thử lại.";
+                }
+                return "Không thể lấy tọa độ hiện tại.";
+            };
+
+            const captureConstructionCoordinates = async () => {
+                if (!activeConstructionLocation?.canUpdate) {
+                    setConstructionRouteStatus("Bạn không có quyền cập nhật tọa độ địa điểm này.", "error");
+                    return;
+                }
+                if (!navigator.geolocation) {
+                    setConstructionRouteStatus("Trình duyệt không hỗ trợ GPS.", "error");
+                    return;
+                }
+
+                try {
+                    if (constructionCoordinateCaptureButton instanceof HTMLButtonElement) {
+                        constructionCoordinateCaptureButton.disabled = true;
+                    }
+                    setConstructionRouteStatus("Đang lấy tọa độ hiện tại...", "info");
+                    const position = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true,
+                            timeout: 15000,
+                            maximumAge: 0
+                        });
+                    });
+                    if (!ensureConstructionMap()) {
+                        return;
+                    }
+
+                    constructionCoordinateCandidate = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    };
+                    const point = [constructionCoordinateCandidate.lat, constructionCoordinateCandidate.lng];
+                    if (!constructionCoordinateCandidateMarker) {
+                        constructionCoordinateCandidateMarker = window.L.circleMarker(point, {
+                            radius: 9,
+                            color: "#ffffff",
+                            weight: 3,
+                            fillColor: "#0ea5e9",
+                            fillOpacity: 1
+                        }).addTo(constructionMap);
+                    } else {
+                        constructionCoordinateCandidateMarker.setLatLng(point);
+                    }
+                    constructionMap.setView(point, 17);
+                    if (constructionCoordinateConfirmCopy instanceof HTMLElement) {
+                        constructionCoordinateConfirmCopy.textContent = `Tọa độ hiện tại:\n${constructionCoordinateCandidate.lat.toFixed(6)}, ${constructionCoordinateCandidate.lng.toFixed(6)}\n\nĐộ chính xác:\n${Math.round(constructionCoordinateCandidate.accuracy)} mét\n\nBạn có muốn cập nhật tọa độ này cho địa điểm công trình không?`;
+                    }
+                    if (constructionCoordinateConfirm instanceof HTMLElement) {
+                        constructionCoordinateConfirm.hidden = false;
+                    }
+                    setConstructionRouteStatus("Đã lấy tọa độ. Vui lòng xác nhận trước khi cập nhật.", "success");
+                } catch (error) {
+                    clearConstructionCoordinateCandidate();
+                    setConstructionRouteStatus(getConstructionGpsErrorMessage(error), "error");
+                } finally {
+                    if (constructionCoordinateCaptureButton instanceof HTMLButtonElement) {
+                        constructionCoordinateCaptureButton.disabled = false;
+                    }
+                }
+            };
+
+            const updateConstructionCardCoordinates = (lat, lng) => {
+                if (!(activeConstructionMapTrigger instanceof HTMLButtonElement)) {
+                    return;
+                }
+                activeConstructionMapTrigger.dataset.lat = `${lat}`;
+                activeConstructionMapTrigger.dataset.lng = `${lng}`;
+                activeConstructionMapTrigger.classList.remove("is-empty");
+                let thumbnail = activeConstructionMapTrigger.querySelector("[data-construction-map-thumb]");
+                if (!(thumbnail instanceof HTMLElement)) {
+                    activeConstructionMapTrigger.innerHTML = `<span class="construction-request-card__map-canvas" data-construction-map-thumb data-lat="${lat}" data-lng="${lng}"></span><span class="construction-request-card__map-cta"><i class="fa-solid fa-location-arrow" aria-hidden="true"></i><span>Bản đồ</span></span>`;
+                    thumbnail = activeConstructionMapTrigger.querySelector("[data-construction-map-thumb]");
+                }
+                if (!(thumbnail instanceof HTMLElement)) {
+                    return;
+                }
+                thumbnail.dataset.lat = `${lat}`;
+                thumbnail.dataset.lng = `${lng}`;
+                if (thumbnail._constructionThumbMap && thumbnail._constructionThumbMarker) {
+                    thumbnail._constructionThumbMarker.setLatLng([lat, lng]);
+                    thumbnail._constructionThumbMap.setView([lat, lng], 16);
+                    thumbnail._constructionThumbMap.invalidateSize();
+                } else {
+                    initConstructionMapThumb(thumbnail);
+                }
+            };
+
+            const saveConstructionCoordinates = async () => {
+                if (!activeConstructionLocation || !constructionCoordinateCandidate) {
+                    return;
+                }
+                const updateUrl = root.dataset.constructionCoordinateUpdateUrl || "";
+                if (!updateUrl) {
+                    setConstructionRouteStatus("Không tìm thấy đường dẫn cập nhật tọa độ.", "error");
+                    return;
+                }
+
+                try {
+                    if (constructionCoordinateSaveButton instanceof HTMLButtonElement) {
+                        constructionCoordinateSaveButton.disabled = true;
+                    }
+                    const body = new FormData();
+                    body.append("RequestId", `${activeConstructionLocation.requestId}`);
+                    body.append("LocationId", `${activeConstructionLocation.locationId}`);
+                    body.append("Latitude", `${constructionCoordinateCandidate.lat}`);
+                    body.append("Longitude", `${constructionCoordinateCandidate.lng}`);
+                    const token = root.querySelector("input[name='__RequestVerificationToken']");
+                    const response = await fetch(updateUrl, {
+                        method: "POST",
+                        headers: token instanceof HTMLInputElement ? { RequestVerificationToken: token.value } : {},
+                        body
+                    });
+                    const payload = await response.json().catch(() => null);
+                    if (!response.ok || payload?.succeeded !== true) {
+                        throw new Error(payload?.message || "Không thể cập nhật tọa độ công trình.");
+                    }
+
+                    const lat = parseConstructionCoordinate(payload.latAddress);
+                    const lng = parseConstructionCoordinate(payload.longAddress);
+                    if (lat === null || lng === null) {
+                        throw new Error("Backend không trả về tọa độ hợp lệ.");
+                    }
+                    activeConstructionLocation.lat = lat;
+                    activeConstructionLocation.lng = lng;
+                    if (constructionMapMarker) {
+                        constructionMapMarker.setLatLng([lat, lng]);
+                    } else if (constructionMap) {
+                        constructionMapMarker = window.L.marker([lat, lng]).addTo(constructionMap);
+                    }
+                    constructionMapMarker?.bindPopup(`${escapeHtml(activeConstructionLocation.customer || activeConstructionLocation.code || "Công trình")}<br>${escapeHtml(activeConstructionLocation.address)}`);
+                    constructionMap?.setView([lat, lng], 17);
+                    if (constructionRouteLayer && constructionMap) {
+                        constructionMap.removeLayer(constructionRouteLayer);
+                        constructionRouteLayer = null;
+                    }
+                    if (constructionMapRouteButton instanceof HTMLButtonElement) {
+                        constructionMapRouteButton.hidden = false;
+                    }
+                    updateConstructionCardCoordinates(lat, lng);
+                    if (activeConstructionMapTrigger instanceof HTMLElement) {
+                        activeConstructionMapTrigger.dataset.updatedLongLatBy = payload.updatedLongLatBy || "";
+                        activeConstructionMapTrigger.dataset.updatedLongLatDate = payload.updatedLongLatDate || "";
+                    }
+                    updateConstructionCoordinateAudit(payload.updatedLongLatBy || "", payload.updatedLongLatDate || "");
+                    clearConstructionCoordinateCandidate();
+                    syncConstructionMapExternalLink();
+                    setConstructionRouteStatus(payload.message || "Đã cập nhật tọa độ công trình.", "success");
+                } catch (error) {
+                    setConstructionRouteStatus(error instanceof Error ? error.message : "Không thể cập nhật tọa độ công trình.", "error");
+                } finally {
+                    if (constructionCoordinateSaveButton instanceof HTMLButtonElement) {
+                        constructionCoordinateSaveButton.disabled = false;
+                    }
+                }
+            };
+
             const loadConstructionRoute = async () => {
-                if (!activeConstructionLocation || !navigator.geolocation) {
+                if (!activeConstructionLocation ||
+                    activeConstructionLocation.lat === null ||
+                    activeConstructionLocation.lng === null ||
+                    !navigator.geolocation) {
                     setConstructionRouteStatus("Không thể lấy GPS hiện tại để chỉ đường.", "error");
                     return;
                 }
@@ -3254,6 +3506,15 @@
             constructionCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionModal));
             constructionMapCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionMap));
             constructionMapRouteButton?.addEventListener("click", () => void loadConstructionRoute());
+            constructionCoordinateCaptureButton?.addEventListener("click", () => void captureConstructionCoordinates());
+            constructionCoordinateSaveButton?.addEventListener("click", () => void saveConstructionCoordinates());
+            constructionCoordinateCancelButton?.addEventListener("click", () => {
+                clearConstructionCoordinateCandidate();
+                setConstructionRouteStatus("Đã hủy cập nhật tọa độ.", "info");
+                if (activeConstructionLocation && activeConstructionLocation.lat !== null && activeConstructionLocation.lng !== null) {
+                    constructionMap?.setView([activeConstructionLocation.lat, activeConstructionLocation.lng], 16);
+                }
+            });
             constructionList?.addEventListener("click", (event) => {
                 const trigger = event.target instanceof Element
                     ? event.target.closest("[data-construction-map-open]")

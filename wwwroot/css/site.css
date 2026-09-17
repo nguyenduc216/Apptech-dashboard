@@ -358,6 +358,41 @@
     overflow: hidden !important;
 }
 
+.construction-coordinate-audit {
+    color: #667085;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.construction-coordinate-confirm {
+    border: 1px solid #b7ddd3;
+    background: #f2fbf8;
+    padding: 12px;
+}
+
+.construction-coordinate-confirm[hidden] {
+    display: none;
+}
+
+.construction-coordinate-confirm p {
+    margin: 0;
+    color: #173f38;
+    line-height: 1.45;
+    white-space: pre-line;
+}
+
+.construction-coordinate-confirm__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.construction-coordinate-confirm__actions .primary-button,
+.construction-coordinate-confirm__actions .secondary-button {
+    min-height: 42px;
+}
+
 @media (min-width: 768px) {
     .construction-checkin-list {
         grid-template-columns: repeat(2, minmax(0, 1fr));

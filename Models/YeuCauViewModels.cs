@@ -304,6 +304,9 @@ public sealed class YeuCauListItem
     public string? DienThoai { get; set; }
     public decimal? LongAddress { get; set; }
     public decimal? LatAddress { get; set; }
+    public DateTime? UpdatedLongLatDate { get; set; }
+    public string? UpdatedLongLatBy { get; set; }
+    public bool CanUpdateLocationCoordinates { get; set; }
     public bool CheckinTheoKhoangCach { get; set; }
     public string? GhiChu { get; set; }
     public string? NhanVienThucHien { get; set; }
@@ -356,6 +359,8 @@ public sealed class YeuCauLocationOption
     public string? DienThoai { get; set; }
     public decimal? LongAddress { get; set; }
     public decimal? LatAddress { get; set; }
+    public DateTime? UpdatedLongLatDate { get; set; }
+    public string? UpdatedLongLatBy { get; set; }
     public bool TrangThaiSuDung { get; set; } = true;
 
     public string TenKhachHangDisplay => string.IsNullOrWhiteSpace(TenKhachHang)
@@ -369,6 +374,14 @@ public sealed class YeuCauLocationOption
     public string CoordinateDisplay => LatAddress.HasValue && LongAddress.HasValue
         ? $"{LatAddress.Value:0.00000}, {LongAddress.Value:0.00000}"
         : "Chưa có tọa độ";
+}
+
+public sealed class ConstructionLocationCoordinateUpdateRequest
+{
+    public int RequestId { get; set; }
+    public int LocationId { get; set; }
+    public decimal? Latitude { get; set; }
+    public decimal? Longitude { get; set; }
 }
 
 public sealed class YeuCauNhanVienOption
