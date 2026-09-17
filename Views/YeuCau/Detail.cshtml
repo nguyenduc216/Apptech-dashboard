@@ -1172,13 +1172,13 @@
                         <div class="yeu-cau-zalo-rating-heading">
                             <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-star" aria-hidden="true"></i></span>
                             <div>
-                                <h3>Danh gia cua khach hang</h3>
-                                <p>@(rating?.HasRating == true ? "Khach hang da gui danh gia chat luong cong viec." : "Khach hang chua danh gia phieu nay.")</p>
+                                <h3>Đánh giá của khách hàng</h3>
+                                <p>@(rating?.HasRating == true ? "Khách hàng đã gửi đánh giá chất lượng công việc." : "Khách hàng chưa đánh giá phiếu này.")</p>
                             </div>
                         </div>
                         @if (rating?.HasRating == true)
                         {
-                            <div class="yeu-cau-rating-score" aria-label="Diem danh gia">
+                            <div class="yeu-cau-rating-score" aria-label="Điểm đánh giá">
                                 @for (var score = 1; score <= 5; score++)
                                 {
                                     <i class="fa-solid fa-star @(score <= rating.RatingScore ? "is-active" : null)" aria-hidden="true"></i>
@@ -1186,10 +1186,10 @@
                                 <strong>@rating.RatingScore/5</strong>
                             </div>
                             <dl class="yeu-cau-zalo-rating-meta">
-                                <div><dt>Thoi gian</dt><dd>@(rating.SubmittedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
-                                <div><dt>Nguon</dt><dd>@(string.IsNullOrWhiteSpace(rating.Source) ? "ZaloQr" : rating.Source)</dd></div>
-                                <div><dt>Ghi chu</dt><dd>@(string.IsNullOrWhiteSpace(rating.Note) ? "-" : rating.Note)</dd></div>
-                                <div><dt>Nhan xet</dt><dd>@(string.IsNullOrWhiteSpace(rating.CustomerComment) ? "-" : rating.CustomerComment)</dd></div>
+                                <div><dt>Thời gian</dt><dd>@(rating.SubmittedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
+                                <div><dt>Nguồn</dt><dd>@(string.IsNullOrWhiteSpace(rating.Source) ? "ZaloQr" : rating.Source)</dd></div>
+                                <div><dt>Ghi chú</dt><dd>@(string.IsNullOrWhiteSpace(rating.Note) ? "-" : rating.Note)</dd></div>
+                                <div><dt>Nhận xét</dt><dd>@(string.IsNullOrWhiteSpace(rating.CustomerComment) ? "-" : rating.CustomerComment)</dd></div>
                             </dl>
                             @if (rating.Items.Count > 0)
                             {
@@ -1209,7 +1209,7 @@
                         {
                             <button type="button" class="secondary-button" data-zalo-qr-open>
                                 <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
-                                <span>Gui QR danh gia Zalo</span>
+                                <span>Gửi QR đánh giá Zalo</span>
                             </button>
                         }
                     </div>
@@ -1218,25 +1218,25 @@
                         <div class="yeu-cau-zalo-rating-heading">
                             <span class="yeu-cau-zalo-rating-icon"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>
                             <div>
-                                <h3>Thong tin Zalo</h3>
-                                <p>@(zaloProfile?.Connected == true ? "Da ket noi Zalo OA." : "Chua ket noi Zalo OA.")</p>
+                                <h3>Thông tin Zalo</h3>
+                                <p>@(zaloProfile?.Connected == true ? "Đã kết nối Zalo OA." : "Chưa kết nối Zalo OA.")</p>
                             </div>
                         </div>
                         <span class="status-pill @(zaloProfile?.Connected == true ? "completed" : "pending")">
-                            @(zaloProfile?.Connected == true ? "Da ket noi Zalo OA" : "Chua ket noi Zalo")
+                            @(zaloProfile?.Connected == true ? "Đã kết nối Zalo OA" : "Chưa kết nối Zalo")
                         </span>
                         @if (zaloProfile?.Connected == true)
                         {
                             <dl class="yeu-cau-zalo-rating-meta">
                                 <div><dt>Zalo User ID</dt><dd>@zaloProfile.ZaloUserId</dd></div>
-                                <div><dt>Ten Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloDisplayName) ? "-" : zaloProfile.ZaloDisplayName)</dd></div>
-                                <div><dt>So dien thoai Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloPhoneNumber) ? "-" : zaloProfile.ZaloPhoneNumber)</dd></div>
-                                <div><dt>Lan tuong tac gan nhat</dt><dd>@(zaloProfile.LastInteractionAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
+                                <div><dt>Tên Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloDisplayName) ? "-" : zaloProfile.ZaloDisplayName)</dd></div>
+                                <div><dt>Số điện thoại Zalo</dt><dd>@(string.IsNullOrWhiteSpace(zaloProfile.ZaloPhoneNumber) ? "-" : zaloProfile.ZaloPhoneNumber)</dd></div>
+                                <div><dt>Lần tương tác gần nhất</dt><dd>@(zaloProfile.LastInteractionAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", viCulture) ?? "-")</dd></div>
                             </dl>
                         }
                         else
                         {
-                            <p class="yeu-cau-zalo-rating-hint">Gui QR Zalo de khach ket noi va danh gia. Neu khach da co Zalo ID, QR se vao thang trang danh gia.</p>
+                            <p class="yeu-cau-zalo-rating-hint">Gửi QR Zalo để khách kết nối và đánh giá. Nếu khách đã có Zalo ID, QR sẽ vào thẳng trang đánh giá.</p>
                         }
                     </div>
                 </article>
