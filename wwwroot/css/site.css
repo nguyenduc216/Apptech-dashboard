@@ -236,11 +236,19 @@
     cursor: pointer;
 }
 
-.construction-request-card__map-thumb img {
+.construction-request-card__map-thumb > img {
     width: 100%;
     height: 100%;
     display: block;
     object-fit: cover;
+}
+
+.construction-request-card__map-thumb .leaflet-tile {
+    width: 256px;
+    height: 256px;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: initial;
 }
 
 .construction-request-card__map-canvas {

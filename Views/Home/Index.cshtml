@@ -1072,8 +1072,10 @@
             let constructionMapResizeObserver = null;
             let constructionMapResizeTimer = null;
             let constructionMapInitializationFrame = null;
-            let constructionTileRetryUsed = false;
-            let constructionTileRetryTimer = null;
+            let constructionTileLoadCount = 0;
+            let constructionTileErrorCount = 0;
+            let constructionFallbackTileLoadCount = 0;
+            let constructionTileFallbackActivated = false;
             let constructionThumbnailObserver = null;
             let activeConstructionLocation = null;
             let speechRecognition = null;
@@ -1082,6 +1084,8 @@
             const defaultCenter = [12.2388, 109.1967];
             const defaultZoom = 13;
             const focusZoom = 16;
+            const CONSTRUCTION_TILE_PRIMARY = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+            const CONSTRUCTION_TILE_FALLBACK = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
             refreshGpsButton?.querySelector("span")?.replaceChildren(document.createTextNode("L\u1EA5y GPS"));
 
@@ -2376,6 +2380,14 @@
                     .forEach(destroyConstructionMapThumb);
             };
 
+            const getActiveConstructionThumbnailMapCount = () => {
+                if (!(constructionList instanceof HTMLElement)) {
+                    return 0;
+                }
+                return Array.from(constructionList.querySelectorAll("[data-construction-map-thumb]"))
+                    .filter((element) => !!element._constructionThumbMap).length;
+            };
+
             const initConstructionMapThumb = (element) => {
                 if (!(element instanceof HTMLElement) ||
                     element.dataset.mapReady === "true" ||
@@ -2401,8 +2413,11 @@
                     boxZoom: false,
                     tap: false
                 });
-                window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
-                    maxZoom: 19
+                window.L.tileLayer(CONSTRUCTION_TILE_PRIMARY, {
+                    maxZoom: 18,
+                    updateWhenIdle: true,
+                    updateWhenZooming: false,
+                    keepBuffer: 0
                 }).addTo(map);
                 const marker = window.L.circleMarker([lat, lng], {
                     radius: 7,
@@ -2649,10 +2664,6 @@
                     window.clearTimeout(constructionMapResizeTimer);
                     constructionMapResizeTimer = null;
                 }
-                if (constructionTileRetryTimer !== null) {
-                    window.clearTimeout(constructionTileRetryTimer);
-                    constructionTileRetryTimer = null;
-                }
                 constructionMapResizeObserver?.disconnect();
                 constructionMapResizeObserver = null;
                 constructionTileLayer?.off();
@@ -2666,7 +2677,10 @@
                 constructionCoordinateCandidateMarker = null;
                 constructionRouteLayer = null;
                 constructionCoordinateCandidate = null;
-                constructionTileRetryUsed = false;
+                constructionTileLoadCount = 0;
+                constructionTileErrorCount = 0;
+                constructionFallbackTileLoadCount = 0;
+                constructionTileFallbackActivated = false;
             };
 
             const refreshConstructionMapSize = () => {
@@ -2678,6 +2692,58 @@
                     return;
                 }
                 constructionMap.invalidateSize({ animate: false, pan: false, debounceMoveend: true });
+            };
+
+            const logConstructionTileDiagnostics = (provider) => {
+                console.debug("[ConstructionMap] tile", {
+                    provider,
+                    loadCount: provider === "fallback" ? constructionFallbackTileLoadCount : constructionTileLoadCount,
+                    errorCount: constructionTileErrorCount,
+                    activeThumbnailMaps: getActiveConstructionThumbnailMapCount()
+                });
+            };
+
+            const createConstructionTileLayer = (url, provider) => {
+                const tileLayer = window.L.tileLayer(url, {
+                    maxZoom: 19,
+                    updateWhenIdle: true,
+                    updateWhenZooming: false,
+                    keepBuffer: 1,
+                    attribution: provider === "primary"
+                        ? "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
+                        : "&copy; OpenStreetMap contributors"
+                });
+                tileLayer.on("tileload", () => {
+                    if (provider === "fallback") {
+                        constructionFallbackTileLoadCount += 1;
+                    } else {
+                        constructionTileLoadCount += 1;
+                    }
+                });
+                tileLayer.on("load", () => logConstructionTileDiagnostics(provider));
+                tileLayer.on("tileerror", () => {
+                    constructionTileErrorCount += 1;
+                    logConstructionTileDiagnostics(provider);
+                    if (provider === "primary" && constructionTileErrorCount >= 3 && !constructionTileFallbackActivated) {
+                        switchConstructionTileProvider(CONSTRUCTION_TILE_FALLBACK);
+                    }
+                });
+                return tileLayer;
+            };
+
+            const switchConstructionTileProvider = (url) => {
+                if (!constructionMap || constructionTileFallbackActivated) {
+                    return;
+                }
+                constructionTileFallbackActivated = true;
+                console.debug("[ConstructionMap] switching tile provider to fallback");
+                if (constructionTileLayer) {
+                    constructionTileLayer.off();
+                    constructionMap.removeLayer(constructionTileLayer);
+                }
+                constructionTileLayer = createConstructionTileLayer(url, "fallback");
+                constructionTileLayer.addTo(constructionMap);
+                refreshConstructionMapSize();
             };
 
             const ensureConstructionMap = () => {
@@ -2696,23 +2762,7 @@
                     zoomControl: true,
                     attributionControl: true
                 });
-                constructionTileLayer = window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
-                    maxZoom: 19,
-                    attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
-                });
-                constructionTileLayer.on("tileerror", () => {
-                    if (constructionTileRetryUsed || !constructionMap || !constructionTileLayer) {
-                        return;
-                    }
-                    constructionTileRetryUsed = true;
-                    constructionTileRetryTimer = window.setTimeout(() => {
-                        constructionTileRetryTimer = null;
-                        if (constructionMap && constructionTileLayer) {
-                            refreshConstructionMapSize();
-                            constructionTileLayer.redraw();
-                        }
-                    }, 250);
-                });
+                constructionTileLayer = createConstructionTileLayer(CONSTRUCTION_TILE_PRIMARY, "primary");
                 constructionTileLayer.addTo(constructionMap);
                 if ("ResizeObserver" in window) {
                     constructionMapResizeObserver = new ResizeObserver(() => {
@@ -2828,6 +2878,12 @@
                 }
                 constructionThumbnailObserver?.disconnect();
                 constructionThumbnailObserver = null;
+                const activeThumbnailMapsBeforeFullscreen = getActiveConstructionThumbnailMapCount();
+                destroyAllConstructionMapThumbs();
+                console.debug("[ConstructionMap] fullscreen isolation", {
+                    activeThumbnailMapsBeforeFullscreen,
+                    activeThumbnailMaps: getActiveConstructionThumbnailMapCount()
+                });
                 destroyConstructionMap();
                 setConstructionRouteStatus("", "info");
                 syncConstructionMapExternalLink();
