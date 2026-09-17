@@ -27,7 +27,7 @@
 ## 4. Tab Đánh giá
 
 - Thêm tab `danh-gia` sau Checkin với icon `fa-star`.
-- Tái sử dụng nguyên panel Rating/Zalo, di chuyển panel vào tab container khi khởi tạo; CSS ngăn panel hiển thị tại vị trí cũ.
+- Tái sử dụng nguyên panel Rating/Zalo và đặt trực tiếp bên trong `data-tab-group`, cùng cấp với các panel `thong-tin`, `cong-viec`, `checkin`; không có panel cũ hoặc bản sao bên ngoài.
 - Giữ nguyên dữ liệu rating, QR/link Zalo, trạng thái kết nối và responsive hai cột/stack mobile.
 - `Form.ActiveTab` tiếp tục lưu và khôi phục tab hiện tại.
 
@@ -39,6 +39,7 @@
 - `CompleteAsync` khóa phiếu bằng `UPDLOCK, HOLDLOCK`, chạy toàn bộ cập nhật và audit trong một transaction.
 - Dùng một thời điểm SQL Server `GETDATE()` cho `NgayHoanThanh`, `Updated_Date` và work metadata; không truncate giờ.
 - Công việc chưa Hoàn thành/Hủy chuyển sang `YeuCauCongViecTrangThaiCatalog.HoanThanh`; công việc Hủy giữ nguyên; công việc đã Hoàn thành không bị update lại.
+- `CheckOutTime` được xác nhận là thời gian kết thúc thực tế của `YeuCauCongViec` qua label UI, validation khoảng thời gian và logic suy trạng thái hiện hữu. Khi một work được chuyển sang Hoàn thành, SQL dùng `CheckoutTime = ISNULL(CheckoutTime, @CompletedAt)`; thời gian có sẵn được giữ nguyên, work Hoàn thành cũ và work Hủy không bị chạm tới.
 - Phiếu đã Hoàn thành trả kết quả idempotent và giữ timestamp cũ; phiếu Hủy bị từ chối.
 
 ## 6. Database
@@ -65,15 +66,15 @@
 | TEST 02 | VERIFIED SOURCE | Button mở modal; chưa submit thì không gọi endpoint. |
 | TEST 03 | VERIFIED SOURCE | Hủy/backdrop đóng modal, không submit. |
 | TEST 04 | NOT RUN | Cần DB runtime để xác nhận dữ liệu thực tế. |
-| TEST 05 | VERIFIED SOURCE | SQL bulk update loại trừ Hoàn thành và Hủy. |
-| TEST 06 | VERIFIED SOURCE | Work đã Hoàn thành không bị UPDATE; schema work không có completion timestamp. |
+| TEST 05 | VERIFIED SOURCE | SQL bulk update loại trừ Hoàn thành/Hủy và điền `CheckoutTime` còn NULL. |
+| TEST 06 | VERIFIED SOURCE | Work đã Hoàn thành không bị UPDATE; `CheckoutTime` cũ được giữ nguyên. |
 | TEST 07 | VERIFIED SOURCE | Row lock và nhánh already-completed giữ `NgayHoanThanh`. |
 | TEST 08 | VERIFIED SOURCE | UI ẩn và service từ chối trạng thái Hủy. |
 | TEST 09 | VERIFIED SOURCE | Service trả lỗi rõ khi không tìm thấy, controller redirect với toast. |
 | TEST 10 | VERIFIED SOURCE | Request, works và audit dùng chung transaction; exception không commit. |
 | TEST 11 | VERIFIED SOURCE | UI và backend cùng kiểm tra quyền Update. |
-| TEST 12 | VERIFIED SOURCE | CSS ẩn panel ở vị trí cũ; JS chuyển đúng panel vào tab container. |
-| TEST 13 | VERIFIED SOURCE | Tab dùng nguyên panel Rating/Zalo hiện có. |
+| TEST 12 | VERIFIED SOURCE | Panel Rating/Zalo nằm trực tiếp trong `data-tab-group`, không còn panel ngoài. |
+| TEST 13 | VERIFIED SOURCE | Tab dùng nguyên panel Rating/Zalo hiện có; chỉ có một `data-rating-tab-panel`. |
 | TEST 14 | NOT RUN | Cần Zalo/browser runtime. |
 | TEST 15 | VERIFIED SOURCE | Markup rating hiện có được giữ nguyên, không đổi API/model. |
 | TEST 16 | NOT RUN | Chưa có browser automation để kiểm tra trực quan mobile. |
@@ -99,6 +100,7 @@ Không có test project phù hợp trong repository.
 
 - Branch: `main`
 - Code commit: `2a4568db4ff81527c60d46bbd875d8e08470d497`
+- Structural/time follow-up commit: `2967b41ea5c287ba2175cc82acb959fd114f917f`
 - Code push: PASS, `origin/main` chứa code commit.
 
 ## 13. Remaining issues
