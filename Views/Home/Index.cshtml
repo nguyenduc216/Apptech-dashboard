@@ -741,7 +741,7 @@
                 <div class="khach-hang-location-viewer-map-shell">
                     <div class="khach-hang-location-map khach-hang-location-viewer-map construction-map-fullscreen-canvas" data-construction-map></div>
                     <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ công trình">
-                        <button type="button" class="menu-nav-button khach-hang-location-map-action" data-construction-coordinate-capture aria-label="Lấy tọa độ hiện tại" title="Lấy tọa độ hiện tại" hidden>
+                        <button type="button" class="menu-nav-button khach-hang-location-map-action construction-coordinate-capture-action" data-construction-coordinate-capture aria-label="Lấy tọa độ hiện tại" title="Lấy tọa độ hiện tại" hidden>
                             <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
                         </button>
                         <button type="button" class="menu-nav-button khach-hang-location-map-action" data-construction-map-route aria-label="Chỉ đường" title="Chỉ đường">
@@ -2841,6 +2841,7 @@
                 }
                 const lat = parseConstructionCoordinate(trigger.dataset.lat);
                 const lng = parseConstructionCoordinate(trigger.dataset.lng);
+                const hasCoordinates = lat !== null && lng !== null;
                 const locationId = Number.parseInt(trigger.dataset.locationId || "", 10);
                 activeConstructionLocation = {
                     lat,
@@ -2856,10 +2857,10 @@
                 clearConstructionCoordinateCandidate();
                 updateConstructionCoordinateAudit(trigger.dataset.updatedLongLatBy || "", trigger.dataset.updatedLongLatDate || "");
                 if (constructionCoordinateCaptureButton instanceof HTMLButtonElement) {
-                    constructionCoordinateCaptureButton.hidden = !activeConstructionLocation.canUpdate;
+                    constructionCoordinateCaptureButton.hidden = !activeConstructionLocation.canUpdate || hasCoordinates;
                 }
                 if (constructionMapRouteButton instanceof HTMLButtonElement) {
-                    constructionMapRouteButton.hidden = lat === null || lng === null;
+                    constructionMapRouteButton.hidden = !hasCoordinates;
                 }
                 if (constructionMapTitle instanceof HTMLElement) {
                     constructionMapTitle.textContent = activeConstructionLocation.code || "Bản đồ công trình";
@@ -3081,6 +3082,9 @@
                     }
                     if (constructionMapRouteButton instanceof HTMLButtonElement) {
                         constructionMapRouteButton.hidden = false;
+                    }
+                    if (constructionCoordinateCaptureButton instanceof HTMLButtonElement) {
+                        constructionCoordinateCaptureButton.hidden = true;
                     }
                     updateConstructionCardCoordinates(lat, lng);
                     if (activeConstructionMapTrigger instanceof HTMLElement) {

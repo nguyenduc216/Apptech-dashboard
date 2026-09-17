@@ -2652,6 +2652,20 @@ body.menu-open {
     cursor: pointer;
 }
 
+.construction-map-fullscreen-shell .construction-coordinate-capture-action {
+    background: #facc15;
+    border-color: #eab308;
+    color: #713f12;
+    box-shadow: 0 10px 24px rgba(161, 98, 7, 0.32);
+}
+
+.construction-map-fullscreen-shell .construction-coordinate-capture-action:hover,
+.construction-map-fullscreen-shell .construction-coordinate-capture-action:focus-visible {
+    background: #fde047;
+    border-color: #ca8a04;
+    color: #422006;
+}
+
 .construction-map-fullscreen-shell .leaflet-control-zoom {
     margin-top: 12px;
     margin-left: 12px;
