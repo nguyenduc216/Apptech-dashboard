@@ -18,7 +18,8 @@ public class HomeController(
     IYeuCauService yeuCauService,
     INhanVienService nhanVienService,
     IWebHostEnvironment webHostEnvironment,
-    ICommonAuditService commonAuditService) : Controller
+    ICommonAuditService commonAuditService,
+    ILogger<HomeController> logger) : Controller
 {
     private static readonly HashSet<string> AllowedAvatarExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -38,6 +39,7 @@ public class HomeController(
     private readonly INhanVienService _nhanVienService = nhanVienService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
     private readonly ICommonAuditService _commonAuditService = commonAuditService;
+    private readonly ILogger<HomeController> _logger = logger;
 
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> Index(DateTime? chamCongDate = null, [FromQuery] int[] employeeIds = null!)
@@ -132,6 +134,23 @@ public class HomeController(
             ? await _nhanVienService.GetChamCongEmployeeOptionsAsync(HttpContext.RequestAborted)
             : [];
         var selectableEmployeeIds = selectableEmployeeOptions.Select(employee => employee.Id).ToHashSet();
+        if (canSelectEmployees &&
+            employeeId.HasValue &&
+            employeeId.Value > 0 &&
+            !selectableEmployeeIds.Contains(employeeId.Value))
+        {
+            _logger.LogWarning(
+                "Construction checkin rejected invalid employee: requested={RequestedEmployeeId}, current={CurrentEmployeeId}, canSelect={CanSelectEmployees}",
+                employeeId,
+                currentEmployeeId,
+                canSelectEmployees);
+            return BadRequest(new
+            {
+                succeeded = false,
+                message = "Nhân viên được chọn không hợp lệ."
+            });
+        }
+
         var targetEmployeeId = canSelectEmployees
             ? ResolveConstructionCheckinEmployeeId(employeeId, currentEmployeeId, selectableEmployeeIds)
             : currentEmployeeId.GetValueOrDefault();
@@ -149,11 +168,44 @@ public class HomeController(
             ?? (targetEmployeeId == currentEmployeeId ? User.FindFirstValue("display_name") : null)
             ?? $"Nhân viên #{targetEmployeeId}";
 
-        var constructionItems = await _yeuCauService.GetConstructionCheckinRequestsAsync(
+        IReadOnlyList<YeuCauListItem> constructionItems;
+        try
+        {
+            constructionItems = await _yeuCauService.GetConstructionCheckinRequestsAsync(
+                targetEmployeeId,
+                employeeName,
+                limit: 100,
+                cancellationToken: HttpContext.RequestAborted);
+        }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Construction checkin failed: requested={RequestedEmployeeId}, current={CurrentEmployeeId}, canSelect={CanSelectEmployees}, resolved={ResolvedEmployeeId}, employee={EmployeeName}",
+                employeeId,
+                currentEmployeeId,
+                canSelectEmployees,
+                targetEmployeeId,
+                employeeName);
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                succeeded = false,
+                message = "Không thể tải danh sách phiếu yêu cầu."
+            });
+        }
+
+        _logger.LogInformation(
+            "Construction checkin: requested={RequestedEmployeeId}, current={CurrentEmployeeId}, canSelect={CanSelectEmployees}, resolved={ResolvedEmployeeId}, employee={EmployeeName}, count={Count}",
+            employeeId,
+            currentEmployeeId,
+            canSelectEmployees,
             targetEmployeeId,
             employeeName,
-            limit: 100,
-            cancellationToken: HttpContext.RequestAborted);
+            constructionItems.Count);
 
         return Json(new
         {

@@ -509,7 +509,7 @@ public sealed class YeuCauService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load construction checkin requests for employee {EmployeeId}.", employeeId);
-            return [];
+            throw;
         }
     }
 

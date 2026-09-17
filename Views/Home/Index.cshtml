@@ -1015,6 +1015,9 @@
             const constructionMapRouteButton = root.querySelector("[data-construction-map-route]");
             const constructionMapExternalLink = root.querySelector("[data-construction-map-external]");
             const constructionMapRouteStatus = root.querySelector("[data-construction-map-route-status]");
+            let constructionEmployeeChangedByUser = false;
+            let constructionRequestController = null;
+            let constructionRequestSequence = 0;
             const distanceLimit = Number.parseFloat(root.dataset.distanceLimit || "");
             let cameraStream = null;
             let attendanceCameraDevices = [];
@@ -2376,17 +2379,74 @@
                 thumbnails.forEach(initConstructionMapThumb);
             };
 
-            const getConstructionSelectedEmployeeId = () => {
-                if (constructionEmployeeSelect instanceof HTMLSelectElement && constructionEmployeeSelect.value) {
-                    const selected = Number.parseInt(constructionEmployeeSelect.value, 10);
-                    return Number.isFinite(selected) && selected > 0 ? selected : null;
+            const parseConstructionEmployeeId = (value) => {
+                const employeeId = Number.parseInt(value || "", 10);
+                return Number.isFinite(employeeId) && employeeId > 0 ? employeeId : null;
+            };
+
+            const updateConstructionEmployeeDisplay = (employeeId, employeeName = "") => {
+                const fallbackName = employeeId ? `Nhân viên #${employeeId}` : "Chưa xác định nhân viên";
+                const displayName = employeeName || fallbackName;
+                if (constructionEmployee instanceof HTMLElement) {
+                    constructionEmployee.textContent = displayName;
                 }
-                const configured = Number.parseInt(root.dataset.constructionEmployeeId || "", 10);
-                return Number.isFinite(configured) && configured > 0 ? configured : null;
+                if (constructionEmployeeName instanceof HTMLElement) {
+                    constructionEmployeeName.textContent = displayName;
+                }
+            };
+
+            const syncConstructionEmployeeStateFromServer = () => {
+                const serverEmployeeId = parseConstructionEmployeeId(root.dataset.constructionEmployeeId);
+                if (!serverEmployeeId) {
+                    return null;
+                }
+
+                if (constructionEmployeeSelect instanceof HTMLSelectElement) {
+                    const matchingOption = Array.from(constructionEmployeeSelect.options)
+                        .find((option) => parseConstructionEmployeeId(option.value) === serverEmployeeId);
+                    if (!matchingOption) {
+                        console.debug("[ConstructionCheckin] server employee is not available in select", {
+                            selectedEmployeeId: serverEmployeeId,
+                            datasetEmployeeId: root.dataset.constructionEmployeeId || "",
+                            selectValue: constructionEmployeeSelect.value
+                        });
+                        return null;
+                    }
+                    constructionEmployeeSelect.value = matchingOption.value;
+                    window.ApptechLiveSelect?.refresh(constructionEmployeeSelect);
+                    updateConstructionEmployeeDisplay(serverEmployeeId, matchingOption.textContent?.trim() || "");
+                } else {
+                    updateConstructionEmployeeDisplay(serverEmployeeId);
+                }
+
+                root.dataset.constructionEmployeeId = `${serverEmployeeId}`;
+                return serverEmployeeId;
+            };
+
+            const resolveConstructionSelectedEmployee = () => {
+                if (constructionEmployeeSelect instanceof HTMLSelectElement) {
+                    const selectedEmployeeId = parseConstructionEmployeeId(constructionEmployeeSelect.value);
+                    const selectedOption = selectedEmployeeId
+                        ? constructionEmployeeSelect.selectedOptions[0]
+                        : null;
+                    if (!selectedEmployeeId || !(selectedOption instanceof HTMLOptionElement)) {
+                        return null;
+                    }
+                    root.dataset.constructionEmployeeId = `${selectedEmployeeId}`;
+                    updateConstructionEmployeeDisplay(selectedEmployeeId, selectedOption.textContent?.trim() || "");
+                    return selectedEmployeeId;
+                }
+
+                const selectedEmployeeId = parseConstructionEmployeeId(root.dataset.constructionEmployeeId);
+                if (selectedEmployeeId) {
+                    root.dataset.constructionEmployeeId = `${selectedEmployeeId}`;
+                    updateConstructionEmployeeDisplay(selectedEmployeeId);
+                }
+                return selectedEmployeeId;
             };
 
             const loadConstructionRequests = async () => {
-                const selectedEmployeeId = getConstructionSelectedEmployeeId();
+                const selectedEmployeeId = resolveConstructionSelectedEmployee();
                 if (!selectedEmployeeId) {
                     setConstructionStatus("Chưa xác định được nhân viên để tải phiếu yêu cầu.", "error");
                     if (constructionList instanceof HTMLElement) {
@@ -2395,30 +2455,50 @@
                     return;
                 }
 
+                constructionRequestController?.abort();
+                const requestController = new AbortController();
+                constructionRequestController = requestController;
+                const requestSequence = ++constructionRequestSequence;
+                const url = new URL(root.dataset.constructionRequestsUrl || "", window.location.origin);
+                url.searchParams.set("employeeId", `${selectedEmployeeId}`);
+                url.searchParams.set("_ts", Date.now().toString());
+                console.debug("[ConstructionCheckin] request", {
+                    selectedEmployeeId,
+                    datasetEmployeeId: root.dataset.constructionEmployeeId || "",
+                    selectValue: constructionEmployeeSelect instanceof HTMLSelectElement ? constructionEmployeeSelect.value : "",
+                    requestUrl: url.toString(),
+                    requestSequence
+                });
+
                 try {
                     setConstructionStatus("Đang tải phiếu yêu cầu...", "info");
                     if (constructionRefreshButton instanceof HTMLButtonElement) {
                         constructionRefreshButton.disabled = true;
                     }
-                    const url = new URL(root.dataset.constructionRequestsUrl || "", window.location.origin);
-                    url.searchParams.set("employeeId", `${selectedEmployeeId}`);
                     const response = await fetch(url, {
                         method: "GET",
                         headers: { "X-Requested-With": "XMLHttpRequest" },
-                        cache: "no-store"
+                        cache: "no-store",
+                        signal: requestController.signal
                     });
                     const payload = await response.json().catch(() => null);
-                    if (!response.ok || payload?.succeeded === false) {
-                        throw new Error(payload?.message || "Không thể tải phiếu yêu cầu.");
+                    if (requestSequence !== constructionRequestSequence) {
+                        return;
+                    }
+                    if (!response.ok || payload?.succeeded !== true) {
+                        throw new Error(payload?.message || "Không thể tải danh sách phiếu yêu cầu. Vui lòng tải lại.");
                     }
 
-                    if (constructionEmployee instanceof HTMLElement) {
-                        constructionEmployee.textContent = payload.employeeName || `Nhân viên #${selectedEmployeeId}`;
+                    const resolvedEmployeeId = parseConstructionEmployeeId(`${payload.employeeId || ""}`);
+                    if (!resolvedEmployeeId || resolvedEmployeeId !== selectedEmployeeId) {
+                        throw new Error("Nhân viên trả về không khớp với nhân viên đã chọn.");
                     }
-                    if (constructionEmployeeName instanceof HTMLElement) {
-                        constructionEmployeeName.textContent = payload.employeeName || `Nhân viên #${selectedEmployeeId}`;
+                    if (constructionEmployeeSelect instanceof HTMLSelectElement) {
+                        constructionEmployeeSelect.value = `${resolvedEmployeeId}`;
+                        window.ApptechLiveSelect?.refresh(constructionEmployeeSelect);
                     }
-                    root.dataset.constructionEmployeeId = `${payload.employeeId || selectedEmployeeId}`;
+                    root.dataset.constructionEmployeeId = `${resolvedEmployeeId}`;
+                    updateConstructionEmployeeDisplay(resolvedEmployeeId, payload.employeeName || "");
 
                     const items = Array.isArray(payload.items) ? payload.items : [];
                     if (constructionList instanceof HTMLElement) {
@@ -2429,12 +2509,27 @@
                     }
                     setConstructionStatus(items.length > 0 ? `Đã tải ${items.length} phiếu yêu cầu.` : "Không có phiếu yêu cầu phù hợp.", items.length > 0 ? "success" : "info");
                 } catch (error) {
-                    setConstructionStatus(error instanceof Error ? error.message : "Không thể tải phiếu yêu cầu.", "error");
+                    if (error instanceof DOMException && error.name === "AbortError") {
+                        return;
+                    }
+                    if (requestSequence !== constructionRequestSequence) {
+                        return;
+                    }
+                    const errorMessage = "Không thể tải danh sách phiếu yêu cầu. Vui lòng tải lại.";
+                    console.debug("[ConstructionCheckin] request failed", {
+                        selectedEmployeeId,
+                        datasetEmployeeId: root.dataset.constructionEmployeeId || "",
+                        selectValue: constructionEmployeeSelect instanceof HTMLSelectElement ? constructionEmployeeSelect.value : "",
+                        requestUrl: url.toString(),
+                        requestSequence,
+                        error
+                    });
+                    setConstructionStatus(errorMessage, "error");
                     if (constructionList instanceof HTMLElement) {
-                        constructionList.innerHTML = `<div class="construction-checkin-empty">Không thể tải dữ liệu. Vui lòng thử lại.</div>`;
+                        constructionList.innerHTML = `<div class="construction-checkin-empty">${errorMessage}</div>`;
                     }
                 } finally {
-                    if (constructionRefreshButton instanceof HTMLButtonElement) {
+                    if (requestSequence === constructionRequestSequence && constructionRefreshButton instanceof HTMLButtonElement) {
                         constructionRefreshButton.disabled = false;
                     }
                 }
@@ -2442,6 +2537,9 @@
 
             const openConstructionModal = () => {
                 if (constructionShell instanceof HTMLElement) {
+                    if (!constructionEmployeeChangedByUser) {
+                        syncConstructionEmployeeStateFromServer();
+                    }
                     constructionShell.hidden = false;
                     document.body.classList.add("modal-open");
                     void loadConstructionRequests();
@@ -3145,7 +3243,14 @@
             purchaseCheckoutButton?.addEventListener("click", () => void openCameraModal("purchase-checkout"));
             constructionOpenButton?.addEventListener("click", openConstructionModal);
             constructionRefreshButton?.addEventListener("click", () => void loadConstructionRequests());
-            constructionEmployeeSelect?.addEventListener("change", () => void loadConstructionRequests());
+            constructionEmployeeSelect?.addEventListener("change", () => {
+                constructionEmployeeChangedByUser = true;
+                if (!resolveConstructionSelectedEmployee()) {
+                    setConstructionStatus("Nhân viên được chọn không hợp lệ.", "error");
+                    return;
+                }
+                void loadConstructionRequests();
+            });
             constructionCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionModal));
             constructionMapCloseButtons.forEach((button) => button.addEventListener("click", closeConstructionMap));
             constructionMapRouteButton?.addEventListener("click", () => void loadConstructionRoute());
@@ -3353,6 +3458,11 @@
             mobileHistoryMedia.addEventListener?.("change", updateHistoryCounter);
 
             initPurchaseSpeech();
+            syncConstructionEmployeeStateFromServer();
+            window.addEventListener("pageshow", () => {
+                constructionEmployeeChangedByUser = false;
+                syncConstructionEmployeeStateFromServer();
+            });
             syncButtons();
             syncEmployeeSummary();
             updateHistoryCounter();
