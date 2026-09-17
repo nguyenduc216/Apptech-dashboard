@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'apptech-static-v3';
+const STATIC_CACHE = 'apptech-static-v4';
 const STATIC_ASSETS = [
     '/dang-nhap',
     '/manifest.webmanifest',
