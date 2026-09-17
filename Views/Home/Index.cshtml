@@ -1073,6 +1073,7 @@
             let constructionMapResizeTimer = null;
             let constructionMapInitializationFrame = null;
             let constructionTileRetryUsed = false;
+            let constructionTileRetryTimer = null;
             let constructionThumbnailObserver = null;
             let activeConstructionLocation = null;
             let speechRecognition = null;
@@ -2353,6 +2354,28 @@
                     </article>`;
             };
 
+            const destroyConstructionMapThumb = (element) => {
+                if (!(element instanceof HTMLElement)) {
+                    return;
+                }
+                const map = element._constructionThumbMap;
+                if (map && typeof map.remove === "function") {
+                    map.off();
+                    map.remove();
+                }
+                element._constructionThumbMap = null;
+                element._constructionThumbMarker = null;
+                delete element.dataset.mapReady;
+            };
+
+            const destroyAllConstructionMapThumbs = () => {
+                if (!(constructionList instanceof HTMLElement)) {
+                    return;
+                }
+                constructionList.querySelectorAll("[data-construction-map-thumb]")
+                    .forEach(destroyConstructionMapThumb);
+            };
+
             const initConstructionMapThumb = (element) => {
                 if (!(element instanceof HTMLElement) ||
                     element.dataset.mapReady === "true" ||
@@ -2492,6 +2515,9 @@
                 if (!selectedEmployeeId) {
                     setConstructionStatus("Chưa xác định được nhân viên để tải phiếu yêu cầu.", "error");
                     if (constructionList instanceof HTMLElement) {
+                        constructionThumbnailObserver?.disconnect();
+                        constructionThumbnailObserver = null;
+                        destroyAllConstructionMapThumbs();
                         constructionList.innerHTML = `<div class="construction-checkin-empty">Chưa xác định được nhân viên.</div>`;
                     }
                     return;
@@ -2544,6 +2570,9 @@
 
                     const items = Array.isArray(payload.items) ? payload.items : [];
                     if (constructionList instanceof HTMLElement) {
+                        constructionThumbnailObserver?.disconnect();
+                        constructionThumbnailObserver = null;
+                        destroyAllConstructionMapThumbs();
                         constructionList.innerHTML = items.length > 0
                             ? items.map(renderConstructionCard).join("")
                             : `<div class="construction-checkin-empty">Không có phiếu yêu cầu phù hợp.</div>`;
@@ -2568,6 +2597,9 @@
                     });
                     setConstructionStatus(errorMessage, "error");
                     if (constructionList instanceof HTMLElement) {
+                        constructionThumbnailObserver?.disconnect();
+                        constructionThumbnailObserver = null;
+                        destroyAllConstructionMapThumbs();
                         constructionList.innerHTML = `<div class="construction-checkin-empty">${errorMessage}</div>`;
                     }
                 } finally {
@@ -2589,6 +2621,8 @@
             };
 
             const closeConstructionModal = () => {
+                constructionThumbnailObserver?.disconnect();
+                constructionThumbnailObserver = null;
                 if (constructionShell instanceof HTMLElement) {
                     constructionShell.hidden = true;
                 }
@@ -2614,6 +2648,10 @@
                 if (constructionMapResizeTimer !== null) {
                     window.clearTimeout(constructionMapResizeTimer);
                     constructionMapResizeTimer = null;
+                }
+                if (constructionTileRetryTimer !== null) {
+                    window.clearTimeout(constructionTileRetryTimer);
+                    constructionTileRetryTimer = null;
                 }
                 constructionMapResizeObserver?.disconnect();
                 constructionMapResizeObserver = null;
@@ -2667,12 +2705,13 @@
                         return;
                     }
                     constructionTileRetryUsed = true;
-                    window.requestAnimationFrame(() => {
+                    constructionTileRetryTimer = window.setTimeout(() => {
+                        constructionTileRetryTimer = null;
                         if (constructionMap && constructionTileLayer) {
                             refreshConstructionMapSize();
                             constructionTileLayer.redraw();
                         }
-                    });
+                    }, 250);
                 });
                 constructionTileLayer.addTo(constructionMap);
                 if ("ResizeObserver" in window) {
@@ -2905,7 +2944,7 @@
                     thumbnail._constructionThumbMarker.setLatLng([lat, lng]);
                     thumbnail._constructionThumbMap.setView([lat, lng], 16);
                     thumbnail._constructionThumbMap.invalidateSize();
-                } else {
+                } else if (!(constructionMapShell instanceof HTMLElement) || constructionMapShell.hidden) {
                     initConstructionMapThumb(thumbnail);
                 }
             };
