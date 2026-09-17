@@ -607,8 +607,12 @@ public sealed class SimpleExcelService : ISimpleExcelService
         var document = new XDocument(
             new XElement(MainNs + "styleSheet",
                 new XElement(MainNs + "fonts",
-                    new XAttribute("count", "1"),
+                    new XAttribute("count", "2"),
                     new XElement(MainNs + "font",
+                        new XElement(MainNs + "sz", new XAttribute("val", "11")),
+                        new XElement(MainNs + "name", new XAttribute("val", "Calibri"))),
+                    new XElement(MainNs + "font",
+                        new XElement(MainNs + "b"),
                         new XElement(MainNs + "sz", new XAttribute("val", "11")),
                         new XElement(MainNs + "name", new XAttribute("val", "Calibri")))),
                 new XElement(MainNs + "fills",
@@ -616,12 +620,18 @@ public sealed class SimpleExcelService : ISimpleExcelService
                     new XElement(MainNs + "fill", new XElement(MainNs + "patternFill", new XAttribute("patternType", "none"))),
                     new XElement(MainNs + "fill", new XElement(MainNs + "patternFill", new XAttribute("patternType", "gray125")))),
                 new XElement(MainNs + "borders",
-                    new XAttribute("count", "1"),
+                    new XAttribute("count", "2"),
                     new XElement(MainNs + "border",
                         new XElement(MainNs + "left"),
                         new XElement(MainNs + "right"),
                         new XElement(MainNs + "top"),
                         new XElement(MainNs + "bottom"),
+                        new XElement(MainNs + "diagonal")),
+                    new XElement(MainNs + "border",
+                        new XElement(MainNs + "left", new XAttribute("style", "thin"), new XElement(MainNs + "color", new XAttribute("rgb", "FFB7C9C4"))),
+                        new XElement(MainNs + "right", new XAttribute("style", "thin"), new XElement(MainNs + "color", new XAttribute("rgb", "FFB7C9C4"))),
+                        new XElement(MainNs + "top", new XAttribute("style", "thin"), new XElement(MainNs + "color", new XAttribute("rgb", "FFB7C9C4"))),
+                        new XElement(MainNs + "bottom", new XAttribute("style", "thin"), new XElement(MainNs + "color", new XAttribute("rgb", "FFB7C9C4"))),
                         new XElement(MainNs + "diagonal"))),
                 new XElement(MainNs + "cellStyleXfs",
                     new XAttribute("count", "1"),
@@ -631,12 +641,27 @@ public sealed class SimpleExcelService : ISimpleExcelService
                         new XAttribute("fillId", "0"),
                         new XAttribute("borderId", "0"))),
                 new XElement(MainNs + "cellXfs",
-                    new XAttribute("count", "1"),
+                    new XAttribute("count", "3"),
                     new XElement(MainNs + "xf",
                         new XAttribute("numFmtId", "0"),
                         new XAttribute("fontId", "0"),
                         new XAttribute("fillId", "0"),
                         new XAttribute("borderId", "0"),
+                        new XAttribute("xfId", "0")),
+                    new XElement(MainNs + "xf",
+                        new XAttribute("numFmtId", "0"),
+                        new XAttribute("fontId", "1"),
+                        new XAttribute("fillId", "0"),
+                        new XAttribute("borderId", "1"),
+                        new XAttribute("applyFont", "1"),
+                        new XAttribute("applyBorder", "1"),
+                        new XAttribute("xfId", "0")),
+                    new XElement(MainNs + "xf",
+                        new XAttribute("numFmtId", "0"),
+                        new XAttribute("fontId", "0"),
+                        new XAttribute("fillId", "0"),
+                        new XAttribute("borderId", "1"),
+                        new XAttribute("applyBorder", "1"),
                         new XAttribute("xfId", "0"))),
                 new XElement(MainNs + "cellStyles",
                     new XAttribute("count", "1"),
@@ -686,7 +711,7 @@ public sealed class SimpleExcelService : ISimpleExcelService
             new(
                 MainNs + "row",
                 new XAttribute("r", "1"),
-                headerValues.Select((value, index) => BuildInlineStringCell($"{GetColumnName(index)}1", value)))
+                headerValues.Select((value, index) => BuildInlineStringCell($"{GetColumnName(index)}1", value, 1)))
         };
 
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
@@ -697,7 +722,8 @@ public sealed class SimpleExcelService : ISimpleExcelService
                 new XAttribute("r", rowNumber.ToString(CultureInfo.InvariantCulture)),
                 rows[rowIndex].Select((value, columnIndex) => BuildInlineStringCell(
                     $"{GetColumnName(columnIndex)}{rowNumber}",
-                    value ?? string.Empty))));
+                    value ?? string.Empty,
+                    2))));
         }
 
         var columns = new XElement(
@@ -720,12 +746,18 @@ public sealed class SimpleExcelService : ISimpleExcelService
         return document.DeclarationAwareString();
     }
 
-    private static XElement BuildInlineStringCell(string reference, string value)
+    private static XElement BuildInlineStringCell(string reference, string value, int? styleIndex = null)
     {
-        return new XElement(MainNs + "c",
+        var cell = new XElement(MainNs + "c",
             new XAttribute("r", reference),
             new XAttribute("t", "inlineStr"),
             new XElement(MainNs + "is", new XElement(MainNs + "t", value)));
+        if (styleIndex.HasValue)
+        {
+            cell.Add(new XAttribute("s", styleIndex.Value));
+        }
+
+        return cell;
     }
 
     private static XDocument LoadXml(ZipArchive archive, string path)
