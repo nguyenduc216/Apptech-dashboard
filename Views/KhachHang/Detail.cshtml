@@ -1648,6 +1648,9 @@
 
 	                        viewMap.setView(defaultCenter, defaultZoom);
 	                    }
+	                    window.setTimeout(() => {
+	                        window.ApptechLeafletDiagnostics?.capture("CustomerMap", viewMapElement, viewMap);
+	                    }, 1500);
 	                }
 	            };
 

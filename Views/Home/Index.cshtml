@@ -1070,7 +1070,6 @@
             let constructionRouteLayer = null;
             let constructionDiagnosticsTimer = null;
             let constructionTileErrorCount = 0;
-            let constructionTileProvider = "primary";
             const constructionRetriedTiles = new Set();
             const constructionFailedTiles = new Set();
             let constructionThumbnailObserver = null;
@@ -2647,7 +2646,7 @@
                 const center = constructionMap?.getCenter();
                 console.debug("[ConstructionMapTile]", {
                     event: eventName,
-                    provider: constructionTileProvider,
+                    provider: "HOT OSM",
                     src: tile?.currentSrc || tile?.src || "",
                     mapSize: size ? { width: size.x, height: size.y } : null,
                     zoom: constructionMap?.getZoom() ?? null,
@@ -2674,16 +2673,24 @@
                     boundingHeight: bounds.height,
                     zoom: constructionMap.getZoom(),
                     center: { lat: center.lat, lng: center.lng },
-                    provider: constructionTileProvider
+                    provider: "HOT OSM",
+                    instances: {
+                        constructionFullscreen: constructionMap ? 1 : 0,
+                        constructionThumbnails: constructionList instanceof HTMLElement
+                            ? Array.from(constructionList.querySelectorAll("[data-construction-map-thumb]"))
+                                .filter((element) => !!element._constructionThumbMap).length
+                            : 0,
+                        attendanceFullscreen: fullscreenMap ? 1 : 0,
+                        purchaseDetail: purchaseDetailMap ? 1 : 0
+                    }
                 });
+                window.ApptechLeafletDiagnostics?.capture("DashboardConstructionMap", constructionMapElement, constructionMap);
             };
 
-            const createConstructionTileLayer = (url, provider) => {
-                const tileLayer = window.L.tileLayer(url, {
+            const createConstructionTileLayer = () => {
+                const tileLayer = window.L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
                     maxZoom: 19,
-                    attribution: provider === "primary"
-                        ? "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
-                        : "&copy; OpenStreetMap contributors"
+                    attribution: "&copy; OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team"
                 });
                 tileLayer.on("tileloadstart", (event) => logConstructionTileEvent("tileloadstart", event.tile));
                 tileLayer.on("tileload", (event) => {
@@ -2706,9 +2713,6 @@
                         constructionFailedTiles.add(originalUrl);
                     }
                     constructionTileErrorCount = constructionFailedTiles.size;
-                    if (provider === "primary" && constructionTileErrorCount >= 3) {
-                        switchConstructionTileProvider();
-                    }
                 });
                 tileLayer.on("load", () => {
                     logConstructionTileEvent("load");
@@ -2717,21 +2721,24 @@
                 return tileLayer;
             };
 
-            const switchConstructionTileProvider = () => {
-                if (!constructionMap || constructionTileProvider === "fallback") {
+            const syncConstructionMapSize = (stage) => {
+                if (!(constructionMapElement instanceof HTMLElement) || !constructionMap) {
                     return;
                 }
-                constructionTileProvider = "fallback";
-                console.debug("[ConstructionMapTile] switching provider", {
-                    provider: constructionTileProvider,
-                    errorCount: constructionTileErrorCount
-                });
-                if (constructionTileLayer) {
-                    constructionTileLayer.off();
-                    constructionMap.removeLayer(constructionTileLayer);
+                const rect = constructionMapElement.getBoundingClientRect();
+                const before = constructionMap.getSize();
+                const sizeChanged = Math.abs(before.x - rect.width) > 1 || Math.abs(before.y - rect.height) > 1;
+                if (sizeChanged) {
+                    constructionMap.invalidateSize({ animate: false, pan: false });
                 }
-                constructionTileLayer = createConstructionTileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", "fallback");
-                constructionTileLayer.addTo(constructionMap);
+                const after = constructionMap.getSize();
+                console.debug("[ConstructionMapLifecycle]", {
+                    stage,
+                    rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left },
+                    before: { width: before.x, height: before.y },
+                    invalidated: sizeChanged,
+                    after: { width: after.x, height: after.y }
+                });
             };
 
             const ensureConstructionMap = () => {
@@ -2740,18 +2747,15 @@
                     return false;
                 }
                 if (constructionMap) {
-                    window.setTimeout(() => constructionMap.invalidateSize(), 120);
                     return true;
                 }
                 constructionMap = window.L.map(constructionMapElement, {
                     zoomControl: true,
                     attributionControl: false
                 });
-                constructionTileProvider = "primary";
-                constructionTileLayer = createConstructionTileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", "primary");
+                constructionTileLayer = createConstructionTileLayer();
                 constructionTileLayer.addTo(constructionMap);
                 constructionMap.setView([16.0471, 108.2068], 6);
-                window.setTimeout(() => constructionMap.invalidateSize(), 120);
                 return true;
             };
 
@@ -2780,7 +2784,6 @@
                     }
                     constructionMap.setView([16.0471, 108.2068], 6);
                 }
-                window.setTimeout(() => constructionMap.invalidateSize(), 100);
             };
 
             const syncConstructionMapExternalLink = () => {
@@ -2869,12 +2872,24 @@
                 setConstructionRouteStatus("", "info");
                 syncConstructionMapExternalLink();
                 window.requestAnimationFrame(() => {
+                    const visibleBounds = constructionMapElement instanceof HTMLElement
+                        ? constructionMapElement.getBoundingClientRect()
+                        : null;
+                    console.debug("[ConstructionMapLifecycle]", {
+                        stage: "shell-visible-before-map",
+                        rect: visibleBounds ? {
+                            width: visibleBounds.width,
+                            height: visibleBounds.height,
+                            top: visibleBounds.top,
+                            left: visibleBounds.left
+                        } : null
+                    });
                     if (!ensureConstructionMap()) {
                         return;
                     }
-                    constructionMap.invalidateSize(true);
+                    syncConstructionMapSize("after-ensure-before-set-view");
                     syncConstructionMap();
-                    window.requestAnimationFrame(() => constructionMap?.invalidateSize(true));
+                    window.requestAnimationFrame(() => syncConstructionMapSize("after-set-view"));
                     constructionDiagnosticsTimer = window.setTimeout(() => {
                         constructionDiagnosticsTimer = null;
                         runConstructionMapDiagnostics();
@@ -3111,7 +3126,7 @@
                     const bounds = constructionRouteLayer.getBounds();
                     if (bounds.isValid()) {
                         constructionMap.fitBounds(bounds.pad(0.15));
-                        window.setTimeout(() => constructionMap.invalidateSize(), 100);
+                        window.requestAnimationFrame(() => syncConstructionMapSize("after-route-fit-bounds"));
                     }
                     const distanceKm = (route.distance / 1000).toFixed(1);
                     const durationMinutes = Math.round(route.duration / 60);

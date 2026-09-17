@@ -197,6 +197,84 @@
         });
     }
 
+    window.ApptechLeafletDiagnostics = {
+        capture(label, element, map) {
+            if (!(element instanceof HTMLElement) || !map) {
+                return null;
+            }
+            const rect = element.getBoundingClientRect();
+            const mapSize = map.getSize();
+            const tiles = Array.from(element.querySelectorAll(".leaflet-tile"));
+            const loadedTiles = tiles.filter((tile) => tile.classList.contains("leaflet-tile-loaded"));
+            const firstTile = tiles[0] instanceof HTMLElement ? tiles[0] : null;
+            const firstTileStyle = firstTile ? window.getComputedStyle(firstTile) : null;
+            const readTransform = (selector) => {
+                const node = element.querySelector(selector);
+                return node instanceof HTMLElement ? window.getComputedStyle(node).transform : null;
+            };
+            const parentChain = [];
+            let parent = element;
+            while (parent instanceof HTMLElement) {
+                const style = window.getComputedStyle(parent);
+                parentChain.push({
+                    node: parent.tagName.toLowerCase(),
+                    id: parent.id || "",
+                    className: parent.className || "",
+                    display: style.display,
+                    position: style.position,
+                    width: style.width,
+                    height: style.height,
+                    minHeight: style.minHeight,
+                    maxHeight: style.maxHeight,
+                    overflow: style.overflow,
+                    overflowX: style.overflowX,
+                    overflowY: style.overflowY,
+                    transform: style.transform,
+                    contain: style.contain,
+                    zoom: style.zoom,
+                    visibility: style.visibility,
+                    opacity: style.opacity,
+                    flex: style.flex,
+                    gridTemplateRows: style.gridTemplateRows,
+                    alignItems: style.alignItems
+                });
+                if (parent === document.body) {
+                    break;
+                }
+                parent = parent.parentElement;
+            }
+            const result = {
+                rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left },
+                clientSize: { width: element.clientWidth, height: element.clientHeight },
+                mapSize: { width: mapSize.x, height: mapSize.y },
+                tiles: { total: tiles.length, loaded: loadedTiles.length, missing: tiles.length - loadedTiles.length },
+                tileStyle: firstTileStyle ? {
+                    width: firstTileStyle.width,
+                    height: firstTileStyle.height,
+                    maxWidth: firstTileStyle.maxWidth,
+                    maxHeight: firstTileStyle.maxHeight,
+                    position: firstTileStyle.position,
+                    left: firstTileStyle.left,
+                    top: firstTileStyle.top,
+                    transform: firstTileStyle.transform,
+                    objectFit: firstTileStyle.objectFit,
+                    display: firstTileStyle.display,
+                    opacity: firstTileStyle.opacity,
+                    visibility: firstTileStyle.visibility,
+                    zIndex: firstTileStyle.zIndex
+                } : null,
+                paneTransform: {
+                    map: readTransform(".leaflet-map-pane"),
+                    tile: readTransform(".leaflet-tile-pane"),
+                    container: readTransform(".leaflet-tile-container")
+                },
+                parentChain
+            };
+            console.debug(`[${label}Comparison]`, result);
+            return result;
+        }
+    };
+
     const topbar = document.querySelector(".topbar");
     const searchToggle = document.querySelector("[data-search-toggle]");
     const globalSearch = document.getElementById("globalSearch");
