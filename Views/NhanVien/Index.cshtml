@@ -160,6 +160,17 @@
 
                                         @if (!item.IsAdministrator && item.IDTaiKhoan.HasValue)
                                         {
+                                            @if (User.IsInRole("Administrator") && !User.IsImpersonating())
+                                            {
+                                                <form method="post" asp-action="Impersonate" class="inline-action-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="accountId" value="@item.IDTaiKhoan.Value" />
+                                                    <button type="submit" class="table-action-button impersonate" title="Đăng nhập hộ tài khoản @item.TenDangNhap">
+                                                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
+                                                        <span>Đăng nhập hộ</span>
+                                                    </button>
+                                                </form>
+                                            }
                                             <a class="table-action-button role"
                                                asp-action="Index"
                                                asp-route-keyword="@Model.Filter.Keyword"

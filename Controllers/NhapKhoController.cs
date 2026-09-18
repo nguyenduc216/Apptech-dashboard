@@ -725,9 +725,6 @@ public class NhapKhoController(
 
     private string GetCurrentAuditUser()
     {
-        return User.FindFirstValue("display_name")
-            ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.Identity?.Name
-            ?? "system";
+        return User.GetAuditUserName();
     }
 }

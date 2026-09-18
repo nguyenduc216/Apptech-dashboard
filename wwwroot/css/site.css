@@ -2024,6 +2024,22 @@ body.menu-open {
     width: 100%;
 }
 
+.account-popup-actions > form .account-popup-item {
+    width: 100%;
+}
+
+.table-action-button.impersonate {
+    background: #f4c542;
+    color: #263c36;
+    border: 1px solid #d6a91f;
+}
+
+.table-action-button.impersonate:hover,
+.table-action-button.impersonate:focus-visible {
+    background: #ffd65c;
+    color: #142a24;
+}
+
 .cham-cong-actions .primary-button,
 .cham-cong-actions .secondary-button {
     min-height: 48px;

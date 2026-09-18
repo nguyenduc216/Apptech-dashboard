@@ -581,11 +581,6 @@ public class XuatKhoController(
 
     private string GetCurrentAuditUser()
     {
-        var username = User.Identity?.Name
-            ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.FindFirstValue("display_name")
-            ?? "system";
-
-        return username.Trim();
+        return User.GetAuditUserName();
     }
 }

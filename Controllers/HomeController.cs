@@ -21,6 +21,14 @@ public class HomeController(
     ICommonAuditService commonAuditService,
     ILogger<HomeController> logger) : Controller
 {
+    private static readonly HashSet<string> ImpersonationClaimTypes =
+    [
+        ImpersonationContext.ActorAccountIdClaim,
+        ImpersonationContext.ActorUserNameClaim,
+        ImpersonationContext.ActorDisplayNameClaim,
+        ImpersonationContext.StartedAtClaim
+    ];
+
     private static readonly HashSet<string> AllowedAvatarExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg",
@@ -785,6 +793,55 @@ public class HomeController(
         return RedirectToAction(nameof(Login));
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ExitImpersonation()
+    {
+        var actorAccountId = User.FindFirstValue(ImpersonationContext.ActorAccountIdClaim);
+        if (!Guid.TryParse(actorAccountId, out var parsedActorAccountId))
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
+        var actorAccount = await _userAccountService.GetAccountByIdAsync(parsedActorAccountId, HttpContext.RequestAborted);
+        if (actorAccount is null || !actorAccount.IsActive || !actorAccount.IsAdministrator)
+        {
+            UserPermissionSession.Clear(HttpContext);
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            TempData["LoginMessage"] = "Không thể khôi phục tài khoản quản trị. Vui lòng đăng nhập lại.";
+            TempData["LoginMessageType"] = "error";
+            return RedirectToAction(nameof(Login));
+        }
+
+        var effectiveAccountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var effectiveUserName = User.GetEffectiveUserName();
+        var startedAt = User.FindFirstValue(ImpersonationContext.StartedAtClaim);
+        await _commonAuditService.WriteAsync(
+            new CommonAuditEntry(
+                "Authentication",
+                "ImpersonationEnded",
+                "TblTaiKhoanNguoiDung",
+                effectiveAccountId ?? string.Empty,
+                effectiveUserName,
+                $"{actorAccount.Username} kết thúc đăng nhập hộ tài khoản {effectiveUserName}.",
+                $"{actorAccount.Username} [đăng nhập hộ: {effectiveUserName}]",
+                Data: new
+                {
+                    actorAccountId = actorAccount.Id,
+                    actorUserName = actorAccount.Username,
+                    targetAccountId = effectiveAccountId,
+                    targetUserName = effectiveUserName,
+                    startedAt,
+                    endedAt = DateTimeOffset.Now
+                }),
+            HttpContext.RequestAborted);
+
+        var authenticateResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await SignInAccountAsync(actorAccount, authenticateResult.Properties);
+        await LoadPermissionsToSessionAsync(actorAccount);
+        return RedirectToAction(nameof(Index));
+    }
+
     [AllowAnonymous]
     public IActionResult Error()
     {
@@ -866,11 +923,7 @@ public class HomeController(
 
     private string GetAuditUserName()
     {
-        return User.FindFirstValue("display_name") ??
-            User.Identity?.Name ??
-            User.FindFirstValue(ClaimTypes.Name) ??
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            "system";
+        return User.GetAuditUserName();
     }
 
     private async Task<UserAccount?> GetCurrentAccountAsync()
@@ -1260,9 +1313,12 @@ public class HomeController(
     private async Task RefreshAuthenticatedUserAsync(UserAccount account)
     {
         var authenticateResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var claims = BuildClaims(account).ToList();
+        claims.AddRange(User.Claims.Where(claim => ImpersonationClaimTypes.Contains(claim.Type)));
 
-        await SignInAccountAsync(
-            account,
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
             authenticateResult.Properties ?? new AuthenticationProperties
             {
                 AllowRefresh = true,

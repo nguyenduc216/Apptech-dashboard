@@ -336,12 +336,7 @@ public class KhachHangController(
 
     private string GetCurrentAuditUser()
     {
-        var username = User.Identity?.Name
-            ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.FindFirstValue("display_name")
-            ?? "system";
-
-        return username.Trim();
+        return User.GetAuditUserName();
     }
 
     private async Task<bool> CanCurrentUserModifyCustomerAsync(int customerId, CancellationToken cancellationToken)

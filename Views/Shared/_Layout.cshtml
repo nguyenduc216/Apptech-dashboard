@@ -13,6 +13,9 @@
         ?? (!string.IsNullOrWhiteSpace(displayName)
             ? displayName[..1].ToUpperInvariant()
             : "U");
+    var isImpersonating = User.IsImpersonating();
+    var impersonatorDisplayName = User.FindFirstValue(ApptechDashboard.Services.ImpersonationContext.ActorDisplayNameClaim)
+        ?? User.FindFirstValue(ApptechDashboard.Services.ImpersonationContext.ActorUserNameClaim);
     var menuJson = JsonSerializer.Serialize(menuItems, new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -60,6 +63,15 @@
             </div>
 
             <div class="topbar-actions">
+                @if (isImpersonating)
+                {
+                    <form method="post" asp-controller="Home" asp-action="ExitImpersonation" class="inline-action-form">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="topbar-utility-button" title="Thoát đăng nhập hộ và trở về @impersonatorDisplayName" aria-label="Thoát đăng nhập hộ">
+                            <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                        </button>
+                    </form>
+                }
                 <button type="button"
                         class="topbar-utility-button"
                         data-qr-lookup-trigger
@@ -105,6 +117,16 @@
                 </div>
 
                 <div class="account-popup-actions">
+                    @if (isImpersonating)
+                    {
+                        <form method="post" asp-controller="Home" asp-action="ExitImpersonation">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="account-popup-item">
+                                <span class="account-popup-item-icon"><i class="fa-solid fa-user-shield" aria-hidden="true"></i></span>
+                                <span class="account-popup-item-label">Thoát đăng nhập hộ</span>
+                            </button>
+                        </form>
+                    }
                     <a class="account-popup-item" href="/tai-khoan/cap-nhat">
                         <span class="account-popup-item-icon"><i class="fa-solid fa-user-pen" aria-hidden="true"></i></span>
                         <span class="account-popup-item-label">Cập nhật tài khoản</span>

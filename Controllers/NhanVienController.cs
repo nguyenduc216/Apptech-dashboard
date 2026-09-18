@@ -12,6 +12,7 @@ namespace ApptechDashboard.Controllers;
 public class NhanVienController(
     INhanVienService nhanVienService,
     IUserAccountService userAccountService,
+    ICommonAuditService commonAuditService,
     IWebHostEnvironment webHostEnvironment) : Controller
 {
     private static readonly HashSet<string> AllowedAvatarExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -28,7 +29,72 @@ public class NhanVienController(
 
     private readonly INhanVienService _nhanVienService = nhanVienService;
     private readonly IUserAccountService _userAccountService = userAccountService;
+    private readonly ICommonAuditService _commonAuditService = commonAuditService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Impersonate(Guid accountId)
+    {
+        if (!User.IsInRole("Administrator") || User.IsImpersonating())
+        {
+            return Forbid();
+        }
+
+        var actorAccountId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var actorUserName = User.GetEffectiveUserName();
+        var actorDisplayName = User.FindFirstValue("display_name") ?? actorUserName;
+        if (!Guid.TryParse(actorAccountId, out var parsedActorAccountId) || parsedActorAccountId == accountId)
+        {
+            return BadRequest();
+        }
+
+        var targetAccount = await _userAccountService.GetAccountByIdAsync(accountId, HttpContext.RequestAborted);
+        if (targetAccount is null || !targetAccount.IsActive || targetAccount.IsAdministrator)
+        {
+            TempData["StatusMessage"] = "Không thể đăng nhập hộ tài khoản đã chọn.";
+            TempData["StatusType"] = "error";
+            return RedirectToAction(nameof(Index));
+        }
+
+        await _commonAuditService.WriteAsync(
+            new CommonAuditEntry(
+                "Authentication",
+                "ImpersonationStarted",
+                "TblTaiKhoanNguoiDung",
+                targetAccount.Id.ToString(),
+                targetAccount.Username,
+                $"{actorUserName} bắt đầu đăng nhập hộ tài khoản {targetAccount.Username}.",
+                $"{actorUserName} [đăng nhập hộ: {targetAccount.Username}]",
+                Data: new
+                {
+                    actorAccountId = parsedActorAccountId,
+                    actorUserName,
+                    targetAccountId = targetAccount.Id,
+                    targetUserName = targetAccount.Username,
+                    startedAt = DateTimeOffset.Now
+                }),
+            HttpContext.RequestAborted);
+
+        var authenticateResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var claims = BuildAccountClaims(targetAccount).ToList();
+        claims.Add(new Claim(ImpersonationContext.ActorAccountIdClaim, parsedActorAccountId.ToString()));
+        claims.Add(new Claim(ImpersonationContext.ActorUserNameClaim, actorUserName));
+        claims.Add(new Claim(ImpersonationContext.ActorDisplayNameClaim, actorDisplayName));
+        claims.Add(new Claim(ImpersonationContext.StartedAtClaim, DateTimeOffset.UtcNow.ToString("O")));
+
+        UserPermissionSession.Clear(HttpContext);
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+            authenticateResult.Properties ?? new AuthenticationProperties
+            {
+                AllowRefresh = true,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12)
+            });
+
+        return RedirectToAction("Index", "Home");
+    }
 
     [HttpGet]
     public async Task<IActionResult> Index([FromQuery] NhanVienListQuery query)
@@ -480,12 +546,27 @@ public class NhanVienController(
 
     private string GetCurrentAuditUser()
     {
-        var username = User.Identity?.Name
-            ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.FindFirstValue("display_name")
-            ?? "system";
+        return User.GetAuditUserName();
+    }
 
-        return username.Trim();
+    private static IEnumerable<Claim> BuildAccountClaims(UserAccount account)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, account.Id.ToString()),
+            new(ClaimTypes.Name, account.Username),
+            new("display_name", account.FullName),
+            new("initials", account.Initials),
+            new("role_label", account.RoleDisplay)
+        };
+
+        if (!string.IsNullOrWhiteSpace(account.Email)) claims.Add(new Claim(ClaimTypes.Email, account.Email));
+        if (account.IsAdministrator) claims.Add(new Claim(ClaimTypes.Role, "Administrator"));
+        if (account.EmployeeId.HasValue && account.EmployeeId.Value > 0) claims.Add(new Claim("employee_id", account.EmployeeId.Value.ToString()));
+        if (!string.IsNullOrWhiteSpace(account.GroupName)) claims.Add(new Claim("group_name", account.GroupName));
+        if (!string.IsNullOrWhiteSpace(account.AvatarUrl)) claims.Add(new Claim("avatar_url", NormalizeAvatarUrl(account.AvatarUrl)));
+
+        return claims;
     }
 
     private bool IsCurrentAccount(Guid? accountId)
@@ -530,6 +611,12 @@ public class NhanVienController(
         {
             claims.Add(role);
         }
+
+        claims.AddRange(existingClaims.Where(claim =>
+            claim.Type == ImpersonationContext.ActorAccountIdClaim ||
+            claim.Type == ImpersonationContext.ActorUserNameClaim ||
+            claim.Type == ImpersonationContext.ActorDisplayNameClaim ||
+            claim.Type == ImpersonationContext.StartedAtClaim));
 
         var groupName = User.FindFirstValue("group_name") ?? existingAccount?.GroupName;
         if (!string.IsNullOrWhiteSpace(groupName))

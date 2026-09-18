@@ -250,12 +250,7 @@ public class KhoController(
 
     private string GetCurrentAuditUser()
     {
-        var username = User.Identity?.Name
-            ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.FindFirstValue("display_name")
-            ?? "system";
-
-        return username.Trim();
+        return User.GetAuditUserName();
     }
 
     private static string BuildImportStatusMessage(KhoImportResult result)

@@ -1061,12 +1061,7 @@ public class YeuCauController(
 
     private string GetCurrentAuditUser()
     {
-        var username = User.FindFirstValue("display_name")
-            ?? User.FindFirstValue(ClaimTypes.Name)
-            ?? User.Identity?.Name
-            ?? "system";
-
-        return username.Trim();
+        return User.GetAuditUserName();
     }
 
     private int? GetCurrentEmployeeId()
