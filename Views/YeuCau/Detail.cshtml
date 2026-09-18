@@ -3429,14 +3429,39 @@
                     }
                 }
 
-                checkinVideo.pause();
-
-                if (checkinImageBlob && checkinFileInput instanceof HTMLInputElement) {
-                    const file = new File([checkinImageBlob], `checkin-${Date.now()}.jpg`, { type: checkinImageBlob.type || "image/jpeg" });
-                    const transfer = new DataTransfer();
-                    transfer.items.add(file);
-                    checkinFileInput.files = transfer.files;
+                if (!checkinImageBlob && checkinCanvas instanceof HTMLCanvasElement) {
+                    const context = checkinCanvas.getContext("2d");
+                    if (context) {
+                        const frame = await drawCurrentCheckinFrame(context);
+                        if (frame && !isCanvasFrameTooDark(context, frame.width, frame.height)) {
+                            checkinImageBlob = await new Promise((resolve) => checkinCanvas.toBlob(resolve, "image/jpeg", 0.88));
+                        }
+                    }
                 }
+
+                let photoReady = false;
+                if (checkinImageBlob) {
+                    const file = new File([checkinImageBlob], `checkin-${Date.now()}.jpg`, { type: checkinImageBlob.type || "image/jpeg" });
+                    try {
+                        photoReady = await drawCapturedFileToCanvas(file);
+                    } catch {
+                        photoReady = false;
+                    }
+                }
+
+                if (!photoReady) {
+                    checkinImageBlob = null;
+                    setCheckinStatus("Không thể lấy file ảnh từ camera. Vui lòng chụp lại.", "error");
+                    if (checkinStamp instanceof HTMLElement) {
+                        checkinStamp.hidden = true;
+                    }
+                    if (checkinCameraShell instanceof HTMLElement) {
+                        checkinCameraShell.classList.remove("is-captured");
+                    }
+                    return;
+                }
+
+                checkinVideo.pause();
 
                 if (checkinRetakeButton instanceof HTMLButtonElement) {
                     checkinRetakeButton.disabled = false;
