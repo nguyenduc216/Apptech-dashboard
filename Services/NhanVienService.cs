@@ -65,6 +65,7 @@ public sealed class NhanVienService(
                 SELECT COUNT(1)
                 FROM [{TableName}] AS nv
                 LEFT JOIN [{DepartmentTableName}] AS pb ON pb.ID = nv.IDPhongBan
+                LEFT JOIN [{UserTableName}] AS tk ON tk.IDNhanVien = nv.ID
                 WHERE {whereClause}
                 """;
             AddFilterParameters(countCommand, normalizedKeyword, statusFilter);

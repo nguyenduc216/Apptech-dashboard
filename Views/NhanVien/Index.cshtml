@@ -160,7 +160,7 @@
 
                                         @if (!item.IsAdministrator && item.IDTaiKhoan.HasValue)
                                         {
-                                            @if (User.IsInRole("Administrator") && !User.IsImpersonating())
+                                            @if (User.CanImpersonate())
                                             {
                                                 <form method="post" asp-action="Impersonate" class="inline-action-form">
                                                     @Html.AntiForgeryToken()

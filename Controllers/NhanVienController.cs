@@ -36,7 +36,7 @@ public class NhanVienController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Impersonate(Guid accountId)
     {
-        if (!User.IsInRole("Administrator") || User.IsImpersonating())
+        if (!User.CanImpersonate())
         {
             return Forbid();
         }

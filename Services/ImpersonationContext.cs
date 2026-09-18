@@ -12,6 +12,10 @@ public static class ImpersonationContext
     public static bool IsImpersonating(this ClaimsPrincipal user) =>
         !string.IsNullOrWhiteSpace(user.FindFirstValue(ActorAccountIdClaim));
 
+    public static bool CanImpersonate(this ClaimsPrincipal user) =>
+        !user.IsImpersonating() &&
+        string.Equals(user.FindFirstValue(ClaimTypes.Name)?.Trim(), "admin", StringComparison.OrdinalIgnoreCase);
+
     public static string GetEffectiveUserName(this ClaimsPrincipal user) =>
         (user.FindFirstValue(ClaimTypes.Name) ??
          user.Identity?.Name ??
