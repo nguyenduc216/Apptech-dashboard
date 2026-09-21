@@ -32,3 +32,28 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TblCham
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TblChamCongTravelEvaluation') AND name=N'IX_TravelEvaluation_EmployeeWarning')
     CREATE INDEX IX_TravelEvaluation_EmployeeWarning ON dbo.TblChamCongTravelEvaluation(EmployeeId, IsWarning, CreatedDate);
+
+IF OBJECT_ID(N'dbo.TblCauHinhHeThong', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.TblCauHinhHeThong
+        WHERE MaCauHinh = N'AllowedTravelDeviationMinutes'
+    )
+    BEGIN
+        INSERT INTO dbo.TblCauHinhHeThong (MaCauHinh, GiaTri)
+        VALUES (N'AllowedTravelDeviationMinutes', N'15');
+    END;
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.TblCauHinhHeThong
+        WHERE MaCauHinh = N'MaxTravelEvaluationGapMinutes'
+    )
+    BEGIN
+        INSERT INTO dbo.TblCauHinhHeThong (MaCauHinh, GiaTri)
+        VALUES (N'MaxTravelEvaluationGapMinutes', N'120');
+    END;
+END;
