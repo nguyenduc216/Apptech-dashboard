@@ -98,3 +98,22 @@ Push thành công lên `origin/main`.
 ## M. Deploy status
 
 **Not deployed.** Repo không xác nhận IIS server/path đích thực tế. Migration mới phải chạy trước khi deploy ứng dụng.
+
+## N. Hoàn thiện sau code review
+
+- Reset và collapse danh sách nội dung chỉ khi mở `purchase-checkin`; tải/refresh danh sách phiếu yêu cầu không còn làm mất lựa chọn đang nhập.
+- Fallback lịch sử AJAX đổi từ `AppTech` thành `Chấm công văn phòng`; trạng thái chấm công ngoài đang mở thống nhất là `Đang thực hiện`.
+- Lượt chỉ có ghi chú hiển thị `Không chọn nội dung` và vẫn hiển thị ghi chú độc lập, không còn bị gắn nhãn dữ liệu cũ.
+- Bổ sung kiểm tra permission phía server cho Index/Create/Update/SetActive; Administrator được phép và người thiếu quyền nhận `Forbid` trước khi service dữ liệu chạy.
+- Danh sách phiếu yêu cầu cuộn độc lập, các card giữ chiều cao nội dung và thumbnail bản đồ giữ kích thước.
+- Không đổi schema, migration, endpoint, internal attendance type hoặc Leaflet.
+
+## O. Kết quả xác minh sau review
+
+- `dotnet build apptech-dashboard.sln -c Release`: thành công, 0 warning, 0 error.
+- `dotnet test apptech-dashboard.sln -c Release --no-build`: thành công, 25/25 passed.
+- `git diff --check`: không có whitespace error; chỉ có thông báo LF/CRLF của Git trên Windows.
+- Feature commit: `85c8a4f35c2d678e6838da5b58fe21dc3a96e1bb`.
+- Message: `fix(attendance): complete attendance UX permissions and request scrolling`.
+- Push: thành công lên `origin/main`.
+- Deploy: chưa thực hiện.
