@@ -2125,22 +2125,24 @@ public sealed class YeuCauService(
                 imgPath = rawImgPath.ToString();
             }
 
-            await using (var deleteCommand = connection.CreateCommand())
-            {
-                deleteCommand.Transaction = transaction;
-                deleteCommand.CommandText = $"""
-                    DELETE FROM [{CheckinHistoryTableName}]
-                    WHERE ID = @Id AND IDYeuCau = @IDYeuCau
-                    """;
-                deleteCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
-                deleteCommand.Parameters.Add(new SqlParameter("@IDYeuCau", SqlDbType.Int) { Value = yeuCauId });
-
-                var affectedRows = await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
-                if (affectedRows <= 0)
+            var deleted = await TravelEvaluationCleanup.ExecuteAttendanceDeleteAsync(
+                () => TravelEvaluationCleanup.DeleteRelatedAsync(connection, transaction, id, cancellationToken),
+                async () =>
                 {
-                    await transaction.RollbackAsync(cancellationToken);
-                    return (false, "Không tìm thấy checkin cần xóa.", null);
-                }
+                    await using var deleteCommand = connection.CreateCommand();
+                    deleteCommand.Transaction = transaction;
+                    deleteCommand.CommandText = $"""
+                        DELETE FROM [{CheckinHistoryTableName}]
+                        WHERE ID = @Id AND IDYeuCau = @IDYeuCau
+                        """;
+                    deleteCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+                    deleteCommand.Parameters.Add(new SqlParameter("@IDYeuCau", SqlDbType.Int) { Value = yeuCauId });
+                    return await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+                },
+                () => transaction.RollbackAsync(cancellationToken));
+            if (!deleted)
+            {
+                return (false, "Không tìm thấy checkin cần xóa.", null);
             }
 
             await transaction.CommitAsync(cancellationToken);

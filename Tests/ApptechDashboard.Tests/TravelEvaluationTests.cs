@@ -67,4 +67,57 @@ public sealed class TravelEvaluationTests
         Assert.Equal(Settings.MorningStart, TravelEvaluationService.ResolveShift(new TimeSpan(8, 0, 0), Settings)?.Start);
         Assert.Equal(Settings.AfternoonStart, TravelEvaluationService.ResolveShift(new TimeSpan(13, 30, 0), Settings)?.Start);
     }
+
+    [Fact]
+    public void DeleteCurrentAttendance_CleansItsTravelEvaluationFirst()
+    {
+        var sql = TravelEvaluationCleanup.DeleteRelatedSql;
+
+        Assert.Contains("DELETE FROM dbo.TblChamCongTravelEvaluation", sql);
+        Assert.Contains("CurrentAttendanceId = @AttendanceId", sql);
+    }
+
+    [Fact]
+    public void DeletePreviousAttendance_CleansReferencingTravelEvaluationFirst()
+    {
+        var sql = TravelEvaluationCleanup.DeleteRelatedSql;
+
+        Assert.Contains("PreviousAttendanceId = @AttendanceId", sql);
+        Assert.Contains(" OR ", sql);
+    }
+
+    [Fact]
+    public void AttendanceWithoutEvaluation_UsesIdempotentCleanup()
+    {
+        Assert.DoesNotContain("THROW", TravelEvaluationCleanup.DeleteRelatedSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("INSERT", TravelEvaluationCleanup.DeleteRelatedSql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AttendanceDeleteFailure_RollsBackEvaluationCleanup()
+    {
+        var calls = new List<string>();
+
+        var deleted = await TravelEvaluationCleanup.ExecuteAttendanceDeleteAsync(
+            () => { calls.Add("cleanup"); return Task.CompletedTask; },
+            () => { calls.Add("delete"); return Task.FromResult(0); },
+            () => { calls.Add("rollback"); return Task.CompletedTask; });
+
+        Assert.False(deleted);
+        Assert.Equal(["cleanup", "delete", "rollback"], calls);
+    }
+
+    [Fact]
+    public async Task AttendanceDeleteSuccess_DoesNotRollback()
+    {
+        var calls = new List<string>();
+
+        var deleted = await TravelEvaluationCleanup.ExecuteAttendanceDeleteAsync(
+            () => { calls.Add("cleanup"); return Task.CompletedTask; },
+            () => { calls.Add("delete"); return Task.FromResult(1); },
+            () => { calls.Add("rollback"); return Task.CompletedTask; });
+
+        Assert.True(deleted);
+        Assert.Equal(["cleanup", "delete"], calls);
+    }
 }

@@ -671,20 +671,24 @@ public sealed class ChamCongService(
                 return (false, "Không tìm thấy lượt đi mua hàng cần xóa.", null);
             }
 
-            await using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = $"""
-                DELETE FROM [{CheckinHistoryTableName}]
-                WHERE ID = @Id
-                  AND {PurchaseAttendancePredicate}
-                """;
-            command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
-            command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
-
-            var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
-            if (affectedRows <= 0)
+            var deleted = await TravelEvaluationCleanup.ExecuteAttendanceDeleteAsync(
+                () => TravelEvaluationCleanup.DeleteRelatedAsync(connection, transaction, id, cancellationToken),
+                async () =>
+                {
+                    await using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = $"""
+                        DELETE FROM [{CheckinHistoryTableName}]
+                        WHERE ID = @Id
+                          AND {PurchaseAttendancePredicate}
+                        """;
+                    command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = id });
+                    command.Parameters.Add(new SqlParameter("@PurchaseCheckInType", SqlDbType.NVarChar, 50) { Value = PurchaseAttendanceType });
+                    return await command.ExecuteNonQueryAsync(cancellationToken);
+                },
+                () => transaction.RollbackAsync(cancellationToken));
+            if (!deleted)
             {
-                await transaction.RollbackAsync(cancellationToken);
                 return (false, "Không tìm thấy lượt đi mua hàng cần xóa.", null);
             }
 
