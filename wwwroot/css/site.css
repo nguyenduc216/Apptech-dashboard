@@ -2243,8 +2243,9 @@ body.menu-open {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 10px;
+    min-height: 42px;
+    padding: 8px 12px;
     border: 1px solid rgba(18, 83, 68, 0.14);
     border-radius: 9px;
     background: rgba(246, 251, 249, 0.96);
@@ -2254,13 +2255,25 @@ body.menu-open {
 }
 
 .purchase-attendance-work-toggle span {
-    display: grid;
-    gap: 3px;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.purchase-attendance-work-toggle strong {
+    flex: 0 1 auto;
+    overflow: hidden;
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
 }
 
 .purchase-attendance-work-toggle small {
+    flex: 0 0 auto;
     color: #5c736a;
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     font-weight: 600;
 }
 
