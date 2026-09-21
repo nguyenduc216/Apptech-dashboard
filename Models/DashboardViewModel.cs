@@ -225,7 +225,10 @@ public sealed record ChamCongTimelineEvent(
     bool IsCheckout,
     DateTime EventTime,
     string? ImagePath,
-    bool IsViolation);
+    bool IsViolation)
+{
+    public bool IsCombined => Item.IsQuickPurchase;
+}
 
 public static class ChamCongTimelineEventFactory
 {

@@ -180,6 +180,7 @@ public sealed class AttendanceOutsideCatalogTests
 
         var combined = Assert.Single(events);
         Assert.False(combined.IsCheckout);
+        Assert.True(combined.IsCombined);
         Assert.True(history.IsQuickPurchase);
     }
 }
