@@ -250,19 +250,26 @@ public sealed class ChamCongReportService(
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT
+                ch.ID,
                 IDNhanVien,
                 ThoiDiem,
                 ThoiDiemCheckOut,
                 ImgPath,
                 ImgPathCheckOut,
                 GhiChuNhanVien,
-                GhiChuCheckOut
-            FROM [{CheckinHistoryTableName}]
-            WHERE {CompanyAttendancePredicate}
-              AND ThoiDiem >= @DateFrom
-              AND ThoiDiem < @DateTo
-              AND IDNhanVien IS NOT NULL
-            ORDER BY IDNhanVien, ThoiDiem, ID
+                GhiChuCheckOut,
+                travel.DistanceKm,
+                travel.ExpectedTravelMinutes,
+                travel.ActualTravelMinutes,
+                travel.DeviationMinutes,
+                CAST(ISNULL(travel.IsWarning, 0) AS bit) AS IsTravelWarning
+            FROM [{CheckinHistoryTableName}] AS ch
+            LEFT JOIN dbo.TblChamCongTravelEvaluation AS travel ON travel.CurrentAttendanceId = ch.ID
+            WHERE {(CompanyAttendancePredicate.Replace("CheckInType", "ch.CheckInType").Replace("IDYeuCau", "ch.IDYeuCau"))}
+              AND ch.ThoiDiem >= @DateFrom
+              AND ch.ThoiDiem < @DateTo
+              AND ch.IDNhanVien IS NOT NULL
+            ORDER BY ch.IDNhanVien, ch.ThoiDiem, ch.ID
             """;
         command.Parameters.Add(new SqlParameter("@CheckInType", SqlDbType.NVarChar, 50) { Value = ChamCongType });
         command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = dateFrom });
@@ -300,12 +307,18 @@ public sealed class ChamCongReportService(
 
             details.Add(new ChamCongReportCheckinDetail
             {
+                AttendanceId = GetNullableInt32(reader, "ID") ?? 0,
                 CheckinTime = checkinTime,
                 CheckoutTime = checkoutTime,
                 CheckinImage = GetNullableString(reader, "ImgPath"),
                 CheckoutImage = GetNullableString(reader, "ImgPathCheckOut"),
                 CheckinNote = GetNullableString(reader, "GhiChuNhanVien"),
-                CheckoutNote = GetNullableString(reader, "GhiChuCheckOut")
+                CheckoutNote = GetNullableString(reader, "GhiChuCheckOut"),
+                DistanceKm = GetNullableDecimal(reader, "DistanceKm"),
+                ExpectedTravelMinutes = GetNullableDecimal(reader, "ExpectedTravelMinutes"),
+                ActualTravelMinutes = GetNullableDecimal(reader, "ActualTravelMinutes"),
+                DeviationMinutes = GetNullableDecimal(reader, "DeviationMinutes"),
+                IsTravelWarning = GetNullableBoolean(reader, "IsTravelWarning") ?? false
             });
 
             if (!hoursResult.TryGetValue(employeeId, out var hoursByDay))
@@ -567,6 +580,12 @@ public sealed class ChamCongReportService(
             string typedString when decimal.TryParse(typedString, out var parsed) => parsed,
             _ => null
         };
+    }
+
+    private static bool? GetNullableBoolean(SqlDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
     private static int? ParseNullableInt(string? value)

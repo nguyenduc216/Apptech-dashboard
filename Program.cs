@@ -54,6 +54,11 @@ dataProtection
     .SetApplicationName("ApptechDashboard")
     .PersistKeysToFileSystem(new DirectoryInfo(resolvedDataProtectionKeyPath));
 builder.Services.AddHttpClient("ZaloOA");
+builder.Services.AddHttpClient("AttendanceRoute", client =>
+{
+    client.BaseAddress = new Uri("https://router.project-osrm.org/");
+    client.Timeout = TimeSpan.FromSeconds(8);
+});
 builder.Services.AddScoped<ISidebarMenuService, SidebarMenuService>();
 builder.Services.AddScoped<IUserAccountService, UserAccountService>();
 builder.Services.AddScoped<IUserPermissionService, UserPermissionService>();
@@ -67,6 +72,7 @@ builder.Services.AddScoped<IYeuCauService, YeuCauService>();
 builder.Services.AddScoped<IChamCongService, ChamCongService>();
 builder.Services.AddScoped<IChamCongReportService, ChamCongReportService>();
 builder.Services.AddScoped<IAttendanceSettingsService, AttendanceSettingsService>();
+builder.Services.AddScoped<ITravelEvaluationService, TravelEvaluationService>();
 builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();

@@ -69,10 +69,16 @@ public sealed class ChamCongReportCount
 
 public sealed class ChamCongReportCheckinDetail
 {
+    public int AttendanceId { get; set; }
     public DateTime? CheckinTime { get; set; }
     public DateTime? CheckoutTime { get; set; }
     public string? CheckinImage { get; set; }
     public string? CheckoutImage { get; set; }
     public string? CheckinNote { get; set; }
     public string? CheckoutNote { get; set; }
+    public decimal? DistanceKm { get; set; }
+    public decimal? ExpectedTravelMinutes { get; set; }
+    public decimal? ActualTravelMinutes { get; set; }
+    public decimal? DeviationMinutes { get; set; }
+    public bool IsTravelWarning { get; set; }
 }

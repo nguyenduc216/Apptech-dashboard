@@ -37,7 +37,7 @@ public class SettingController(IAttendanceSettingsService attendanceSettingsServ
             return View("Index", new AttendanceSettingsViewModel
             {
                 Schedule = form,
-                StatusMessage = "Vui lòng kiểm tra lại 4 mốc giờ chấm công.",
+                StatusMessage = "Vui lòng kiểm tra lại cấu hình giờ chấm công và đánh giá di chuyển.",
                 StatusType = "error"
             });
         }

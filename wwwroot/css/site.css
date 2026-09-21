@@ -4668,6 +4668,24 @@ body.report-fullscreen-open {
     overflow: hidden;
 }
 
+.cham-cong-attendance-line.is-travel-warning {
+    border-color: rgba(234, 88, 12, 0.48);
+    background: rgba(255, 237, 213, 0.9);
+}
+
+.cham-cong-travel-warning {
+    color: #c2410c;
+}
+
+.report-hour-cell.is-travel-warning {
+    background: rgba(255, 237, 213, 0.92);
+    color: #c2410c;
+}
+
+.report-hour-cell.is-travel-warning .report-hour-detail-button {
+    color: #c2410c;
+}
+
 .cham-cong-activity-type {
     position: absolute;
     top: 7px;

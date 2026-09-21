@@ -11,6 +11,7 @@
                 <h3>Cấu hình giờ chấm công</h3>
                 <p>Thiết lập 4 mốc giờ làm việc để tính giờ công, đi trễ và về sớm.</p>
             </div>
+
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
@@ -52,6 +53,23 @@
                     <span>Cho phép trễ chiều (phút)</span>
                     <input asp-for="Schedule.AfternoonLateGraceMinutes" type="number" min="0" max="240" step="1" inputmode="numeric" />
                     <small asp-validation-for="Schedule.AfternoonLateGraceMinutes"></small>
+                </label>
+            </div>
+
+            <div class="settings-section-heading">
+                <h3>Cấu hình đánh giá thời gian di chuyển</h3>
+                <p>Đánh giá chênh lệch giữa thời gian thực tế và thời gian tuyến đường dự kiến.</p>
+            </div>
+            <div class="attendance-settings-grid">
+                <label class="attendance-time-field">
+                    <span>Cho phép chênh lệch thời gian di chuyển (phút)</span>
+                    <input asp-for="Schedule.AllowedTravelDeviationMinutes" type="number" min="0" max="240" step="1" inputmode="numeric" />
+                    <small asp-validation-for="Schedule.AllowedTravelDeviationMinutes"></small>
+                </label>
+                <label class="attendance-time-field">
+                    <span>Khoảng thời gian tối đa giữa 2 lần chấm công để đánh giá di chuyển (phút)</span>
+                    <input asp-for="Schedule.MaxTravelEvaluationGapMinutes" type="number" min="1" max="1440" step="1" inputmode="numeric" />
+                    <small asp-validation-for="Schedule.MaxTravelEvaluationGapMinutes"></small>
                 </label>
             </div>
 

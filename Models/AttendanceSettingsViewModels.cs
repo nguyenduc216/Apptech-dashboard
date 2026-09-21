@@ -33,6 +33,12 @@ public sealed class AttendanceScheduleSettingsForm : IValidatableObject
     [Range(0, 240, ErrorMessage = "Số phút cho phép trễ buổi chiều phải từ 0 đến 240.")]
     public int AfternoonLateGraceMinutes { get; set; }
 
+    [Range(0, 240, ErrorMessage = "Chênh lệch cho phép phải từ 0 đến 240 phút.")]
+    public int AllowedTravelDeviationMinutes { get; set; }
+
+    [Range(1, 1440, ErrorMessage = "Khoảng đánh giá tối đa phải từ 1 đến 1440 phút.")]
+    public int MaxTravelEvaluationGapMinutes { get; set; }
+
     public static AttendanceScheduleSettingsForm Default() => new()
     {
         MorningStart = new TimeSpan(7, 30, 0),
@@ -40,7 +46,9 @@ public sealed class AttendanceScheduleSettingsForm : IValidatableObject
         MorningLateGraceMinutes = 10,
         AfternoonStart = new TimeSpan(13, 0, 0),
         AfternoonEnd = new TimeSpan(17, 0, 0),
-        AfternoonLateGraceMinutes = 10
+        AfternoonLateGraceMinutes = 10,
+        AllowedTravelDeviationMinutes = 15,
+        MaxTravelEvaluationGapMinutes = 120
     };
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

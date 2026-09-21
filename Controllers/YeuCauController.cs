@@ -19,6 +19,7 @@ public class YeuCauController(
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService,
     IDanhMucDichVuService danhMucDichVuService,
+    ITravelEvaluationService travelEvaluationService,
     IWebHostEnvironment webHostEnvironment) : Controller
 {
     private static readonly HashSet<string> AllowedCheckinImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -42,6 +43,7 @@ public class YeuCauController(
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
     private readonly IDanhMucDichVuService _danhMucDichVuService = danhMucDichVuService;
+    private readonly ITravelEvaluationService _travelEvaluationService = travelEvaluationService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
 
     [HttpGet]
@@ -539,6 +541,11 @@ public class YeuCauController(
         {
             DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
             return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkin." });
+        }
+
+        if (result.Id is > 0)
+        {
+            await _travelEvaluationService.EvaluateAsync(result.Id.Value, HttpContext.RequestAborted);
         }
 
         TempData["StatusMessage"] = "Đã lưu checkin.";

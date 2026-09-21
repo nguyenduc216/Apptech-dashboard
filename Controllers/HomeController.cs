@@ -20,6 +20,7 @@ public class HomeController(
     INhanVienService nhanVienService,
     IWebHostEnvironment webHostEnvironment,
     ICommonAuditService commonAuditService,
+    ITravelEvaluationService travelEvaluationService,
     ILogger<HomeController> logger) : Controller
 {
     private static readonly HashSet<string> ImpersonationClaimTypes =
@@ -49,6 +50,7 @@ public class HomeController(
     private readonly INhanVienService _nhanVienService = nhanVienService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
     private readonly ICommonAuditService _commonAuditService = commonAuditService;
+    private readonly ITravelEvaluationService _travelEvaluationService = travelEvaluationService;
     private readonly ILogger<HomeController> _logger = logger;
 
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
@@ -398,6 +400,11 @@ public class HomeController(
             return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkin." });
         }
 
+        if (result.Id is > 0)
+        {
+            await _travelEvaluationService.EvaluateAsync(result.Id.Value, HttpContext.RequestAborted);
+        }
+
         return Json(new { succeeded = true, id = result.Id });
     }
 
@@ -515,6 +522,11 @@ public class HomeController(
                 targetEmployeeId,
                 model,
                 HttpContext.RequestAborted);
+        }
+
+        if (result.Id is > 0)
+        {
+            await _travelEvaluationService.EvaluateAsync(result.Id.Value, HttpContext.RequestAborted);
         }
 
         return Json(new { succeeded = true, id = result.Id });

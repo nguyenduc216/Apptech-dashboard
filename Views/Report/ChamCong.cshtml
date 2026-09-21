@@ -187,7 +187,8 @@
                                             var isPastOrToday = day.Date.Date <= today;
                                             var isIncomplete = isPastOrToday && expectedHours > 0 && (!hasValue || hours < expectedHours);
                                             var hasDetails = employee.DetailsByDay.ContainsKey(day.Day);
-                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "") @(isIncomplete ? "is-incomplete" : "")">
+                                            var hasTravelWarning = hasDetails && employee.DetailsByDay[day.Day].Any(detail => detail.IsTravelWarning);
+                                            <td class="report-hour-cell @(day.IsSunday ? "is-sunday" : "") @(isIncomplete ? "is-incomplete" : "") @(hasTravelWarning ? "is-travel-warning" : "")">
                                                 @if (hasValue || hasDetails)
                                                 {
                                                     <button type="button"
@@ -195,6 +196,10 @@
                                                             data-report-detail-open
                                                             data-employee-id="@employee.EmployeeId"
                                                             data-day="@day.Day">
+                                                        @if (hasTravelWarning)
+                                                        {
+                                                            <i class="fa-solid fa-triangle-exclamation" title="Có lượt di chuyển bất thường" aria-label="Có lượt di chuyển bất thường"></i>
+                                                        }
                                                         @(hasValue ? hours.ToString("0.##") : "0")
                                                     </button>
                                                 }
@@ -433,7 +438,12 @@
                     detail.CheckinImage,
                     detail.CheckoutImage,
                     detail.CheckinNote,
-                    detail.CheckoutNote
+                    detail.CheckoutNote,
+                    detail.DistanceKm,
+                    detail.ExpectedTravelMinutes,
+                    detail.ActualTravelMinutes,
+                    detail.DeviationMinutes,
+                    detail.IsTravelWarning
                 }))
         })));
 
@@ -522,14 +532,20 @@
                         const checkinPhoto = renderPhoto(item.CheckinImage, `Ảnh checkin ${employeeName}`);
                         const checkoutPhoto = renderPhoto(item.CheckoutImage, `Ảnh checkout ${employeeName}`);
                         const checkoutClass = item.CheckoutTime ? "is-checkout-complete" : "is-checkout-pending";
+                        const travelTitle = item.IsTravelWarning
+                            ? `Di chuyển bất thường\nKhoảng cách: ${item.DistanceKm} km\nDự kiến: ${item.ExpectedTravelMinutes} phút\nThực tế: ${item.ActualTravelMinutes} phút\nChênh lệch: +${item.DeviationMinutes} phút`
+                            : "";
+                        const travelWarning = item.IsTravelWarning
+                            ? `<span class="cham-cong-travel-warning" title="${escapeHtml(travelTitle)}" aria-label="Di chuyển bất thường"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>`
+                            : "";
                         return `
                             <div class="cham-cong-timeline-item is-complete">
                                 <div class="cham-cong-split">
                                     <strong class="cham-cong-employee-name">${escapeHtml(employeeName)}</strong>
-                                    <section class="cham-cong-attendance-line is-checkin">
+                                    <section class="cham-cong-attendance-line is-checkin ${item.IsTravelWarning ? "is-travel-warning" : ""}">
                                         <div class="cham-cong-entry-photo">${checkinPhoto}</div>
                                         <div class="cham-cong-entry-content">
-                                            <strong><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.CheckinTime || "--:--")}</strong>
+                                            <strong>${travelWarning}<i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>${escapeHtml(item.CheckinTime || "--:--")}</strong>
                                             ${renderNote(item.CheckinNote)}
                                         </div>
                                     </section>

@@ -28,6 +28,8 @@ public sealed class AttendanceSettingsService(
     private const string AfternoonEndKey = "End_2";
     private const string MorningLateGraceKey = "LateGraceMinutes_1";
     private const string AfternoonLateGraceKey = "LateGraceMinutes_2";
+    private const string AllowedTravelDeviationKey = "AllowedTravelDeviationMinutes";
+    private const string MaxTravelEvaluationGapKey = "MaxTravelEvaluationGapMinutes";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -46,7 +48,8 @@ public sealed class AttendanceSettingsService(
                 FROM [{SystemConfigTableName}]
                 WHERE MaCauHinh IN (
                     N'{MorningStartKey}', N'{MorningEndKey}', N'{AfternoonStartKey}', N'{AfternoonEndKey}',
-                    N'{MorningLateGraceKey}', N'{AfternoonLateGraceKey}'
+                    N'{MorningLateGraceKey}', N'{AfternoonLateGraceKey}',
+                    N'{AllowedTravelDeviationKey}', N'{MaxTravelEvaluationGapKey}'
                 )
                 """;
 
@@ -76,6 +79,12 @@ public sealed class AttendanceSettingsService(
                     case AfternoonLateGraceKey:
                         form.AfternoonLateGraceMinutes = ParseNullableInt(rawValue) ?? form.AfternoonLateGraceMinutes;
                         break;
+                    case AllowedTravelDeviationKey:
+                        form.AllowedTravelDeviationMinutes = ParseNullableInt(rawValue) ?? form.AllowedTravelDeviationMinutes;
+                        break;
+                    case MaxTravelEvaluationGapKey:
+                        form.MaxTravelEvaluationGapMinutes = ParseNullableInt(rawValue, 1, 1440) ?? form.MaxTravelEvaluationGapMinutes;
+                        break;
                 }
             }
         }
@@ -102,6 +111,8 @@ public sealed class AttendanceSettingsService(
             await UpsertConfigAsync(connection, transaction, AfternoonEndKey, form.AfternoonEnd, cancellationToken);
             await UpsertConfigAsync(connection, transaction, MorningLateGraceKey, form.MorningLateGraceMinutes, cancellationToken);
             await UpsertConfigAsync(connection, transaction, AfternoonLateGraceKey, form.AfternoonLateGraceMinutes, cancellationToken);
+            await UpsertConfigAsync(connection, transaction, AllowedTravelDeviationKey, form.AllowedTravelDeviationMinutes, cancellationToken);
+            await UpsertConfigAsync(connection, transaction, MaxTravelEvaluationGapKey, form.MaxTravelEvaluationGapMinutes, cancellationToken, 1, 1440);
 
             await transaction.CommitAsync(cancellationToken);
             return (true, null);
@@ -145,8 +156,11 @@ public sealed class AttendanceSettingsService(
         int value,
         CancellationToken cancellationToken)
     {
-        return UpsertConfigTextAsync(connection, transaction, key, Math.Clamp(value, 0, 240).ToString(CultureInfo.InvariantCulture), cancellationToken);
+        return UpsertConfigAsync(connection, transaction, key, value, cancellationToken, 0, 240);
     }
+
+    private static Task UpsertConfigAsync(SqlConnection connection, SqlTransaction transaction, string key, int value, CancellationToken cancellationToken, int min, int max) =>
+        UpsertConfigTextAsync(connection, transaction, key, Math.Clamp(value, min, max).ToString(CultureInfo.InvariantCulture), cancellationToken);
 
     private static async Task UpsertConfigTextAsync(
         SqlConnection connection,
@@ -210,10 +224,10 @@ public sealed class AttendanceSettingsService(
             : null;
     }
 
-    private static int? ParseNullableInt(string? value)
+    private static int? ParseNullableInt(string? value, int min = 0, int max = 240)
     {
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            ? Math.Clamp(parsed, 0, 240)
+            ? Math.Clamp(parsed, min, max)
             : null;
     }
 }
