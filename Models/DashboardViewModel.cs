@@ -177,6 +177,12 @@ public sealed class ChamCongHistoryItem
         "MuaHang" => IsQuickPurchase ? "Chấm công ngoài · Hoàn tất nhanh" : "Chấm công ngoài",
         _ => "Chấm công văn phòng"
     };
+    public string DisplayDescription => AttendanceType switch
+    {
+        "KhachHang" => CustomerDisplayName,
+        "MuaHang" => string.IsNullOrWhiteSpace(PurchaseNote) ? "Chấm công ngoài" : PurchaseNote,
+        _ => "Chấm công văn phòng"
+    };
 
     private (IReadOnlyList<string> WorkContent, string? Note, bool IsLegacy) ParsePurchaseNote(string? rawValue)
     {

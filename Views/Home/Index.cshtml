@@ -214,11 +214,12 @@
                                         ? Url.Action("Edit", "YeuCau", new { id = item.IDYeuCau.Value })
                                         : null;
                                     var eventClass = entry.IsCheckout ? "is-checkout-complete" : "is-checkin";
-                                    var eventIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
+                                    var isCombinedQuick = isPurchaseCheckin && item.IsQuickPurchase;
+                                    var eventIcon = isCombinedQuick ? "fa-right-left" : entry.IsCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                                    var eventActionLabel = isCombinedQuick ? "Check-in & Check-out" : entry.IsCheckout ? "Check-out" : "Check-in";
                                     var eventLabel = isPurchaseCheckin
                                         ? (item.IsQuickPurchase ? "Chấm công ngoài · Hoàn tất nhanh" : entry.IsCheckout ? "Checkout ngoài" : "Check-in ngoài")
                                         : entry.IsCheckout ? "Checkout" : "Checkin";
-                                    var metaText = isCustomerCheckin ? item.MaYeuCau : isPurchaseCheckin ? "Chấm công ngoài" : "Chấm công văn phòng";
                                     var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang thực hiện" : "Hoàn tất";
                                     var activityTypeLabel = isPurchaseCheckin ? "Chấm công ngoài" : isCustomerCheckin ? "Chấm công công việc" : "Chấm công văn phòng";
                                     var activityTypeIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
@@ -256,7 +257,7 @@
                                             }
                                         </div>
                                         <div class="cham-cong-entry-content">
-                                            <strong><i class="fa-solid @eventIcon" aria-hidden="true"></i>@entry.EventTime?.ToString("dd/MM/yyyy HH:mm")</strong>
+                                            <strong><i class="fa-solid @eventIcon cham-cong-entry-time-icon" title="@eventActionLabel" aria-label="@eventActionLabel"></i>@entry.EventTime?.ToString("dd/MM/yyyy HH:mm")</strong>
                                             @if (isCustomerCheckin && item.IDYeuCau.HasValue)
                                             {
                                                 var works = (item.DanhSachCongViec ?? string.Empty)
@@ -271,12 +272,12 @@
                                                         data-request-contact="@item.NguoiLienHe"
                                                         data-request-phone="@item.DienThoai"
                                                         data-request-works="@string.Join("||", works)">
-                                                    @(string.IsNullOrWhiteSpace(metaText) ? "Phiếu yêu cầu" : metaText)
+                                                    @item.DisplayDescription
                                                 </button>
                                             }
                                             else
                                             {
-                                                <span class="cham-cong-entry-meta">@(isPurchaseCheckin ? (item.IsQuickPurchase ? "Chấm công ngoài · Nhanh" : metaText) : metaText)</span>
+                                                <span class="cham-cong-entry-meta">@item.DisplayDescription</span>
                                                 @if (isPurchaseCheckin && !item.IsQuickPurchase)
                                                 {
                                                     <span class="purchase-attendance-status">@purchaseStatus</span>
@@ -718,7 +719,7 @@
                         <strong data-construction-checkin-employee-name>@constructionInitialEmployeeName</strong>
                     </p>
                 </div>
-                <button type="button" class="secondary-button construction-checkin-refresh" data-construction-checkin-refresh aria-label="Tải lại danh sách" title="Tải lại danh sách">
+                <button type="button" class="crud-modal-close construction-checkin-refresh" data-construction-checkin-refresh aria-label="Tải lại danh sách" title="Tải lại danh sách">
                     <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
                 </button>
                 <button type="button" class="crud-modal-close" data-construction-checkin-close aria-label="Đóng chấm công công việc">
@@ -2238,14 +2239,16 @@
                                    data-request-address="${escapeHtml(summary.diaChi || item.locationDisplayText || item.diaChi || "Chưa có địa chỉ")}"
                                    data-request-contact="${escapeHtml(summary.nguoiLienHe || "")}"
                                    data-request-phone="${escapeHtml(summary.dienThoai || "")}"
-                                   data-request-works="${escapeHtml(workText)}">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</button>`
+                                   data-request-works="${escapeHtml(workText)}">${escapeHtml(item.displayDescription || summary.tenKhachHang || item.tenKhachHang || "Khách hàng chưa xác định")}</button>`
                         : isPurchaseCheckin
-                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Chấm công ngoài · Nhanh" : "Chấm công ngoài"}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang thực hiện" : "Hoàn tất"}</span>`}`
-                            : '<span class="cham-cong-entry-meta">Chấm công văn phòng</span>';
+                            ? `<span class="cham-cong-entry-meta">${escapeHtml(item.displayDescription || "Chấm công ngoài")}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang thực hiện" : "Hoàn tất"}</span>`}`
+                            : `<span class="cham-cong-entry-meta">${escapeHtml(item.displayDescription || "Chấm công văn phòng")}</span>`;
                     const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
                     const lineClass = event.isCheckout ? "is-checkout-complete" : "is-checkin";
-                    const iconClass = isPurchaseCheckin ? "fa-cart-shopping" : event.isCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                    const isCombinedQuick = isPurchaseCheckin && item.isQuickPurchase === true;
+                    const iconClass = isCombinedQuick ? "fa-right-left" : event.isCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                    const eventActionLabel = isCombinedQuick ? "Check-in & Check-out" : event.isCheckout ? "Check-out" : "Check-in";
                     const activityTypeLabel = isPurchaseCheckin ? "Chấm công ngoài" : isCustomerCheckin ? "Chấm công công việc" : "Chấm công văn phòng";
                     const activityTypeIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
                     const label = isPurchaseCheckin
@@ -2261,7 +2264,7 @@
                             </span>
                             <div class="cham-cong-entry-photo">${photo}</div>
                             <div class="cham-cong-entry-content">
-                                <strong><i class="fa-solid ${iconClass}" aria-hidden="true"></i>${escapeHtml(event.timeText || "--:--")}</strong>
+                                <strong><i class="fa-solid ${iconClass} cham-cong-entry-time-icon" title="${eventActionLabel}" aria-label="${eventActionLabel}"></i>${escapeHtml(event.timeText || "--:--")}</strong>
                                 ${metaHtml}
                             </div>
                         </section>`;

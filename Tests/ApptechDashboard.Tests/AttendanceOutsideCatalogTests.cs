@@ -122,4 +122,23 @@ public sealed class AttendanceOutsideCatalogTests
         Assert.Single(model.OutsideWorkOptions);
         Assert.Equal("Giao hàng", model.OutsideWorkOptions[0].Name);
     }
+
+    [Theory]
+    [InlineData(null, null, "Chấm công văn phòng")]
+    [InlineData("MuaHang", "Đi giao hàng", "Đi giao hàng")]
+    [InlineData("MuaHang", null, "Chấm công ngoài")]
+    public void AttendanceDescription_UsesTypeSpecificDisplayText(string? checkInType, string? note, string expected)
+    {
+        var history = new ChamCongHistoryItem { CheckInType = checkInType, GhiChuNhanVien = note };
+
+        Assert.Equal(expected, history.DisplayDescription);
+    }
+
+    [Fact]
+    public void CustomerAttendanceDescription_UsesCustomerDisplayName()
+    {
+        var history = new ChamCongHistoryItem { IDYeuCau = 12, TenKhachHang = "Công ty ABC" };
+
+        Assert.Equal("Công ty ABC", history.DisplayDescription);
+    }
 }

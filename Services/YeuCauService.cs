@@ -532,7 +532,10 @@ public sealed class YeuCauService(
                         OR kh.TenKhachHang COLLATE {SearchCollation} LIKE @Keyword
                         OR {BuildSearchExpression("kh.TenKhachHang")} LIKE @KeywordNoAccent
                         OR yc.MaYeuCau COLLATE {SearchCollation} LIKE @Keyword
-                        OR (@PhoneKeyword IS NOT NULL AND REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(dd.DienThoai, N''), N' ', N''), N'.', N''), N'-', N''), N'+', N'') LIKE @PhoneKeyword)
+                        OR (@PhoneKeyword IS NOT NULL AND (
+                            {BuildPhoneSearchExpression("kh.SoDienThoai")} LIKE @PhoneKeyword
+                            OR {BuildPhoneSearchExpression("dd.DienThoai")} LIKE @PhoneKeyword
+                        ))
                     )
                 ORDER BY {orderByClause}
                 """;
@@ -608,7 +611,46 @@ public sealed class YeuCauService(
 
     public static string NormalizePhoneSearch(string value)
     {
-        return new string(value.Where(char.IsDigit).ToArray());
+        if (!IsPhoneLikeKeyword(value))
+        {
+            return string.Empty;
+        }
+
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        return digits.StartsWith("84", StringComparison.Ordinal) && value.TrimStart().StartsWith('+')
+            ? $"0{digits[2..]}"
+            : digits;
+    }
+
+    public static bool IsPhoneLikeKeyword(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var digitCount = 0;
+        foreach (var character in value.Trim())
+        {
+            if (char.IsDigit(character))
+            {
+                digitCount++;
+                continue;
+            }
+
+            if (character is not (' ' or '+' or '-' or '.' or '(' or ')'))
+            {
+                return false;
+            }
+        }
+
+        return digitCount >= 6;
+    }
+
+    public static string BuildPhoneSearchExpression(string sqlExpression)
+    {
+        var digits = $"REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL({sqlExpression}, N''), N' ', N''), N'.', N''), N'-', N''), N'+', N''), N'(', N''), N')', N'')";
+        return $"CASE WHEN {digits} LIKE N'84%' THEN N'0' + SUBSTRING({digits}, 3, 50) ELSE {digits} END";
     }
 
     public async Task<IReadOnlyList<YeuCauNhanVienOption>> GetNhanVienOptionsAsync(CancellationToken cancellationToken = default)

@@ -48,7 +48,7 @@
 .construction-checkin-shell .crud-modal-header {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 56px 56px;
+    grid-template-columns: minmax(0, 1fr) 38px 38px;
     align-items: start;
     gap: 14px;
 }
@@ -90,10 +90,6 @@
 }
 
 .construction-checkin-refresh {
-    width: 56px;
-    min-width: 56px;
-    height: 56px;
-    min-height: 56px;
     padding: 0;
     justify-content: center;
 }
@@ -420,7 +416,7 @@
 
 @media (max-width: 430px) {
     .construction-checkin-shell .crud-modal-header {
-        grid-template-columns: minmax(0, 1fr) 48px 48px;
+        grid-template-columns: minmax(0, 1fr) 38px 38px;
         align-items: start;
     }
 
@@ -430,10 +426,6 @@
 
     .construction-checkin-refresh {
         grid-column: 2;
-        width: 48px;
-        min-width: 48px;
-        height: 48px;
-        min-height: 48px;
     }
 
     .construction-checkin-toolbar {
@@ -4743,7 +4735,7 @@ body.report-fullscreen-open {
 .cham-cong-entry-content > strong {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0;
     min-width: 0;
     font-size: 0.84rem;
     line-height: 1.2;
@@ -4788,6 +4780,10 @@ body.report-fullscreen-open {
     border-color: rgba(202, 138, 4, 0.46);
     background: rgba(254, 249, 195, 0.9);
     color: #713f12;
+}
+
+.cham-cong-entry-time-icon {
+    margin-right: 5px;
 }
 
 .cham-cong-attendance-line.is-customer-event .cham-cong-entry-content > strong,

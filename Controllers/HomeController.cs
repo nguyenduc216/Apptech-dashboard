@@ -1021,6 +1021,7 @@ public class HomeController(
             requestDetailUrl,
             locationDisplayText = item.LocationDisplayText,
             title = item.Title,
+            displayDescription = item.DisplayDescription,
             requestSummary = item.IDYeuCau.HasValue
                 ? new
                 {

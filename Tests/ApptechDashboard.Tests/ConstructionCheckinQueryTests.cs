@@ -51,10 +51,41 @@ public sealed class ConstructionCheckinQueryTests
     [Theory]
     [InlineData("0986590425", "0986590425")]
     [InlineData("0986 590 425", "0986590425")]
-    [InlineData("+84.986-590-425", "84986590425")]
+    [InlineData("+84.986-590-425", "0986590425")]
     [InlineData("AppTech", "")]
+    [InlineData("YC-2600001", "")]
+    [InlineData("ABC 2", "")]
+    [InlineData("Khách 2026", "")]
     public void PhoneSearch_RemovesFormatting(string value, string expected)
     {
         Assert.Equal(expected, YeuCauService.NormalizePhoneSearch(value));
+    }
+
+    [Theory]
+    [InlineData("0986590425")]
+    [InlineData("0986 590 425")]
+    [InlineData("+84 986 590 425")]
+    [InlineData("0986.590.425")]
+    [InlineData("(0258) 1234567")]
+    public void PhoneLikeKeyword_AcceptsPhoneCharacters(string value)
+    {
+        Assert.True(YeuCauService.IsPhoneLikeKeyword(value));
+    }
+
+    [Theory]
+    [InlineData("YC-2600001")]
+    [InlineData("ABC 2")]
+    [InlineData("Khách 2026")]
+    [InlineData("Công ty 123")]
+    public void PhoneLikeKeyword_RejectsMixedBusinessText(string value)
+    {
+        Assert.False(YeuCauService.IsPhoneLikeKeyword(value));
+    }
+
+    [Fact]
+    public void PhoneSearchSql_CoversCustomerAndLocationPhones()
+    {
+        Assert.Contains("kh.SoDienThoai", YeuCauService.BuildPhoneSearchExpression("kh.SoDienThoai"));
+        Assert.Contains("dd.DienThoai", YeuCauService.BuildPhoneSearchExpression("dd.DienThoai"));
     }
 }
