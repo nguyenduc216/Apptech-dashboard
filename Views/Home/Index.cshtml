@@ -219,7 +219,7 @@
                                         ? (item.IsQuickPurchase ? "Chấm công ngoài · Hoàn tất nhanh" : entry.IsCheckout ? "Checkout ngoài" : "Check-in ngoài")
                                         : entry.IsCheckout ? "Checkout" : "Checkin";
                                     var metaText = isCustomerCheckin ? item.MaYeuCau : isPurchaseCheckin ? "Chấm công ngoài" : "Chấm công văn phòng";
-                                    var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang đi" : "Hoàn tất";
+                                    var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang thực hiện" : "Hoàn tất";
                                     var activityTypeLabel = isPurchaseCheckin ? "Chấm công ngoài" : isCustomerCheckin ? "Chấm công công việc" : "Chấm công văn phòng";
                                     var activityTypeIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
                                     <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && !isPurchaseCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event")"
@@ -1985,6 +1985,10 @@
                         checkbox.checked = false;
                     }
                 });
+                if (isPurchaseCheckinMode()) {
+                    updatePurchaseWorkSummary();
+                    setPurchaseWorkCollapsed(true);
+                }
                 if (purchaseQuickInput instanceof HTMLInputElement) {
                     purchaseQuickInput.checked = true;
                 }
@@ -2221,7 +2225,7 @@
                                    data-request-works="${escapeHtml(workText)}">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</button>`
                         : isPurchaseCheckin
                             ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Chấm công ngoài · Nhanh" : "Chấm công ngoài"}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang thực hiện" : "Hoàn tất"}</span>`}`
-                            : '<span class="cham-cong-entry-meta">AppTech</span>';
+                            : '<span class="cham-cong-entry-meta">Chấm công văn phòng</span>';
                     const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
                     const lineClass = event.isCheckout ? "is-checkout-complete" : "is-checkin";
@@ -2577,9 +2581,6 @@
                     requestUrl: url.toString(),
                     requestSequence
                 });
-                updatePurchaseWorkSummary();
-                setPurchaseWorkCollapsed(true);
-
                 try {
                     setConstructionStatus("Đang tải phiếu yêu cầu...", "info");
                     if (constructionRefreshButton instanceof HTMLButtonElement) {
@@ -2655,6 +2656,9 @@
                 if (constructionShell instanceof HTMLElement) {
                     if (!constructionEmployeeChangedByUser) {
                         syncConstructionEmployeeStateFromServer();
+                    }
+                    if (constructionList instanceof HTMLElement) {
+                        constructionList.scrollTop = 0;
                     }
                     constructionShell.hidden = false;
                     document.body.classList.add("modal-open");
@@ -3229,7 +3233,7 @@
 
             const getPurchaseStatusText = (detail) => detail?.isQuick
                 ? "Nhanh"
-                : detail?.isOpen ? "Đang đi" : "Hoàn tất";
+                : detail?.isOpen ? "Đang thực hiện" : "Hoàn tất";
 
             const setPurchaseDetailTab = (name) => {
                 purchaseDetailTabs.forEach((tab) => {
@@ -3345,7 +3349,7 @@
                 }
                 const workHtml = detail.workContent.length > 0
                     ? `<ul>${detail.workContent.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
-                    : detail.isLegacy ? "Không xác định / Dữ liệu cũ" : "Chưa có dữ liệu";
+                    : "Không chọn nội dung";
                 const checkoutHtml = detail.isQuick
                     ? ""
                     : `<div><dt>Checkout</dt><dd>${escapeHtml(detail.checkoutTime || "Chưa checkout")}</dd></div>`;

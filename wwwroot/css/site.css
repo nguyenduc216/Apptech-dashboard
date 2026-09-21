@@ -46,6 +46,7 @@
 }
 
 .construction-checkin-shell .crud-modal-header {
+    flex: 0 0 auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(148px, 0.26fr) 56px;
     align-items: start;
@@ -57,6 +58,7 @@
 }
 
 .construction-checkin-toolbar {
+    flex: 0 0 auto;
     display: block;
     padding: 0 16px 12px;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
@@ -96,10 +98,13 @@
     min-height: 0;
     overflow-y: auto;
     display: grid;
+    align-content: start;
+    grid-auto-rows: max-content;
     gap: 14px;
     padding: 14px;
     background: #f6f9fb;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .construction-checkin-empty {
@@ -114,6 +119,7 @@
 .construction-request-card {
     --construction-status-color: #64748b;
     position: relative;
+    align-self: start;
     display: block;
     overflow: hidden;
     padding: 14px;
@@ -226,6 +232,7 @@
     position: relative;
     width: 128px;
     min-width: 128px;
+    flex: 0 0 auto;
     aspect-ratio: 1 / 1;
     overflow: hidden;
     border: 0;

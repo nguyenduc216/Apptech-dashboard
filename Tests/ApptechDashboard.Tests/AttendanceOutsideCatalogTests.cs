@@ -1,6 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using ApptechDashboard.Controllers;
 using ApptechDashboard.Models;
 using ApptechDashboard.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
 using Xunit;
 
 namespace ApptechDashboard.Tests;
@@ -41,6 +46,73 @@ public sealed class AttendanceOutsideCatalogTests
         Assert.Equal(["Mua vật tư", "Đi ngân hàng"], history.PurchaseWorkContent);
         Assert.Equal("Gấp", history.PurchaseNote);
         Assert.Equal("Chấm công ngoài", history.Title);
+    }
+
+    [Fact]
+    public void NoteOnlyPurchaseAttendance_KeepsNoteWithoutWorkContent()
+    {
+        var history = new ChamCongHistoryItem { CheckInType = "MuaHang", GhiChuNhanVien = "Ghi chú phát sinh" };
+
+        Assert.Empty(history.PurchaseWorkContent);
+        Assert.Equal("Ghi chú phát sinh", history.PurchaseNote);
+    }
+
+    [Theory]
+    [InlineData("index")]
+    [InlineData("create")]
+    [InlineData("update")]
+    [InlineData("set-active")]
+    public async Task CatalogEndpoints_DenyUsersWithoutServerPermission(string action)
+    {
+        var catalogService = new Mock<IDanhMucChamCongNgoaiService>(MockBehavior.Strict);
+        var permissionService = new Mock<IUserPermissionService>();
+        permissionService
+            .Setup(service => service.GetPermissionsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var controller = CreateController(catalogService.Object, permissionService.Object);
+
+        IActionResult result = action switch
+        {
+            "index" => await controller.Index(null, null, null),
+            "create" => await controller.Save(new DanhMucChamCongNgoaiForm()),
+            "update" => await controller.Save(new DanhMucChamCongNgoaiForm { Id = 1 }),
+            _ => await controller.SetActive(1, false)
+        };
+
+        Assert.IsType<ForbidResult>(result);
+        catalogService.VerifyNoOtherCalls();
+    }
+
+    private static DanhMucChamCongNgoaiController CreateController(
+        IDanhMucChamCongNgoaiService catalogService,
+        IUserPermissionService permissionService)
+    {
+        var accountId = Guid.NewGuid();
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, accountId.ToString())],
+                "Test")),
+            Session = new TestSession()
+        };
+        return new DanhMucChamCongNgoaiController(catalogService, permissionService)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext }
+        };
+    }
+
+    private sealed class TestSession : ISession
+    {
+        private readonly Dictionary<string, byte[]> _values = [];
+        public bool IsAvailable => true;
+        public string Id { get; } = Guid.NewGuid().ToString();
+        public IEnumerable<string> Keys => _values.Keys;
+        public void Clear() => _values.Clear();
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void Remove(string key) => _values.Remove(key);
+        public void Set(string key, byte[] value) => _values[key] = value;
+        public bool TryGetValue(string key, out byte[] value) => _values.TryGetValue(key, out value!);
     }
 
     [Fact]
