@@ -1,0 +1,25 @@
+@model DanhMucChamCongNgoaiPageModel
+@{ ViewData["Title"] = "Danh mục nội dung chấm công ngoài"; ViewData["Breadcrumb"] = "Trang chủ / Danh mục / Nội dung chấm công ngoài"; }
+<section class="master-data-page">
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage)) { <div class="page-alert @Model.StatusType">@Model.StatusMessage</div> }
+    <article class="panel master-data-panel">
+        <div class="panel-header"><div><h3>Danh mục nội dung chấm công ngoài</h3><p>Quản lý nội dung lựa chọn khi nhân viên chấm công ngoài.</p></div></div>
+        <form method="get" class="master-data-filter-bar">
+            <label class="master-data-filter-field"><span>Tìm kiếm</span><span class="login-input-shell"><i class="fa-solid fa-magnifying-glass"></i><input name="keyword" value="@Model.Keyword" /></span></label>
+            <label class="master-data-filter-field"><span>Trạng thái</span><span class="login-input-shell select-shell"><select name="statusFilter"><option value="">Tất cả</option><option value="true" selected="@(Model.StatusFilter == true)">Đang dùng</option><option value="false" selected="@(Model.StatusFilter == false)">Ngừng dùng</option></select></span></label>
+            <button class="secondary-button" type="submit">Tìm kiếm</button>
+        </form>
+        <div class="master-data-table-wrap"><table class="master-data-table"><thead><tr><th>Nội dung</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+        @foreach (var item in Model.Items) {
+            <tr><td><strong>@item.TenNoiDung</strong></td><td>@item.ThuTuHienThi</td><td>@(item.IsActive ? "Đang dùng" : "Ngừng dùng")</td><td><div class="table-actions"><a class="table-action-button" asp-action="Index" asp-route-editId="@item.Id" asp-permission-action="update">Sửa</a><form method="post" asp-action="SetActive"><input type="hidden" name="id" value="@item.Id" /><input type="hidden" name="isActive" value="@(!item.IsActive)" /><button class="table-action-button" type="submit" asp-permission-action="delete">@(item.IsActive ? "Tắt" : "Bật")</button></form></div></td></tr>
+        }
+        </tbody></table></div>
+    </article>
+    <article class="panel master-data-panel">
+        <div class="panel-header"><div><h3>@(Model.IsEditing ? "Cập nhật nội dung" : "Thêm nội dung")</h3></div></div>
+        <form method="post" asp-action="Save" class="crud-form"><div asp-validation-summary="ModelOnly" class="page-alert error"></div><input type="hidden" asp-for="Form.Id" />
+            <div class="account-form-grid"><label class="login-field"><span>Tên nội dung</span><span class="login-input-shell"><i class="fa-solid fa-list-check"></i><input asp-for="Form.TenNoiDung" /></span><span asp-validation-for="Form.TenNoiDung" class="login-field-error"></span></label><label class="login-field"><span>Thứ tự hiển thị</span><span class="login-input-shell"><i class="fa-solid fa-arrow-down-1-9"></i><input asp-for="Form.ThuTuHienThi" type="number" min="0" max="9999" /></span></label><label class="login-field qr-checkbox-field"><span>Đang sử dụng</span><span class="switch-field-shell"><input asp-for="Form.IsActive" type="checkbox" /></span></label></div>
+            <div class="crud-modal-footer"><button type="submit" class="primary-button" asp-permission-action="@(Model.IsEditing ? "update" : "insert")"><i class="fa-solid fa-floppy-disk"></i><span>Lưu</span></button>@if(Model.IsEditing){<a asp-action="Index" class="secondary-button">Hủy sửa</a>}</div>
+        </form>
+    </article>
+</section>

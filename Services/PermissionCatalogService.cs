@@ -14,6 +14,7 @@ public interface IPermissionCatalogService
     Task EnsureCongViecReportPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureDanhMucDichVuPermissionsAsync(CancellationToken cancellationToken = default);
+    Task EnsureDanhMucChamCongNgoaiPermissionsAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class PermissionCatalogService(
@@ -32,6 +33,10 @@ public sealed class PermissionCatalogService(
     public const string DanhMucDichVuCreatePermissionCode = "DanhMucDichVu_Create";
     public const string DanhMucDichVuUpdatePermissionCode = "DanhMucDichVu_Update";
     public const string DanhMucDichVuDeletePermissionCode = "DanhMucDichVu_Delete";
+    public const string DanhMucChamCongNgoaiViewPermissionCode = "DanhMucChamCongNgoai_View";
+    public const string DanhMucChamCongNgoaiCreatePermissionCode = "DanhMucChamCongNgoai_Create";
+    public const string DanhMucChamCongNgoaiUpdatePermissionCode = "DanhMucChamCongNgoai_Update";
+    public const string DanhMucChamCongNgoaiDeletePermissionCode = "DanhMucChamCongNgoai_Delete";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -597,6 +602,48 @@ public sealed class PermissionCatalogService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to ensure service catalog permissions.");
+        }
+    }
+
+    public async Task EnsureDanhMucChamCongNgoaiPermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured) return;
+        try
+        {
+            await using var connection = new SqlConnection(!string.IsNullOrWhiteSpace(_connectionString) ? _connectionString : _sqlOptions.BuildConnectionString());
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                DECLARE @ParentCode nvarchar(250) = N'Category';
+                DECLARE @FunctionId int;
+                IF NOT EXISTS (SELECT 1 FROM TblChucNang WHERE MaChucNang=@ParentCode)
+                    INSERT INTO TblChucNang (MaChucNang, TenChucNang, MieuTa, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (@ParentCode, N'Danh mục', N'Nhóm danh mục quản trị', N'3', N'fa-solid fa-table-list', 1);
+
+                SELECT TOP 1 @FunctionId=ID FROM TblChucNang WHERE MaChucNang=N'DanhMucChamCongNgoai' ORDER BY ID;
+                IF @FunctionId IS NULL
+                BEGIN
+                    INSERT INTO TblChucNang (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'DanhMucChamCongNgoai', @ParentCode, N'Nội dung chấm công ngoài', N'Danh mục nội dung chấm công ngoài', N'/danh-muc-cham-cong-ngoai', N'3.42', N'fa-solid fa-route', 1);
+                    SET @FunctionId=CONVERT(int,SCOPE_IDENTITY());
+                END
+                ELSE UPDATE TblChucNang SET MaChucNangCha=@ParentCode, TenChucNang=N'Nội dung chấm công ngoài', URL=N'/danh-muc-cham-cong-ngoai', CssClass=N'fa-solid fa-route', TrangThaiSuDung=1 WHERE ID=@FunctionId;
+
+                IF NOT EXISTS (SELECT 1 FROM TblQuyen WHERE MaQuyen=@View) INSERT TblQuyen (IDChucNang,TenQuyen,MaQuyen,MieuTa) VALUES (@FunctionId,N'Xem danh mục nội dung chấm công ngoài',@View,N'Cho phép xem danh mục.');
+                IF NOT EXISTS (SELECT 1 FROM TblQuyen WHERE MaQuyen=@Create) INSERT TblQuyen (IDChucNang,TenQuyen,MaQuyen,MieuTa) VALUES (@FunctionId,N'Thêm nội dung chấm công ngoài',@Create,N'Cho phép thêm danh mục.');
+                IF NOT EXISTS (SELECT 1 FROM TblQuyen WHERE MaQuyen=@Update) INSERT TblQuyen (IDChucNang,TenQuyen,MaQuyen,MieuTa) VALUES (@FunctionId,N'Cập nhật nội dung chấm công ngoài',@Update,N'Cho phép cập nhật danh mục.');
+                IF NOT EXISTS (SELECT 1 FROM TblQuyen WHERE MaQuyen=@Delete) INSERT TblQuyen (IDChucNang,TenQuyen,MaQuyen,MieuTa) VALUES (@FunctionId,N'Bật tắt nội dung chấm công ngoài',@Delete,N'Cho phép bật hoặc tắt danh mục.');
+                UPDATE TblQuyen SET IDChucNang=@FunctionId WHERE MaQuyen IN (@View,@Create,@Update,@Delete);
+                """;
+            command.Parameters.AddWithValue("@View", DanhMucChamCongNgoaiViewPermissionCode);
+            command.Parameters.AddWithValue("@Create", DanhMucChamCongNgoaiCreatePermissionCode);
+            command.Parameters.AddWithValue("@Update", DanhMucChamCongNgoaiUpdatePermissionCode);
+            command.Parameters.AddWithValue("@Delete", DanhMucChamCongNgoaiDeletePermissionCode);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure outside attendance catalog permissions.");
         }
     }
 }

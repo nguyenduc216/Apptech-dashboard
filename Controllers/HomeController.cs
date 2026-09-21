@@ -15,6 +15,7 @@ public class HomeController(
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService,
     IChamCongService chamCongService,
+    IDanhMucChamCongNgoaiService danhMucChamCongNgoaiService,
     IYeuCauService yeuCauService,
     INhanVienService nhanVienService,
     IWebHostEnvironment webHostEnvironment,
@@ -43,6 +44,7 @@ public class HomeController(
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
     private readonly IChamCongService _chamCongService = chamCongService;
+    private readonly IDanhMucChamCongNgoaiService _danhMucChamCongNgoaiService = danhMucChamCongNgoaiService;
     private readonly IYeuCauService _yeuCauService = yeuCauService;
     private readonly INhanVienService _nhanVienService = nhanVienService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
@@ -459,13 +461,13 @@ public class HomeController(
         }
         else if (model.IDNhanVien is not > 0)
         {
-            return BadRequest(new { message = "Vui lòng chọn nhân viên đi mua hàng." });
+            return BadRequest(new { message = "Vui lòng chọn nhân viên." });
         }
 
         var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(model.IDNhanVien, currentEmployeeId, HttpContext.RequestAborted);
         if (targetEmployeeId <= 0)
         {
-            return BadRequest(new { message = "Tài khoản chưa liên kết nhân viên nên không thể ghi nhận đi mua hàng." });
+            return BadRequest(new { message = "Tài khoản chưa liên kết nhân viên nên không thể ghi nhận chấm công ngoài." });
         }
 
         var checkinDate = (model.ThoiDiem ?? DateTime.Now).Date;
@@ -475,17 +477,7 @@ public class HomeController(
             return BadRequest(new { message = dateError });
         }
 
-        if (string.IsNullOrWhiteSpace(model.NoiDungCongViec))
-        {
-            return BadRequest(new { message = "Vui lòng chọn ít nhất một nội dung đi ra ngoài." });
-        }
-
-        if (string.IsNullOrWhiteSpace(model.GhiChuNhanVien))
-        {
-            return BadRequest(new { message = "Vui lòng nhập ghi chú cho lượt đi ra ngoài." });
-        }
-
-        var imageError = ValidateCheckinImage(imageFile, "Vui lòng chụp ảnh khi ghi nhận đi mua hàng.");
+        var imageError = ValidateCheckinImage(imageFile, "Vui lòng chụp ảnh khi ghi nhận chấm công ngoài.");
         if (imageError is not null)
         {
             return BadRequest(new { message = imageError });
@@ -494,7 +486,7 @@ public class HomeController(
         var uploadResult = await SaveCheckinImageAsync(imageFile!, HttpContext.RequestAborted);
         if (!uploadResult.Succeeded)
         {
-            return BadRequest(new { message = uploadResult.ErrorMessage ?? "Không thể lưu ảnh đi mua hàng." });
+            return BadRequest(new { message = uploadResult.ErrorMessage ?? "Không thể lưu ảnh chấm công ngoài." });
         }
 
         model.ImgPath = uploadResult.RelativeUrl;
@@ -502,7 +494,7 @@ public class HomeController(
         if (!result.Succeeded)
         {
             DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
-            return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin đi mua hàng." });
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin chấm công ngoài." });
         }
 
         if (canAdminManageAttendance)
@@ -537,7 +529,7 @@ public class HomeController(
         var targetEmployeeId = await ResolveAttendanceEmployeeIdAsync(model.IDNhanVien, currentEmployeeId, HttpContext.RequestAborted);
         if (targetEmployeeId <= 0)
         {
-            return BadRequest(new { message = "Tài khoản chưa liên kết nhân viên nên không thể checkout đi mua hàng." });
+            return BadRequest(new { message = "Tài khoản chưa liên kết nhân viên nên không thể checkout chấm công ngoài." });
         }
 
         var checkoutDate = (model.ThoiDiemCheckOut ?? DateTime.Now).Date;
@@ -547,7 +539,7 @@ public class HomeController(
             return BadRequest(new { message = dateError });
         }
 
-        var imageError = ValidateCheckinImage(imageFile, "Vui lòng chụp ảnh checkout đi mua hàng.");
+        var imageError = ValidateCheckinImage(imageFile, "Vui lòng chụp ảnh checkout chấm công ngoài.");
         if (imageError is not null)
         {
             return BadRequest(new { message = imageError });
@@ -556,7 +548,7 @@ public class HomeController(
         var uploadResult = await SaveCheckinImageAsync(imageFile!, HttpContext.RequestAborted);
         if (!uploadResult.Succeeded)
         {
-            return BadRequest(new { message = uploadResult.ErrorMessage ?? "Không thể lưu ảnh checkout đi mua hàng." });
+            return BadRequest(new { message = uploadResult.ErrorMessage ?? "Không thể lưu ảnh checkout chấm công ngoài." });
         }
 
         model.ImgPathCheckOut = uploadResult.RelativeUrl;
@@ -564,7 +556,7 @@ public class HomeController(
         if (!result.Succeeded)
         {
             DeleteLocalCheckinImageIfOwned(uploadResult.AbsolutePath);
-            return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkout đi mua hàng." });
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể lưu thông tin checkout chấm công ngoài." });
         }
 
         return Json(new { succeeded = true });
@@ -582,13 +574,13 @@ public class HomeController(
 
         if (model.Id <= 0)
         {
-            return BadRequest(new { message = "Không xác định được lượt đi mua hàng cần xóa." });
+            return BadRequest(new { message = "Không xác định được lượt chấm công ngoài cần xóa." });
         }
 
         var result = await _chamCongService.DeletePurchaseCheckinAsync(model.Id, HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
-            return BadRequest(new { message = result.ErrorMessage ?? "Không thể xóa lượt đi mua hàng." });
+            return BadRequest(new { message = result.ErrorMessage ?? "Không thể xóa lượt chấm công ngoài." });
         }
 
         if (result.DeletedCheckin is not null)
@@ -969,6 +961,7 @@ public class HomeController(
             SelectedDate = selectedDate.Date,
             CurrentEmployeeId = employeeId,
             LocationOptions = locations,
+            OutsideWorkOptions = await _danhMucChamCongNgoaiService.GetActiveAsync(cancellationToken),
             EmployeeOptions = employeeOptions,
             SelectedEmployeeIds = normalizedSelectedEmployeeIds,
             History = history

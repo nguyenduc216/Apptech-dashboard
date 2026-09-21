@@ -2231,6 +2231,41 @@ body.menu-open {
     color: #0369a1;
 }
 
+.purchase-attendance-work-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(18, 83, 68, 0.14);
+    border-radius: 9px;
+    background: rgba(246, 251, 249, 0.96);
+    color: #12382f;
+    text-align: left;
+    cursor: pointer;
+}
+
+.purchase-attendance-work-toggle span {
+    display: grid;
+    gap: 3px;
+}
+
+.purchase-attendance-work-toggle small {
+    color: #5c736a;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.purchase-attendance-work .purchase-attendance-chip-grid {
+    margin-top: 10px;
+}
+
+.cham-cong-actions > button {
+    min-width: 0;
+    white-space: normal;
+}
+
 .purchase-detail-modal {
     width: calc(100vw - 24px);
     height: calc(100vh - 24px);

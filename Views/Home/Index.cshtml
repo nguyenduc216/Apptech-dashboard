@@ -89,7 +89,7 @@
     <div class="panel-header">
         <div>
             <h3>Chấm công</h3>
-            <p>Checkin tại địa điểm khách hàng AppTech và theo dõi lịch sử trong ngày.</p>
+            <p>Theo dõi chấm công văn phòng, chấm công ngoài và chấm công công việc trong ngày.</p>
         </div>
         <form class="cham-cong-date-form" method="get" asp-action="Index">
             <label class="master-data-filter-field" for="chamCongDate">
@@ -214,14 +214,14 @@
                                         ? Url.Action("Edit", "YeuCau", new { id = item.IDYeuCau.Value })
                                         : null;
                                     var eventClass = entry.IsCheckout ? "is-checkout-complete" : "is-checkin";
-                                    var eventIcon = isPurchaseCheckin ? "fa-cart-shopping" : entry.IsCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
+                                    var eventIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
                                     var eventLabel = isPurchaseCheckin
-                                        ? (item.IsQuickPurchase ? "Mua hàng nhanh" : entry.IsCheckout ? "Checkout mua hàng" : "Check-in mua hàng")
+                                        ? (item.IsQuickPurchase ? "Chấm công ngoài · Hoàn tất nhanh" : entry.IsCheckout ? "Checkout ngoài" : "Check-in ngoài")
                                         : entry.IsCheckout ? "Checkout" : "Checkin";
-                                    var metaText = isCustomerCheckin ? item.MaYeuCau : isPurchaseCheckin ? "Mua hàng" : "AppTech";
+                                    var metaText = isCustomerCheckin ? item.MaYeuCau : isPurchaseCheckin ? "Chấm công ngoài" : "Chấm công văn phòng";
                                     var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang đi" : "Hoàn tất";
-                                    var activityTypeLabel = isPurchaseCheckin ? "Đi mua hàng" : isCustomerCheckin ? "Chấm công công trình" : "Chấm công";
-                                    var activityTypeIcon = isPurchaseCheckin ? "fa-cart-shopping" : isCustomerCheckin ? "fa-screwdriver-wrench" : "fa-user-check";
+                                    var activityTypeLabel = isPurchaseCheckin ? "Chấm công ngoài" : isCustomerCheckin ? "Chấm công công việc" : "Chấm công văn phòng";
+                                    var activityTypeIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
                                     <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && !isPurchaseCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event")"
                                              @(isPurchaseCheckin ? "data-purchase-detail-open" : null)
                                              data-purchase-id="@(isPurchaseCheckin ? item.Id.ToString(invariantCulture) : null)"
@@ -276,7 +276,7 @@
                                             }
                                             else
                                             {
-                                                <span class="cham-cong-entry-meta">@(isPurchaseCheckin ? (item.IsQuickPurchase ? "Mua hàng · Nhanh" : metaText) : "AppTech")</span>
+                                                <span class="cham-cong-entry-meta">@(isPurchaseCheckin ? (item.IsQuickPurchase ? "Chấm công ngoài · Nhanh" : metaText) : metaText)</span>
                                                 @if (isPurchaseCheckin && !item.IsQuickPurchase)
                                                 {
                                                     <span class="purchase-attendance-status">@purchaseStatus</span>
@@ -324,8 +324,8 @@
                         data-cham-cong-checkin
                         @(chamCong.OpenCheckin is null && chamCong.CanCheckin ? null : "hidden")>
                     <span class="button-content">
-                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
-                        <span>Apptech</span>
+                        <i class="fa-solid fa-building" aria-hidden="true"></i>
+                        <span>Chấm công văn phòng</span>
                     </span>
                 </button>
                 <button type="button"
@@ -333,30 +333,30 @@
                         data-cham-cong-checkout
                         @(chamCong.OpenCheckin is not null ? null : "hidden")>
                     <span class="button-content">
-                        <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-                        <span>Apptech</span>
+                        <i class="fa-solid fa-building" aria-hidden="true"></i>
+                        <span>Chấm công văn phòng</span>
                     </span>
                 </button>
                 <button type="button"
                         class="secondary-button purchase-attendance-button"
                         data-purchase-checkin
                         @(chamCong.OpenPurchaseCheckin is null && (chamCong.CurrentEmployeeId.HasValue || chamCong.CanSelectEmployees) ? null : "hidden")>
-                    <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                    <span>Mua hàng</span>
+                    <i class="fa-solid fa-route" aria-hidden="true"></i>
+                    <span>Chấm công ngoài</span>
                 </button>
                 <button type="button"
                         class="secondary-button construction-checkin-button"
                         data-construction-checkin-open
                         @((chamCong.CurrentEmployeeId.HasValue || chamCong.CanSelectEmployees) ? null : "hidden")>
-                    <i class="fa-solid fa-helmet-safety" aria-hidden="true"></i>
-                    <span>Công trình</span>
+                    <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                    <span>Chấm công công việc</span>
                 </button>
                 <button type="button"
                         class="secondary-button purchase-attendance-button is-active"
                         data-purchase-checkout
                         @(chamCong.OpenPurchaseCheckin is not null ? null : "hidden")>
-                    <i class="fa-solid fa-cart-flatbed" aria-hidden="true"></i>
-                    <span>Mua hàng</span>
+                    <i class="fa-solid fa-route" aria-hidden="true"></i>
+                    <span>Chấm công ngoài</span>
                 </button>
             </div>
 
@@ -375,7 +375,7 @@
                 }
                 else if (chamCong.OpenPurchaseCheckin is not null)
                 {
-                    <span>Đang có lượt đi mua hàng chưa hoàn tất từ @(chamCong.OpenPurchaseCheckin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "thời gian chưa xác định").</span>
+                    <span>Đang có lượt chấm công ngoài chưa hoàn tất từ @(chamCong.OpenPurchaseCheckin.ThoiDiem?.ToString("dd/MM/yyyy HH:mm") ?? "thời gian chưa xác định").</span>
                 }
                 else
                 {
@@ -400,14 +400,17 @@
             <div class="crud-form yeu-cau-checkin-body">
                 <input type="file" accept="image/*" data-cham-cong-file hidden />
                 <div class="purchase-attendance-fields" data-purchase-fields hidden>
-                    <div class="purchase-attendance-work">
-                        <span class="purchase-attendance-label">Nội dung đi ra ngoài</span>
-                        <div class="purchase-attendance-chip-grid" data-purchase-work-options>
-                            @foreach (var option in new[] { "Mua vật tư", "Mua thiết bị", "Mua linh kiện", "Giao hàng", "Nhận hàng", "Làm việc với nhà cung cấp", "Đi ngân hàng", "Đi bảo hành", "Đi kho", "Công việc khác" })
+                    <div class="purchase-attendance-work is-collapsed" data-purchase-work-collapse>
+                        <button type="button" class="purchase-attendance-work-toggle" data-purchase-work-toggle aria-expanded="false" aria-controls="purchaseWorkOptions">
+                            <span><strong>Nội dung chấm công ngoài</strong><small data-purchase-work-summary>Không bắt buộc</small></span>
+                            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div class="purchase-attendance-chip-grid" id="purchaseWorkOptions" data-purchase-work-options hidden>
+                            @foreach (var option in chamCong.OutsideWorkOptions)
                             {
                                 <label class="purchase-attendance-chip">
-                                    <input type="checkbox" value="@option" data-purchase-work-option />
-                                    <span>@option</span>
+                                    <input type="checkbox" value="@option.Name" data-purchase-work-option />
+                                    <span>@option.Name</span>
                                 </label>
                             }
                         </div>
@@ -416,7 +419,7 @@
                     {
                         <div class="purchase-attendance-admin-grid">
                             <label class="master-data-filter-field" for="purchaseAttendanceEmployee">
-                                <span>Nhân viên đi mua hàng</span>
+                                <span>Nhân viên</span>
                                 <span class="login-input-shell select-shell">
                                     <i class="fa-solid fa-user-check" aria-hidden="true"></i>
                                     <select id="purchaseAttendanceEmployee" data-purchase-employee>
@@ -442,7 +445,7 @@
                         <input type="checkbox" data-purchase-quick checked />
                         <span>
                             <strong>Check-in nhanh</strong>
-                            <small>Hoàn tất chuyến đi ngay sau khi ghi nhận.</small>
+                            <small>Hoàn tất lượt chấm công ngoài ngay sau khi ghi nhận.</small>
                         </span>
                     </label>
                 </div>
@@ -599,7 +602,7 @@
         <section class="crud-modal purchase-detail-modal" role="dialog" aria-modal="true" aria-labelledby="purchase-detail-title">
             <div class="crud-modal-header">
                 <div class="crud-modal-heading">
-                    <h2 id="purchase-detail-title">Chi tiết đi mua hàng</h2>
+                    <h2 id="purchase-detail-title">Chi tiết chấm công ngoài</h2>
                     <p class="crud-modal-subtitle" data-purchase-detail-subtitle></p>
                 </div>
                 <span class="purchase-detail-badge" data-purchase-detail-badge></span>
@@ -607,7 +610,7 @@
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
             </div>
-            <div class="purchase-detail-tabs" role="tablist" aria-label="Chi tiết đi mua hàng">
+            <div class="purchase-detail-tabs" role="tablist" aria-label="Chi tiết chấm công ngoài">
                 <button type="button" role="tab" aria-selected="true" aria-controls="purchase-detail-images" data-purchase-detail-tab="images">Hình ảnh</button>
                 <button type="button" role="tab" aria-selected="false" aria-controls="purchase-detail-location" data-purchase-detail-tab="location">Vị trí</button>
                 <button type="button" role="tab" aria-selected="false" aria-controls="purchase-detail-info" data-purchase-detail-tab="info">Thông tin</button>
@@ -628,7 +631,7 @@
             <div class="crud-modal-footer purchase-detail-footer">
                 <button type="button" class="purchase-attendance-delete purchase-detail-delete" data-purchase-detail-delete hidden>
                     <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-                    <span>Xóa lượt mua hàng</span>
+                    <span>Xóa lượt chấm công ngoài</span>
                 </button>
                 <button type="button" class="secondary-button crud-cancel-button" data-purchase-detail-close>Đóng</button>
             </div>
@@ -688,7 +691,7 @@
         <section class="crud-modal construction-checkin-modal" role="dialog" aria-modal="true" aria-labelledby="constructionCheckinTitle">
             <div class="crud-modal-header">
                 <div class="crud-modal-heading">
-                    <h2 id="constructionCheckinTitle">Checkin công trình</h2>
+                    <h2 id="constructionCheckinTitle">Chấm công công việc</h2>
                     <div class="construction-employee-control">
                         @if (chamCong.CanSelectEmployees)
                         {
@@ -711,7 +714,7 @@
                         }
                     </div>
                     <p class="crud-modal-subtitle">
-                        Danh sách phiếu yêu cầu của nhân viên
+                        Danh sách phiếu yêu cầu/công việc của nhân viên
                         <strong data-construction-checkin-employee-name>@constructionInitialEmployeeName</strong>
                     </p>
                 </div>
@@ -719,7 +722,7 @@
                     <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
                     <span>Tải lại</span>
                 </button>
-                <button type="button" class="crud-modal-close" data-construction-checkin-close aria-label="Đóng Checkin công trình">
+                <button type="button" class="crud-modal-close" data-construction-checkin-close aria-label="Đóng chấm công công việc">
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
             </div>
@@ -735,17 +738,17 @@
         <section class="crud-modal khach-hang-location-viewer construction-map-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="constructionMapTitle">
             <div class="crud-modal-header">
                 <div class="crud-modal-heading">
-                    <h2 id="constructionMapTitle" data-construction-map-title>Bản đồ công trình</h2>
+                    <h2 id="constructionMapTitle" data-construction-map-title>Bản đồ công việc</h2>
                     <p class="crud-modal-subtitle" data-construction-map-subtitle>Vị trí khách hàng</p>
                 </div>
-                <button type="button" class="menu-nav-button crud-close-button" data-construction-map-close aria-label="Đóng bản đồ công trình">
+                <button type="button" class="menu-nav-button crud-close-button" data-construction-map-close aria-label="Đóng bản đồ công việc">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="crud-form khach-hang-location-viewer-body construction-map-fullscreen-body">
                 <div class="khach-hang-location-viewer-map-shell">
                     <div class="khach-hang-location-map khach-hang-location-viewer-map construction-map-fullscreen-canvas" data-construction-map></div>
-                    <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ công trình">
+                    <div class="khach-hang-location-viewer-map-actions" aria-label="Tác vụ bản đồ công việc">
                         <button type="button" class="menu-nav-button khach-hang-location-map-action construction-coordinate-capture-action" data-construction-coordinate-capture aria-label="Lấy tọa độ hiện tại" title="Lấy tọa độ hiện tại" hidden>
                             <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
                         </button>
@@ -972,6 +975,10 @@
             const purchaseTimeInput = root.querySelector("[data-purchase-time]");
             const purchaseQuickInput = root.querySelector("[data-purchase-quick]");
             const purchaseWorkOptions = root.querySelectorAll("[data-purchase-work-option]");
+            const purchaseWorkCollapse = root.querySelector("[data-purchase-work-collapse]");
+            const purchaseWorkToggle = root.querySelector("[data-purchase-work-toggle]");
+            const purchaseWorkOptionsPanel = root.querySelector("[data-purchase-work-options]");
+            const purchaseWorkSummary = root.querySelector("[data-purchase-work-summary]");
             const purchaseSpeechButton = root.querySelector("[data-purchase-speech]");
             const purchaseSpeechLabel = root.querySelector("[data-purchase-speech-label]");
             const mapElement = root.querySelector("[data-cham-cong-map]");
@@ -1939,15 +1946,23 @@
 
             const getPurchaseNote = () => noteInput instanceof HTMLTextAreaElement ? noteInput.value.trim() : "";
 
+            const updatePurchaseWorkSummary = () => {
+                const count = Array.from(purchaseWorkOptions).filter((item) => item instanceof HTMLInputElement && item.checked).length;
+                if (purchaseWorkSummary) purchaseWorkSummary.textContent = count > 0 ? `Đã chọn ${count} nội dung` : "Không bắt buộc";
+            };
+
+            const setPurchaseWorkCollapsed = (collapsed) => {
+                if (purchaseWorkOptionsPanel instanceof HTMLElement) purchaseWorkOptionsPanel.hidden = collapsed;
+                purchaseWorkCollapse?.classList.toggle("is-collapsed", collapsed);
+                purchaseWorkToggle?.setAttribute("aria-expanded", collapsed ? "false" : "true");
+                const icon = purchaseWorkToggle?.querySelector("i");
+                icon?.classList.toggle("fa-chevron-down", collapsed);
+                icon?.classList.toggle("fa-chevron-up", !collapsed);
+            };
+
             const validatePurchaseContent = () => {
                 if (root.dataset.canAdminManageAttendance === "true" && !getPurchaseActionEmployeeId()) {
-                    throw new Error("Vui lòng chọn nhân viên đi mua hàng.");
-                }
-                if (!getSelectedPurchaseWork()) {
-                    throw new Error("Vui lòng chọn ít nhất một nội dung đi ra ngoài.");
-                }
-                if (!getPurchaseNote()) {
-                    throw new Error("Vui lòng nhập ghi chú cho lượt đi ra ngoài.");
+                    throw new Error("Vui lòng chọn nhân viên.");
                 }
             };
 
@@ -1997,14 +2012,14 @@
                 }
                 if (timeLabel instanceof HTMLElement) {
                     timeLabel.textContent = isPurchaseCheckoutMode()
-                        ? "Thời gian checkout mua hàng"
+                        ? "Thời gian checkout ngoài"
                         : isPurchaseCheckinMode()
                             ? "Thời gian ghi nhận"
                             : mode === "checkout" ? "Thời gian checkout" : "Thời gian checkin";
                 }
                 if (cameraTitle) {
                     cameraTitle.textContent = isPurchaseMode()
-                        ? "Đi mua hàng / Đi ra ngoài"
+                        ? "Chấm công ngoài"
                         : mode === "checkout" ? "Chụp ảnh checkout" : "Chụp ảnh checkin";
                 }
                 if (cameraSubtitle) {
@@ -2026,7 +2041,7 @@
                     syncAttendanceMap(activeGps);
                     await startCamera();
                     setStatus(cameraStatus, isPurchaseMode()
-                        ? "Camera đã sẵn sàng. Vui lòng chụp ảnh để ghi nhận đi mua hàng."
+                        ? "Camera đã sẵn sàng. Vui lòng chụp ảnh để ghi nhận chấm công ngoài."
                         : "Camera đã sẵn sàng. Vui lòng chụp ảnh chấm công.", "success");
                 } catch (error) {
                     setStatus(cameraStatus, error instanceof Error ? error.message : "Không thể mở camera.", "error");
@@ -2205,16 +2220,16 @@
                                    data-request-phone="${escapeHtml(summary.dienThoai || "")}"
                                    data-request-works="${escapeHtml(workText)}">${escapeHtml(item.maYeuCau || "Phiếu yêu cầu")}</button>`
                         : isPurchaseCheckin
-                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Mua hàng · Nhanh" : "Mua hàng"}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang đi" : "Hoàn tất"}</span>`}`
+                            ? `<span class="cham-cong-entry-meta">${item.isQuickPurchase ? "Chấm công ngoài · Nhanh" : "Chấm công ngoài"}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang thực hiện" : "Hoàn tất"}</span>`}`
                             : '<span class="cham-cong-entry-meta">AppTech</span>';
                     const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
                     const lineClass = event.isCheckout ? "is-checkout-complete" : "is-checkin";
                     const iconClass = isPurchaseCheckin ? "fa-cart-shopping" : event.isCheckout ? "fa-right-from-bracket" : "fa-right-to-bracket";
-                    const activityTypeLabel = isPurchaseCheckin ? "Đi mua hàng" : isCustomerCheckin ? "Chấm công công trình" : "Chấm công";
-                    const activityTypeIcon = isPurchaseCheckin ? "fa-cart-shopping" : isCustomerCheckin ? "fa-screwdriver-wrench" : "fa-user-check";
+                    const activityTypeLabel = isPurchaseCheckin ? "Chấm công ngoài" : isCustomerCheckin ? "Chấm công công việc" : "Chấm công văn phòng";
+                    const activityTypeIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
                     const label = isPurchaseCheckin
-                        ? item.isQuickPurchase ? "mua hàng nhanh" : event.isCheckout ? "checkout mua hàng" : "check-in mua hàng"
+                        ? item.isQuickPurchase ? "chấm công ngoài hoàn tất nhanh" : event.isCheckout ? "checkout ngoài" : "check-in ngoài"
                         : event.isCheckout ? "checkout" : "checkin";
                     const photo = imagePath
                         ? `<button type="button" class="cham-cong-entry-image-button" ${isPurchaseCheckin ? "data-purchase-detail-open" : `data-cham-cong-image-open data-image-src="${escapeHtml(imagePath)}" data-image-title="Ảnh ${label} ${escapeHtml(employeeName)}"`}><img src="${escapeHtml(imagePath)}" alt="Ảnh ${label}" /></button>`
@@ -2562,6 +2577,8 @@
                     requestUrl: url.toString(),
                     requestSequence
                 });
+                updatePurchaseWorkSummary();
+                setPurchaseWorkCollapsed(true);
 
                 try {
                     setConstructionStatus("Đang tải phiếu yêu cầu...", "info");
@@ -2873,7 +2890,7 @@
                     constructionMapRouteButton.hidden = !hasCoordinates;
                 }
                 if (constructionMapTitle instanceof HTMLElement) {
-                    constructionMapTitle.textContent = activeConstructionLocation.code || "Bản đồ công trình";
+                    constructionMapTitle.textContent = activeConstructionLocation.code || "Bản đồ công việc";
                 }
                 if (constructionMapSubtitle instanceof HTMLElement) {
                     constructionMapSubtitle.textContent = [activeConstructionLocation.customer, activeConstructionLocation.address].filter(Boolean).join(" - ");
@@ -3288,7 +3305,7 @@
                         src="https://www.google.com/maps?q=${query}&z=17&output=embed"
                         loading="lazy"
                         referrerpolicy="no-referrer-when-downgrade"
-                        title="Bản đồ vị trí đi mua hàng"></iframe>`;
+                        title="Bản đồ vị trí chấm công ngoài"></iframe>`;
             };
 
             const renderPurchaseDetailLocation = (detail) => {
@@ -3337,7 +3354,7 @@
                     <div><dt>Check-in</dt><dd>${escapeHtml(detail.checkinTime || "Chưa xác định")}</dd></div>
                     ${checkoutHtml}
                     <div><dt>Loại</dt><dd>${escapeHtml(detail.isQuick ? "Check-in nhanh" : getPurchaseStatusText(detail))}</dd></div>
-                    <div><dt>Nội dung đi ra ngoài</dt><dd>${workHtml}</dd></div>
+                    <div><dt>Nội dung chấm công ngoài</dt><dd>${workHtml}</dd></div>
                     <div><dt>Ghi chú</dt><dd>${escapeHtml(detail.note || "Không có ghi chú")}</dd></div>`;
             };
 
@@ -3442,7 +3459,7 @@
                 if (note) {
                     return `${note} · bắt đầu lúc ${startedText}.`;
                 }
-                return `Đang có lượt đi mua hàng chưa hoàn tất từ ${startedText}.`;
+                return `Đang có lượt chấm công ngoài chưa hoàn tất từ ${startedText}.`;
             };
 
             const syncButtons = () => {
@@ -3587,7 +3604,7 @@
                     return;
                 }
                 if (!capturedBlob) {
-                    setStatus(cameraStatus, isPurchaseMode() ? "Vui lòng chụp ảnh khi ghi nhận đi mua hàng." : "Vui lòng chụp ảnh trước khi lưu.", "error");
+                    setStatus(cameraStatus, isPurchaseMode() ? "Vui lòng chụp ảnh khi ghi nhận chấm công ngoài." : "Vui lòng chụp ảnh trước khi lưu.", "error");
                     return;
                 }
                 try {
@@ -3597,7 +3614,7 @@
                     if (activeMode === "purchase-checkout") {
                         const openId = root.dataset.openPurchaseCheckinId;
                         if (!openId) {
-                            throw new Error("Không có lượt đi mua hàng đang mở để checkout.");
+                            throw new Error("Không có lượt chấm công ngoài đang mở để checkout.");
                         }
                         await postForm(root.dataset.purchaseCheckoutUrl || "", {
                             Id: openId,
@@ -3608,7 +3625,7 @@
                             GhiChuCheckOut: noteInput instanceof HTMLTextAreaElement ? noteInput.value : ""
                         }, capturedBlob);
                         root.dataset.openPurchaseCheckinId = "";
-                        setStatus(statusElement, "Đã lưu checkout mua hàng.", "success");
+                        setStatus(statusElement, "Đã lưu checkout ngoài.", "success");
                     } else if (activeMode === "checkout") {
                         const openId = root.dataset.openCheckinId;
                         if (!openId) {
@@ -3635,7 +3652,7 @@
                             GhiChuNhanVien: getPurchaseNote(),
                             QuickCheckin: purchaseQuickInput instanceof HTMLInputElement ? purchaseQuickInput.checked : true
                         }, capturedBlob);
-                        setStatus(statusElement, "Đã lưu lượt đi mua hàng.", "success");
+                        setStatus(statusElement, "Đã lưu lượt chấm công ngoài.", "success");
                     } else {
                         const location = getSelectedLocation();
                         if (!location) {
@@ -3670,22 +3687,22 @@
 
                 const id = Number.parseInt(button.dataset.purchaseDeleteId || "", 10);
                 if (!Number.isFinite(id) || id <= 0) {
-                    setStatus(statusElement, "Không xác định được lượt đi mua hàng cần xóa.", "error");
+                    setStatus(statusElement, "Không xác định được lượt chấm công ngoài cần xóa.", "error");
                     return;
                 }
 
-                if (!window.confirm("Bạn có chắc muốn xóa lượt đi mua hàng này?")) {
+                if (!window.confirm("Bạn có chắc muốn xóa lượt chấm công ngoài này?")) {
                     return;
                 }
 
                 try {
                     button.disabled = true;
                     await postForm(root.dataset.purchaseDeleteUrl || "", { Id: id });
-                    setStatus(statusElement, "Đã xóa lượt đi mua hàng.", "success");
+                    setStatus(statusElement, "Đã xóa lượt chấm công ngoài.", "success");
                     closePurchaseDetail();
                     await loadHistory();
                 } catch (error) {
-                    setStatus(statusElement, error instanceof Error ? error.message : "Không thể xóa lượt đi mua hàng.", "error");
+                    setStatus(statusElement, error instanceof Error ? error.message : "Không thể xóa lượt chấm công ngoài.", "error");
                 } finally {
                     button.disabled = false;
                 }
@@ -3695,6 +3712,8 @@
             checkoutButton?.addEventListener("click", () => void openCameraModal("checkout"));
             purchaseCheckinButton?.addEventListener("click", () => void openCameraModal("purchase-checkin"));
             purchaseCheckoutButton?.addEventListener("click", () => void openCameraModal("purchase-checkout"));
+            purchaseWorkToggle?.addEventListener("click", () => setPurchaseWorkCollapsed(purchaseWorkToggle.getAttribute("aria-expanded") === "true"));
+            purchaseWorkOptions.forEach((option) => option.addEventListener("change", updatePurchaseWorkSummary));
             constructionOpenButton?.addEventListener("click", openConstructionModal);
             constructionRefreshButton?.addEventListener("click", () => void loadConstructionRequests());
             constructionEmployeeSelect?.addEventListener("change", () => {
@@ -3741,7 +3760,7 @@
                     return;
                 }
                 const src = trigger.dataset.imageSrc || trigger.querySelector("img")?.getAttribute("src") || "";
-                const title = trigger.dataset.imageTitle || trigger.querySelector("img")?.getAttribute("alt") || "Ảnh đi mua hàng";
+                const title = trigger.dataset.imageTitle || trigger.querySelector("img")?.getAttribute("alt") || "Ảnh chấm công ngoài";
                 openImageViewer(src, title);
             });
             historyElement?.addEventListener("click", (event) => {

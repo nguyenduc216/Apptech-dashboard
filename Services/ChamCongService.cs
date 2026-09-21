@@ -1105,7 +1105,7 @@ public sealed class ChamCongService(
         return await command.ExecuteScalarAsync(cancellationToken) is not null;
     }
 
-    private static string? BuildPurchaseWorkNote(string? selectedWork, string? detailNote)
+    public static string? BuildPurchaseWorkNote(string? selectedWork, string? detailNote)
     {
         var selectedParts = (selectedWork ?? string.Empty)
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -1114,8 +1114,13 @@ public sealed class ChamCongService(
             .ToList();
         var note = string.IsNullOrWhiteSpace(detailNote) ? null : detailNote.Trim();
 
+        if (selectedParts.Count == 0)
+        {
+            return note;
+        }
+
         var prefix = $"[{string.Join("; ", selectedParts)}]";
-        return $"{prefix} {note}";
+        return string.IsNullOrWhiteSpace(note) ? prefix : $"{prefix} {note}";
     }
 
     private async Task<string?> ValidateDistanceAsync(

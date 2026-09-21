@@ -20,7 +20,7 @@ public class DashboardViewModel
         {
             CompanyName = "Apptech Smart Control",
             DashboardTitle = "Dashboard quản trị nhà thông minh",
-            Subtitle = "Bố cục lấy cảm hứng từ Ace Admin, phối màu theo nhận diện Apptech Nha Trang.",
+            Subtitle = "Theo dõi chấm công văn phòng, chấm công ngoài và chấm công công việc trong ngày.",
             MetricCards =
             [
                 new MetricCard("Thiết bị online", "128", "+12 hôm nay", "online"),
@@ -81,6 +81,7 @@ public sealed class ChamCongDashboardModel
     public int? CurrentEmployeeId { get; set; }
     public IReadOnlyList<ChamCongLocationOption> LocationOptions { get; set; } = [];
     public IReadOnlyList<ChamCongEmployeeOption> EmployeeOptions { get; set; } = [];
+    public IReadOnlyList<DanhMucChamCongNgoaiOption> OutsideWorkOptions { get; set; } = [];
     public IReadOnlyList<int> SelectedEmployeeIds { get; set; } = [];
     public IReadOnlyList<ChamCongHistoryItem> History { get; set; } = [];
     public ChamCongHistoryItem? OpenCheckin { get; set; }
@@ -165,16 +166,16 @@ public sealed class ChamCongHistoryItem
         ThoiDiem.Value == ThoiDiemCheckOut.Value &&
         string.Equals(ImgPath, ImgPathCheckOut, StringComparison.OrdinalIgnoreCase);
     public string CustomerDisplayName => string.IsNullOrWhiteSpace(TenKhachHang)
-        ? (IsPurchase ? "Mua hàng" : (IDYeuCau.HasValue ? "Khách hàng chưa xác định" : "AppTech"))
+        ? (IsPurchase ? "Chấm công ngoài" : (IDYeuCau.HasValue ? "Khách hàng chưa xác định" : "AppTech"))
         : TenKhachHang.Trim();
     public string LocationDisplayText => string.IsNullOrWhiteSpace(DiaChi)
         ? (IsPurchase ? "Vị trí GPS phát sinh" : "Chưa có địa chỉ")
         : DiaChi.Trim();
     public string Title => AttendanceType switch
     {
-        "KhachHang" => $"Chấm công tại khách hàng: {CustomerDisplayName}",
-        "MuaHang" => IsQuickPurchase ? "Đi mua hàng · Hoàn tất nhanh" : "Đi mua hàng / Đi ra ngoài",
-        _ => $"Chấm công tại {CustomerDisplayName}"
+        "KhachHang" => $"Chấm công công việc: {CustomerDisplayName}",
+        "MuaHang" => IsQuickPurchase ? "Chấm công ngoài · Hoàn tất nhanh" : "Chấm công ngoài",
+        _ => "Chấm công văn phòng"
     };
 
     private (IReadOnlyList<string> WorkContent, string? Note, bool IsLegacy) ParsePurchaseNote(string? rawValue)
