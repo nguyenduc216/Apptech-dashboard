@@ -85,3 +85,86 @@ UI cho phép chọn profile, tạo profile mới, sửa/lưu profile không mặ
 - Trạng thái: **Not deployed**.
 - Target: chưa xác nhận. Repo chỉ mô tả cách publish ra `publish/iis`; không cung cấp IIS server/path triển khai thực tế.
 - Kết quả: build hoàn tất nhưng chưa deploy vì không có deployment target được xác nhận.
+
+---
+
+# Follow-up: hoàn thiện workflow calibration
+
+## A. Issues fixed
+
+- Sau khi lưu, controller dùng `ProfileId` service trả về để reload và chọn đúng profile vừa lưu.
+- Profile `Mặc định` có trạng thái UI riêng, nút đổi thành **Lưu thành cấu hình mới** và server không cho ghi đè/tạo custom profile trùng tên dành riêng.
+- PDF In thử hiển thị cả crosshair tâm và bounding box đúng kích thước QR.
+- Test 2 trang được sửa để kiểm tra 360 mapping thực tế, 180 item mỗi trang và item đầu trang 2 reset về `indexWithinPage = 0`.
+
+## B. Files changed
+
+- `ApptechDashboard.csproj`
+- `Controllers/QrCodeController.cs`
+- `Models/QrCodeViewModels.cs`
+- `Services/Qr180PrinterProfileService.cs`
+- `Services/QrCodeBatchService.cs`
+- `Views/QrCode/Index.cshtml`
+- `wwwroot/css/site.css`
+- `Tests/ApptechDashboard.Tests/ApptechDashboard.Tests.csproj`
+- `Tests/ApptechDashboard.Tests/Qr180PrintingTests.cs`
+
+## C. Active profile flow
+
+```text
+SaveAsync
+→ trả ProfileId của record INSERT/UPDATE
+→ redirect Index?printerProfileId=...
+→ server resolve profile theo Id
+→ set Print180.ProfileId và toàn bộ calibration values
+→ Razor chọn đúng option và render đúng input values
+```
+
+Profile custom khi update vẫn giữ cùng Id nên không tạo duplicate. Profile mới được redirect về Id mới sinh.
+
+## D. Default profile protection
+
+`Mặc định` không bị overwrite. Service kiểm tra record đích: chỉ profile tồn tại và `IsDefault = false` mới được UPDATE; default luôn chuyển sang INSERT custom. Cả model validation và service đều từ chối tên custom `Mặc định` sau khi trim và so sánh không phân biệt hoa thường. UI không gửi Id default khi lưu và yêu cầu người dùng đặt tên mới.
+
+## E. Calibration PDF
+
+Mỗi vị trí dùng chính `Qr180LayoutPosition` của PDF thật để vẽ:
+
+- bounding box vector 0,25 pt tại `Left`, `Top`, rộng/cao bằng `QrSize`;
+- crosshair vector tại tâm QR;
+- không tô nền và dùng nét xám nhẹ để thuận tiện đặt chồng với decal.
+
+Thay đổi QR Size làm thay đổi trực tiếp bounding box. In thử vẫn không gọi batch generation và không ghi sequence.
+
+## F. Tests
+
+Tổng cộng 15 test pass. Các coverage mới/sửa gồm:
+
+- 360 values tạo 2 trang, mỗi trang 180 placement;
+- item thứ 181 thuộc page 2, `indexWithinPage = 0`, đúng value và geometry đầu trang;
+- calibration PDF có 180 bounding box và kích thước box thay đổi từ QR 10 mm sang 18 mm;
+- calibration test không tạo `qr-sequence.txt`;
+- quyết định INSERT profile mới, UPDATE custom, không UPDATE default;
+- cấm tên custom `Mặc định`;
+- resolve active profile và calibration values theo requested Id;
+- save controller redirect kèm đúng `printerProfileId` vừa lưu.
+
+## G. Build
+
+- `dotnet restore apptech-dashboard.sln`: thành công.
+- `dotnet build apptech-dashboard.sln -c Release --no-restore`: thành công, 0 warning, 0 error.
+- `dotnet test apptech-dashboard.sln -c Release --no-build --no-restore`: thành công, 15/15 test passed.
+- `git diff --check`: không có whitespace error; chỉ có thông báo LF/CRLF của Git trên Windows.
+
+## H. Database
+
+Không thay schema và không tạo migration mới. Migration hiện tại phải được chạy trước deploy:
+
+`App_Data/Migrations/20260921_add_qr180_printer_profiles.sql`
+
+## I. Commit
+
+- SHA: `08c922285031a603ee169ee1a52aafebc4d4b264`
+- Message: `fix(qr): complete 180-label calibration workflow`
+- Branch: `main`
+- Push result: thành công lên `origin/main`.
