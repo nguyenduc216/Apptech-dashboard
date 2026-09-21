@@ -48,7 +48,7 @@
 .construction-checkin-shell .crud-modal-header {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(148px, 0.26fr) 56px;
+    grid-template-columns: minmax(0, 1fr) 56px 56px;
     align-items: start;
     gap: 14px;
 }
@@ -59,7 +59,9 @@
 
 .construction-checkin-toolbar {
     flex: 0 0 auto;
-    display: block;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+    gap: 10px;
     padding: 0 16px 12px;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
     background: #f8fbfd;
@@ -82,15 +84,32 @@
 }
 
 .construction-checkin-status {
+    grid-column: 1 / -1;
     margin: 0;
     width: 100%;
 }
 
 .construction-checkin-refresh {
+    width: 56px;
+    min-width: 56px;
+    height: 56px;
     min-height: 56px;
+    padding: 0;
+    justify-content: center;
+}
+
+.construction-checkin-refresh.is-loading i {
+    animation: construction-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes construction-refresh-spin {
+    to { transform: rotate(360deg); }
+}
+
+.construction-checkin-search,
+.construction-checkin-sort {
     width: 100%;
     min-width: 0;
-    justify-content: center;
 }
 
 .construction-checkin-list {
@@ -401,7 +420,7 @@
 
 @media (max-width: 430px) {
     .construction-checkin-shell .crud-modal-header {
-        grid-template-columns: minmax(0, 1fr) 48px;
+        grid-template-columns: minmax(0, 1fr) 48px 48px;
         align-items: start;
     }
 
@@ -410,10 +429,15 @@
     }
 
     .construction-checkin-refresh {
+        grid-column: 2;
+        width: 48px;
+        min-width: 48px;
+        height: 48px;
         min-height: 48px;
     }
 
     .construction-checkin-toolbar {
+        grid-template-columns: minmax(0, 1fr);
         padding: 10px;
     }
 

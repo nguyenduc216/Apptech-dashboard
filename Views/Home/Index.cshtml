@@ -718,15 +718,28 @@
                         <strong data-construction-checkin-employee-name>@constructionInitialEmployeeName</strong>
                     </p>
                 </div>
-                <button type="button" class="secondary-button construction-checkin-refresh" data-construction-checkin-refresh>
+                <button type="button" class="secondary-button construction-checkin-refresh" data-construction-checkin-refresh aria-label="Tải lại danh sách" title="Tải lại danh sách">
                     <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
-                    <span>Tải lại</span>
                 </button>
                 <button type="button" class="crud-modal-close" data-construction-checkin-close aria-label="Đóng chấm công công việc">
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
             </div>
             <div class="construction-checkin-toolbar">
+                <label class="login-input-shell construction-checkin-search" for="constructionCheckinKeyword">
+                    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input id="constructionCheckinKeyword" type="search" maxlength="200" autocomplete="off" placeholder="Tìm theo tên khách hoặc số điện thoại" data-construction-checkin-keyword />
+                </label>
+                <label class="login-input-shell select-shell construction-checkin-sort" for="constructionCheckinSort">
+                    <i class="fa-solid fa-arrow-down-wide-short" aria-hidden="true"></i>
+                    <select id="constructionCheckinSort" data-construction-checkin-sort>
+                        <option value="recent-checkin" selected>Công việc mới check-in/out</option>
+                        <option value="newest">Công việc mới nhất</option>
+                        <option value="oldest">Công việc cũ nhất</option>
+                        <option value="deadline">Công việc cần hoàn thành sớm</option>
+                    </select>
+                    <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+                </label>
                 <span class="page-alert info construction-checkin-status" data-construction-checkin-status>Đang tải phiếu yêu cầu...</span>
             </div>
             <div class="construction-checkin-list" data-construction-checkin-list></div>
@@ -1033,6 +1046,8 @@
             const constructionEmployee = root.querySelector("[data-construction-checkin-employee]");
             const constructionEmployeeName = root.querySelector("[data-construction-checkin-employee-name]");
             const constructionEmployeeSelect = root.querySelector("[data-construction-employee-select]");
+            const constructionKeywordInput = root.querySelector("[data-construction-checkin-keyword]");
+            const constructionSortSelect = root.querySelector("[data-construction-checkin-sort]");
             const constructionStatus = root.querySelector("[data-construction-checkin-status]");
             const constructionList = root.querySelector("[data-construction-checkin-list]");
             const constructionMapShell = root.querySelector("[data-construction-map-shell]");
@@ -1052,6 +1067,7 @@
             let constructionEmployeeChangedByUser = false;
             let constructionRequestController = null;
             let constructionRequestSequence = 0;
+            let constructionSearchTimer = 0;
             const distanceLimit = Number.parseFloat(root.dataset.distanceLimit || "");
             let cameraStream = null;
             let attendanceCameraDevices = [];
@@ -2573,6 +2589,12 @@
                 const requestSequence = ++constructionRequestSequence;
                 const url = new URL(root.dataset.constructionRequestsUrl || "", window.location.origin);
                 url.searchParams.set("employeeId", `${selectedEmployeeId}`);
+                const keyword = constructionKeywordInput instanceof HTMLInputElement ? constructionKeywordInput.value.trim() : "";
+                const sort = constructionSortSelect instanceof HTMLSelectElement ? constructionSortSelect.value : "recent-checkin";
+                if (keyword) {
+                    url.searchParams.set("keyword", keyword);
+                }
+                url.searchParams.set("sort", sort || "recent-checkin");
                 url.searchParams.set("_ts", Date.now().toString());
                 console.debug("[ConstructionCheckin] request", {
                     selectedEmployeeId,
@@ -2585,6 +2607,7 @@
                     setConstructionStatus("Đang tải phiếu yêu cầu...", "info");
                     if (constructionRefreshButton instanceof HTMLButtonElement) {
                         constructionRefreshButton.disabled = true;
+                        constructionRefreshButton.classList.add("is-loading");
                     }
                     const response = await fetch(url, {
                         method: "GET",
@@ -2618,10 +2641,11 @@
                         destroyAllConstructionMapThumbs();
                         constructionList.innerHTML = items.length > 0
                             ? items.map(renderConstructionCard).join("")
-                            : `<div class="construction-checkin-empty">Không có phiếu yêu cầu phù hợp.</div>`;
+                            : `<div class="construction-checkin-empty">${keyword ? "Không tìm thấy phiếu yêu cầu phù hợp." : "Không có phiếu yêu cầu phù hợp."}</div>`;
+                        constructionList.scrollTop = 0;
                         syncConstructionMapThumbs();
                     }
-                    setConstructionStatus(items.length > 0 ? `Đã tải ${items.length} phiếu yêu cầu.` : "Không có phiếu yêu cầu phù hợp.", items.length > 0 ? "success" : "info");
+                    setConstructionStatus(items.length > 0 ? `Đã tải ${items.length} phiếu yêu cầu.` : keyword ? "Không tìm thấy phiếu yêu cầu phù hợp." : "Không có phiếu yêu cầu phù hợp.", items.length > 0 ? "success" : "info");
                 } catch (error) {
                     if (error instanceof DOMException && error.name === "AbortError") {
                         return;
@@ -2648,14 +2672,22 @@
                 } finally {
                     if (requestSequence === constructionRequestSequence && constructionRefreshButton instanceof HTMLButtonElement) {
                         constructionRefreshButton.disabled = false;
+                        constructionRefreshButton.classList.remove("is-loading");
                     }
                 }
             };
 
             const openConstructionModal = () => {
                 if (constructionShell instanceof HTMLElement) {
+                    window.clearTimeout(constructionSearchTimer);
                     if (!constructionEmployeeChangedByUser) {
                         syncConstructionEmployeeStateFromServer();
+                    }
+                    if (constructionKeywordInput instanceof HTMLInputElement) {
+                        constructionKeywordInput.value = "";
+                    }
+                    if (constructionSortSelect instanceof HTMLSelectElement) {
+                        constructionSortSelect.value = "recent-checkin";
                     }
                     if (constructionList instanceof HTMLElement) {
                         constructionList.scrollTop = 0;
@@ -2667,6 +2699,8 @@
             };
 
             const closeConstructionModal = () => {
+                window.clearTimeout(constructionSearchTimer);
+                constructionRequestController?.abort();
                 constructionThumbnailObserver?.disconnect();
                 constructionThumbnailObserver = null;
                 if (constructionShell instanceof HTMLElement) {
@@ -3719,8 +3753,20 @@
             purchaseWorkToggle?.addEventListener("click", () => setPurchaseWorkCollapsed(purchaseWorkToggle.getAttribute("aria-expanded") === "true"));
             purchaseWorkOptions.forEach((option) => option.addEventListener("change", updatePurchaseWorkSummary));
             constructionOpenButton?.addEventListener("click", openConstructionModal);
-            constructionRefreshButton?.addEventListener("click", () => void loadConstructionRequests());
+            constructionRefreshButton?.addEventListener("click", () => {
+                window.clearTimeout(constructionSearchTimer);
+                void loadConstructionRequests();
+            });
+            constructionKeywordInput?.addEventListener("input", () => {
+                window.clearTimeout(constructionSearchTimer);
+                constructionSearchTimer = window.setTimeout(() => void loadConstructionRequests(), 300);
+            });
+            constructionSortSelect?.addEventListener("change", () => {
+                window.clearTimeout(constructionSearchTimer);
+                void loadConstructionRequests();
+            });
             constructionEmployeeSelect?.addEventListener("change", () => {
+                window.clearTimeout(constructionSearchTimer);
                 constructionEmployeeChangedByUser = true;
                 if (!resolveConstructionSelectedEmployee()) {
                     setConstructionStatus("Nhân viên được chọn không hợp lệ.", "error");

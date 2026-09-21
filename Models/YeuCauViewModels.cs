@@ -5,6 +5,22 @@ using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace ApptechDashboard.Models;
 
+public static class ConstructionCheckinSortCatalog
+{
+    public const string RecentAttendance = "recent-checkin";
+    public const string Newest = "newest";
+    public const string Oldest = "oldest";
+    public const string Deadline = "deadline";
+
+    public static string Normalize(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        Newest => Newest,
+        Oldest => Oldest,
+        Deadline => Deadline,
+        _ => RecentAttendance
+    };
+}
+
 public static class YeuCauTrangThaiCatalog
 {
     public const string TaoMoi = "Tạo mới";

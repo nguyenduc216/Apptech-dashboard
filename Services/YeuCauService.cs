@@ -40,6 +40,8 @@ public interface IYeuCauService
     Task<IReadOnlyList<YeuCauListItem>> GetConstructionCheckinRequestsAsync(
         int employeeId,
         string? employeeName,
+        string? keyword,
+        string? sort,
         int limit = 100,
         CancellationToken cancellationToken = default);
 
@@ -414,6 +416,8 @@ public sealed class YeuCauService(
     public async Task<IReadOnlyList<YeuCauListItem>> GetConstructionCheckinRequestsAsync(
         int employeeId,
         string? employeeName,
+        string? keyword,
+        string? sort,
         int limit = 100,
         CancellationToken cancellationToken = default)
     {
@@ -424,6 +428,9 @@ public sealed class YeuCauService(
 
         limit = Math.Clamp(limit, 1, 200);
         var normalizedEmployeeName = string.IsNullOrWhiteSpace(employeeName) ? null : employeeName.Trim();
+        var normalizedKeyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
+        var normalizedSort = ConstructionCheckinSortCatalog.Normalize(sort);
+        var orderByClause = GetConstructionCheckinOrderBy(normalizedSort);
 
         try
         {
@@ -485,6 +492,7 @@ public sealed class YeuCauService(
                     FROM [{WorkTableName}] AS ycvc
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
+                {GetConstructionAttendanceApplySql()}
                 WHERE
                     EXISTS (
                         SELECT 1
@@ -519,13 +527,24 @@ public sealed class YeuCauService(
                             )
                         )
                     )
-                ORDER BY ISNULL(yc.NgayYeuCau, yc.Created_Date) ASC, yc.ID ASC
+                    AND (
+                        @Keyword IS NULL
+                        OR kh.TenKhachHang COLLATE {SearchCollation} LIKE @Keyword
+                        OR {BuildSearchExpression("kh.TenKhachHang")} LIKE @KeywordNoAccent
+                        OR yc.MaYeuCau COLLATE {SearchCollation} LIKE @Keyword
+                        OR (@PhoneKeyword IS NOT NULL AND REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(dd.DienThoai, N''), N' ', N''), N'.', N''), N'-', N''), N'+', N'') LIKE @PhoneKeyword)
+                    )
+                ORDER BY {orderByClause}
                 """;
             command.Parameters.Add(new SqlParameter("@Limit", SqlDbType.Int) { Value = limit });
             command.Parameters.Add(new SqlParameter("@EmployeeId", SqlDbType.Int) { Value = employeeId });
             command.Parameters.Add(new SqlParameter("@EmployeeName", SqlDbType.NVarChar, 250) { Value = ToDbValue(normalizedEmployeeName) });
             command.Parameters.Add(new SqlParameter("@EmployeeNameLike", SqlDbType.NVarChar, 250) { Value = normalizedEmployeeName is null ? DBNull.Value : $"%{normalizedEmployeeName}%" });
             command.Parameters.Add(new SqlParameter("@EmployeeNameNoAccentLike", SqlDbType.NVarChar, 250) { Value = normalizedEmployeeName is null ? DBNull.Value : $"%{NormalizeSearchPattern(normalizedEmployeeName)}%" });
+            command.Parameters.Add(new SqlParameter("@Keyword", SqlDbType.NVarChar, 202) { Value = normalizedKeyword is null ? DBNull.Value : $"%{normalizedKeyword}%" });
+            command.Parameters.Add(new SqlParameter("@KeywordNoAccent", SqlDbType.NVarChar, 202) { Value = normalizedKeyword is null ? DBNull.Value : $"%{NormalizeSearchPattern(normalizedKeyword)}%" });
+            var phoneKeyword = normalizedKeyword is null ? string.Empty : NormalizePhoneSearch(normalizedKeyword);
+            command.Parameters.Add(new SqlParameter("@PhoneKeyword", SqlDbType.NVarChar, 202) { Value = phoneKeyword.Length == 0 ? DBNull.Value : $"%{phoneKeyword}%" });
             command.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
             command.Parameters.Add(new SqlParameter("@DefaultWorkStatusFilter", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.TaoMoi });
             command.Parameters.Add(new SqlParameter("@CompletedWorkStatusFilter", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
@@ -548,6 +567,48 @@ public sealed class YeuCauService(
             _logger.LogError(ex, "Failed to load construction checkin requests for employee {EmployeeId}.", employeeId);
             throw;
         }
+    }
+
+    public static string GetConstructionCheckinOrderBy(string? sort)
+    {
+        return ConstructionCheckinSortCatalog.Normalize(sort) switch
+        {
+            ConstructionCheckinSortCatalog.Newest => "ISNULL(yc.NgayYeuCau, yc.Created_Date) DESC, yc.ID DESC",
+            ConstructionCheckinSortCatalog.Oldest => "ISNULL(yc.NgayYeuCau, yc.Created_Date) ASC, yc.ID ASC",
+            ConstructionCheckinSortCatalog.Deadline => "CASE WHEN yc.NgayHetHan IS NULL THEN 1 ELSE 0 END ASC, yc.NgayHetHan ASC, ISNULL(yc.NgayYeuCau, yc.Created_Date) ASC, yc.ID ASC",
+            _ => "CASE WHEN attendanceStats.LastAttendance IS NULL THEN 1 ELSE 0 END ASC, attendanceStats.LastAttendance DESC, ISNULL(yc.NgayYeuCau, yc.Created_Date) ASC, yc.ID ASC"
+        };
+    }
+
+    public static string GetConstructionAttendanceApplySql() => $"""
+        OUTER APPLY (
+            SELECT MAX(
+                CASE
+                    WHEN attendance.ThoiDiemCheckOut IS NOT NULL
+                         AND (attendance.ThoiDiem IS NULL OR attendance.ThoiDiemCheckOut > attendance.ThoiDiem)
+                        THEN attendance.ThoiDiemCheckOut
+                    ELSE attendance.ThoiDiem
+                END
+            ) AS LastAttendance
+            FROM [{CheckinHistoryTableName}] AS attendance
+            WHERE attendance.IDYeuCau = yc.ID
+              AND attendance.IDNhanVien = @EmployeeId
+        ) AS attendanceStats
+        """;
+
+    public static DateTime? GetLatestAttendanceActivity(DateTime? checkin, DateTime? checkout)
+    {
+        if (!checkin.HasValue)
+        {
+            return checkout;
+        }
+
+        return checkout.HasValue && checkout.Value > checkin.Value ? checkout : checkin;
+    }
+
+    public static string NormalizePhoneSearch(string value)
+    {
+        return new string(value.Where(char.IsDigit).ToArray());
     }
 
     public async Task<IReadOnlyList<YeuCauNhanVienOption>> GetNhanVienOptionsAsync(CancellationToken cancellationToken = default)

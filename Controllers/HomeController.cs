@@ -119,8 +119,14 @@ public class HomeController(
 
     [HttpGet]
     [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-    public async Task<IActionResult> CheckinCongTrinhRequests(int? employeeId)
+    public async Task<IActionResult> CheckinCongTrinhRequests(int? employeeId, string? keyword, string? sort)
     {
+        keyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
+        if (keyword?.Length > 200)
+        {
+            keyword = keyword[..200];
+        }
+        sort = ConstructionCheckinSortCatalog.Normalize(sort);
         var currentEmployeeId = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
         var canSelectEmployees = await CanSelectChamCongEmployeesAsync(HttpContext.RequestAborted);
         var canAdminManageAttendance = await CanAdminManageChamCongAsync(HttpContext.RequestAborted);
@@ -185,6 +191,8 @@ public class HomeController(
             constructionItems = await _yeuCauService.GetConstructionCheckinRequestsAsync(
                 targetEmployeeId,
                 employeeName,
+                keyword,
+                sort,
                 limit: 100,
                 cancellationToken: HttpContext.RequestAborted);
         }
@@ -210,12 +218,14 @@ public class HomeController(
         }
 
         _logger.LogInformation(
-            "Construction checkin: requested={RequestedEmployeeId}, current={CurrentEmployeeId}, canSelect={CanSelectEmployees}, resolved={ResolvedEmployeeId}, employee={EmployeeName}, count={Count}",
+            "Construction checkin: requested={RequestedEmployeeId}, current={CurrentEmployeeId}, canSelect={CanSelectEmployees}, resolved={ResolvedEmployeeId}, employee={EmployeeName}, keyword={Keyword}, sort={Sort}, count={Count}",
             employeeId,
             currentEmployeeId,
             canSelectEmployees,
             targetEmployeeId,
             employeeName,
+            keyword,
+            sort,
             constructionItems.Count);
 
         return Json(new
