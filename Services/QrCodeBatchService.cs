@@ -11,8 +11,12 @@ public interface IQrCodeBatchService
     Task<QrCodeBatchGenerationResult> GenerateBatchAsync(QrCodeBatchRequestModel request, CancellationToken cancellationToken = default);
     string GenerateSvgMarkup(string value);
     byte[] GeneratePdfDocument(IReadOnlyList<string> values, QrCodeBatchRequestModel request);
-    byte[] Generate180LabelSheetPdfDocument(IReadOnlyList<string> values);
+    byte[] Generate180LabelSheetPdfDocument(IReadOnlyList<string> values, Qr180PrintSettings settings);
+    byte[] Generate180CalibrationPdfDocument(Qr180PrintSettings settings);
+    Qr180LayoutPosition Get180LayoutPosition(int indexWithinPage, Qr180PrintSettings settings);
 }
+
+public readonly record struct Qr180LayoutPosition(decimal LeftMm, decimal TopMm, decimal SizeMm);
 
 public sealed class QrCodeBatchService(
     IWebHostEnvironment webHostEnvironment,
@@ -21,6 +25,11 @@ public sealed class QrCodeBatchService(
     private const string Prefix = "appTech-";
     private const string Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private const int CodeLength = 9;
+    private const int Label180Columns = 10;
+    private const int Label180Rows = 18;
+    private const decimal Label180BaseLeftMm = 6m;
+    private const decimal Label180BaseTopMm = 14m;
+    private const decimal MillimeterToPoint = 72m / 25.4m;
     private static readonly SemaphoreSlim SequenceLock = new(1, 1);
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
     private readonly ILogger<QrCodeBatchService> _logger = logger;
@@ -181,9 +190,10 @@ public sealed class QrCodeBatchService(
         }
     }
 
-    public byte[] Generate180LabelSheetPdfDocument(IReadOnlyList<string> values)
+    public byte[] Generate180LabelSheetPdfDocument(IReadOnlyList<string> values, Qr180PrintSettings settings)
     {
         ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(settings);
 
         if (values.Count == 0)
         {
@@ -192,20 +202,9 @@ public sealed class QrCodeBatchService(
 
         try
         {
-            const decimal millimeterToPoint = 72m / 25.4m;
-            const int columns = 10;
-            const int rows = 18;
-            const int itemsPerPage = columns * rows;
-
-            var pageWidth = 210m * millimeterToPoint;
-            var pageHeight = 297m * millimeterToPoint;
-            var marginLeft = 6m * millimeterToPoint;
-            var marginTop = 14m * millimeterToPoint;
-            var cellWidth = 20m * millimeterToPoint;
-            var cellHeight = 15m * millimeterToPoint;
-            var qrSize = 14.5m * millimeterToPoint;
-            var qrOffsetX = (cellWidth - qrSize) / 2m;
-            var qrOffsetY = (cellHeight - qrSize) / 2m;
+            const int itemsPerPage = Label180Columns * Label180Rows;
+            var pageWidth = 210m * MillimeterToPoint;
+            var pageHeight = 297m * MillimeterToPoint;
             var pageCount = (int)Math.Ceiling(values.Count / (decimal)itemsPerPage);
 
             var contentStreams = new List<string>(pageCount);
@@ -218,18 +217,15 @@ public sealed class QrCodeBatchService(
                 for (var itemIndex = pageStart; itemIndex < pageEnd; itemIndex++)
                 {
                     var indexWithinPage = itemIndex - pageStart;
-                    var row = indexWithinPage / columns;
-                    var column = indexWithinPage % columns;
-                    var cellX = marginLeft + (column * cellWidth);
-                    var cellTopY = pageHeight - marginTop - (row * cellHeight);
+                    var position = Get180LayoutPosition(indexWithinPage, settings);
 
                     DrawQrCode(
                         pageBuilder,
                         values[itemIndex],
-                        cellX + qrOffsetX,
-                        cellTopY - qrOffsetY,
-                        qrSize,
-                        qrSize);
+                        position.LeftMm * MillimeterToPoint,
+                        pageHeight - (position.TopMm * MillimeterToPoint),
+                        position.SizeMm * MillimeterToPoint,
+                        position.SizeMm * MillimeterToPoint);
                 }
 
                 contentStreams.Add(pageBuilder.ToString());
@@ -242,6 +238,41 @@ public sealed class QrCodeBatchService(
             _logger.LogError(ex, "Failed to generate 180-label QR PDF. ValuesCount={ValuesCount}", values.Count);
             throw;
         }
+    }
+
+    public byte[] Generate180CalibrationPdfDocument(Qr180PrintSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var pageWidth = 210m * MillimeterToPoint;
+        var pageHeight = 297m * MillimeterToPoint;
+        var builder = new StringBuilder();
+
+        for (var index = 0; index < Label180Columns * Label180Rows; index++)
+        {
+            var position = Get180LayoutPosition(index, settings);
+            var centerX = (position.LeftMm + (position.SizeMm / 2m)) * MillimeterToPoint;
+            var centerY = pageHeight - ((position.TopMm + (position.SizeMm / 2m)) * MillimeterToPoint);
+            var arm = Math.Min(2.5m, position.SizeMm / 4m) * MillimeterToPoint;
+            DrawSolidLine(builder, centerX - arm, centerY, centerX + arm, centerY);
+            DrawSolidLine(builder, centerX, centerY - arm, centerX, centerY + arm);
+        }
+
+        return BuildPdfDocument([builder.ToString()], pageWidth, pageHeight);
+    }
+
+    public Qr180LayoutPosition Get180LayoutPosition(int indexWithinPage, Qr180PrintSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (indexWithinPage is < 0 or >= Label180Columns * Label180Rows)
+        {
+            throw new ArgumentOutOfRangeException(nameof(indexWithinPage));
+        }
+
+        var row = indexWithinPage / Label180Columns;
+        var column = indexWithinPage % Label180Columns;
+        var left = Label180BaseLeftMm + settings.OffsetX + (column * settings.PitchX) + ((settings.PitchX - settings.QrSize) / 2m);
+        var top = Label180BaseTopMm + settings.OffsetY + (row * settings.PitchY) + ((settings.PitchY - settings.QrSize) / 2m);
+        return new Qr180LayoutPosition(left, top, settings.QrSize);
     }
 
     private async Task<(long FirstSequence, long LastSequence)> ReserveSequenceRangeAsync(
@@ -417,6 +448,13 @@ public sealed class QrCodeBatchService(
         builder.AppendLine(FormattableString.Invariant($"{startX:0.###} {startY:0.###} m {endX:0.###} {endY:0.###} l S"));
         builder.AppendLine("[] 0 d");
         builder.AppendLine("0 G");
+    }
+
+    private static void DrawSolidLine(StringBuilder builder, decimal startX, decimal startY, decimal endX, decimal endY)
+    {
+        builder.AppendLine("0.35 w");
+        builder.AppendLine("0 G");
+        builder.AppendLine(FormattableString.Invariant($"{startX:0.###} {startY:0.###} m {endX:0.###} {endY:0.###} l S"));
     }
 
     private static byte[] BuildPdfDocument(

@@ -11,6 +11,7 @@ namespace ApptechDashboard.Controllers;
 [Authorize]
 public class QrCodeController(
     IQrCodeBatchService qrCodeBatchService,
+    IQr180PrinterProfileService qr180PrinterProfileService,
     IVatTuService vatTuService,
     ILogger<QrCodeController> logger) : Controller
 {
@@ -20,6 +21,7 @@ public class QrCodeController(
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private readonly IQrCodeBatchService _qrCodeBatchService = qrCodeBatchService;
+    private readonly IQr180PrinterProfileService _qr180PrinterProfileService = qr180PrinterProfileService;
     private readonly IVatTuService _vatTuService = vatTuService;
     private readonly ILogger<QrCodeController> _logger = logger;
 
@@ -110,14 +112,20 @@ public class QrCodeController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Print180([Bind(Prefix = "Request")] QrCodeBatchRequestModel request)
+    public async Task<IActionResult> Print180([Bind(Prefix = "Print180")] Qr180PrintRequest request)
     {
+        if (!ModelState.IsValid)
+        {
+            SetPageMetadata();
+            return View("Index", await BuildPageModelAsync(new QrCodeBatchRequestModel(), null, null, null, HttpContext.RequestAborted, request));
+        }
+
         try
         {
-            var fixedRequest = Build180LabelRequest(request.Print180Pages);
+            var fixedRequest = Build180LabelRequest(request.PageCount);
             var result = await _qrCodeBatchService.GenerateBatchAsync(fixedRequest, HttpContext.RequestAborted);
             var pdfBytes = _qrCodeBatchService.Generate180LabelSheetPdfDocument(
-                result.Items.Select(item => item.Value).ToArray());
+                result.Items.Select(item => item.Value).ToArray(), request);
 
             Response.Headers["Content-Disposition"] = $"inline; filename=\"qr-180-{fixedRequest.Quantity}-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.pdf\"";
             return File(pdfBytes, "application/pdf");
@@ -127,8 +135,39 @@ public class QrCodeController(
             _logger.LogError(ex, "Failed to generate QR 180-label print sheet from UI request.");
             ModelState.AddModelError(string.Empty, BuildDetailedQrErrorMessage(ex));
             SetPageMetadata();
-            return View("Index", await BuildPageModelAsync(request, null, null, null, HttpContext.RequestAborted));
+            return View("Index", await BuildPageModelAsync(new QrCodeBatchRequestModel(), null, null, null, HttpContext.RequestAborted, request));
         }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PrintCalibration180([Bind(Prefix = "Print180")] Qr180PrintRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            SetPageMetadata();
+            return View("Index", await BuildPageModelAsync(new QrCodeBatchRequestModel(), null, null, null, HttpContext.RequestAborted, request));
+        }
+
+        var pdfBytes = _qrCodeBatchService.Generate180CalibrationPdfDocument(request);
+        Response.Headers["Content-Disposition"] = $"inline; filename=\"qr-180-calibration-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.pdf\"";
+        return File(pdfBytes, "application/pdf");
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Save180Profile([Bind(Prefix = "Profile")] Qr180ProfileSaveRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            TempData["Qr180ProfileError"] = string.Join(" ", ModelState.Values.SelectMany(value => value.Errors).Select(error => error.ErrorMessage));
+            return RedirectToAction(nameof(Index));
+        }
+
+        var result = await _qr180PrinterProfileService.SaveAsync(request, HttpContext.RequestAborted);
+        TempData[result.Succeeded ? "Qr180ProfileSuccess" : "Qr180ProfileError"] =
+            result.Succeeded ? "Đã lưu cấu hình máy in." : result.ErrorMessage;
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpGet]
@@ -213,8 +252,7 @@ public class QrCodeController(
             Quantity = 180 * normalizedPageCount,
             QrPerRow = 10,
             QrWidth = 17,
-            QrHeight = 17,
-            Print180Pages = normalizedPageCount
+            QrHeight = 17
         };
     }
 
@@ -223,9 +261,11 @@ public class QrCodeController(
         IReadOnlyList<QrCodePrintItem>? items,
         DateTimeOffset? generatedAtUtc,
         (long FirstSequence, long LastSequence)? sequenceRange,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Qr180PrintRequest? print180 = null)
     {
         var (khoOptions, hangHoaOptions, _) = await _vatTuService.GetLookupDataAsync(cancellationToken);
+        var printerProfiles = await _qr180PrinterProfileService.GetProfilesAsync(cancellationToken);
 
         return new QrCodeBatchPageViewModel
         {
@@ -234,6 +274,8 @@ public class QrCodeController(
             GeneratedAtUtc = generatedAtUtc,
             FirstSequence = sequenceRange?.FirstSequence,
             LastSequence = sequenceRange?.LastSequence,
+            Print180 = print180 ?? new Qr180PrintRequest(),
+            PrinterProfiles = printerProfiles,
             Assignment = new QrCodeAssignmentViewModel
             {
                 KhoOptions = khoOptions,

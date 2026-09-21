@@ -6578,6 +6578,47 @@ body.report-fullscreen-open {
     min-height: 40px;
 }
 
+.qr-180-panel {
+    border-top: 4px solid #099a74;
+}
+
+.qr-180-settings-grid {
+    grid-template-columns: 160px minmax(240px, 1fr) minmax(240px, 1fr);
+    align-items: start;
+}
+
+.qr-180-calibration-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    color: #12382f;
+}
+
+.qr-180-calibration-title span {
+    color: #5c736a;
+    font-size: 0.9rem;
+}
+
+.qr-180-calibration-grid {
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    align-items: start;
+}
+
+.qr-180-calibration-grid .login-field > span:first-child {
+    min-height: 40px;
+}
+
+.qr-180-calibration-grid .login-input-shell em {
+    padding-right: 12px;
+    color: #5c736a;
+    font-size: 0.82rem;
+    font-style: normal;
+}
+
+.qr-180-print-guide {
+    margin: 0;
+}
+
 .qr-batch-sheet {
     display: flex;
     justify-content: center;
@@ -6700,6 +6741,11 @@ body.report-fullscreen-open {
 
     .qr-settings-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .qr-180-settings-grid,
+    .qr-180-calibration-grid {
+        grid-template-columns: 1fr;
     }
 
     .qr-generator-form-actions > .primary-button,

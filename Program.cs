@@ -87,6 +87,7 @@ builder.Services.AddScoped<IZaloMessageService>(provider => provider.GetRequired
 builder.Services.AddScoped<ICustomerLinkService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
 builder.Services.AddScoped<IZaloWebhookService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
 builder.Services.AddSingleton<IQrCodeBatchService, QrCodeBatchService>();
+builder.Services.AddScoped<IQr180PrinterProfileService, Qr180PrinterProfileService>();
 builder.Services.AddHostedService<ZaloTokenRefreshWorker>();
 
 var app = builder.Build();

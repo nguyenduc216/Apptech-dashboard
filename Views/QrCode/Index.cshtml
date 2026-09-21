@@ -181,14 +181,6 @@
                     </span>
                 </label>
 
-                <label class="login-field">
-                    <span>Số trang In180</span>
-                    <span class="login-input-shell">
-                        <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
-                        <input asp-for="Request.Print180Pages" type="number" min="1" max="50" inputmode="numeric" />
-                    </span>
-                    <span asp-validation-for="Request.Print180Pages" class="login-field-error"></span>
-                </label>
             </div>
 
             <div class="qr-generator-form-actions">
@@ -203,14 +195,6 @@
                     </span>
                 </button>
 
-                <button type="submit"
-                        class="secondary-button qr-print-180-button"
-                        formaction="@Url.Action("Print180", "QrCode")"
-                        formtarget="_blank"
-                        formnovalidate>
-                    <i class="fa-solid fa-print" aria-hidden="true"></i>
-                    <span>In180 theo số trang</span>
-                </button>
             </div>
         </form>
 
@@ -233,6 +217,49 @@
                 }
             </form>
         }
+    </article>
+
+    <article class="panel master-data-panel qr-generator-panel qr-screen-only qr-180-panel" data-qr180-panel>
+        <div class="panel-header"><div><h3>In tem 180 ô</h3><p>Cấu hình riêng cho giấy decal A4 gồm 10 cột × 18 dòng. Thông số QR thông thường phía trên không ảnh hưởng đến bản in này.</p></div></div>
+        @if (TempData["Qr180ProfileSuccess"] is string profileSuccess) { <div class="page-alert success">@profileSuccess</div> }
+        @if (TempData["Qr180ProfileError"] is string profileError) { <div class="page-alert error">@profileError</div> }
+
+        <form method="post" class="qr-generator-form" data-qr180-print-form>
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="page-alert error"></div>
+            <div class="account-form-grid qr-180-settings-grid">
+                <label class="login-field"><span>Số trang</span><span class="login-input-shell"><i class="fa-regular fa-file-lines"></i><input asp-for="Print180.PageCount" type="number" min="1" max="50" /></span><span asp-validation-for="Print180.PageCount" class="login-field-error"></span></label>
+                <label class="login-field"><span>Cấu hình máy in</span><span class="login-input-shell select-shell"><i class="fa-solid fa-print"></i><select asp-for="Print180.ProfileId" data-qr180-profile-select>
+                    @foreach (var profile in Model.PrinterProfiles)
+                    {
+                        <option value="@profile.Id" data-name="@profile.ProfileName" data-offset-x="@profile.OffsetX.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-offset-y="@profile.OffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-pitch-x="@profile.PitchX.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-pitch-y="@profile.PitchY.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-qr-size="@profile.QrSize.ToString(System.Globalization.CultureInfo.InvariantCulture)">@profile.ProfileName</option>
+                    }
+                    <option value="">Tạo cấu hình mới</option>
+                </select><span class="select-indicator"><i class="fa-solid fa-chevron-down"></i></span></span></label>
+                <label class="login-field"><span>Tên cấu hình</span><span class="login-input-shell"><i class="fa-solid fa-tag"></i><input type="text" maxlength="100" data-qr180-profile-name value="@(Model.PrinterProfiles.FirstOrDefault()?.ProfileName ?? "Mặc định")" /></span></label>
+            </div>
+
+            <div class="qr-180-calibration-title"><strong>Hiệu chỉnh</strong><span>Đơn vị mm, nhập theo bước 0,05.</span></div>
+            <div class="account-form-grid qr-180-calibration-grid">
+                <label class="login-field"><span>Dịch trái / phải <i class="fa-regular fa-circle-question" title="Dùng khi toàn bộ QR bị lệch sang trái hoặc phải."></i></span><span class="login-input-shell"><input asp-for="Print180.OffsetX" type="number" min="-10" max="10" step="0.05" data-qr180-value="offsetX" /><em>mm</em></span><span asp-validation-for="Print180.OffsetX" class="login-field-error"></span></label>
+                <label class="login-field"><span>Dịch lên / xuống <i class="fa-regular fa-circle-question" title="Số âm dịch lên trên; số dương dịch xuống dưới."></i></span><span class="login-input-shell"><input asp-for="Print180.OffsetY" type="number" min="-10" max="10" step="0.05" data-qr180-value="offsetY" /><em>mm</em></span><span asp-validation-for="Print180.OffsetY" class="login-field-error"></span></label>
+                <label class="login-field"><span>Bước ngang <i class="fa-regular fa-circle-question" title="Dùng khi cột đầu đúng nhưng các cột cuối lệch dần."></i></span><span class="login-input-shell"><input asp-for="Print180.PitchX" type="number" min="18" max="22" step="0.05" data-qr180-value="pitchX" /><em>mm</em></span><span asp-validation-for="Print180.PitchX" class="login-field-error"></span></label>
+                <label class="login-field"><span>Bước dọc <i class="fa-regular fa-circle-question" title="Dùng khi dòng đầu đúng nhưng các dòng cuối lệch dần."></i></span><span class="login-input-shell"><input asp-for="Print180.PitchY" type="number" min="13" max="17" step="0.05" data-qr180-value="pitchY" /><em>mm</em></span><span asp-validation-for="Print180.PitchY" class="login-field-error"></span></label>
+                <label class="login-field"><span>Kích thước QR <i class="fa-regular fa-circle-question" title="Điều chỉnh kích thước mã QR trong từng tem."></i></span><span class="login-input-shell"><input asp-for="Print180.QrSize" type="number" min="10" max="18" step="0.05" data-qr180-value="qrSize" /><em>mm</em></span><span asp-validation-for="Print180.QrSize" class="login-field-error"></span></label>
+            </div>
+            <div class="page-alert info qr-180-print-guide"><i class="fa-solid fa-circle-info"></i><div><strong>Khi in:</strong> chọn A4, Portrait, Scale 100% / Actual size; không chọn Fit to page hoặc Shrink oversized pages.</div></div>
+            <div class="qr-generator-form-actions">
+                <button type="submit" class="secondary-button" formaction="@Url.Action("PrintCalibration180", "QrCode")" formtarget="_blank"><i class="fa-solid fa-crosshairs"></i><span>In thử căn chỉnh</span></button>
+                <button type="button" class="secondary-button" data-qr180-save><i class="fa-regular fa-floppy-disk"></i><span>Lưu cấu hình</span></button>
+                <button type="submit" class="primary-button" formaction="@Url.Action("Print180", "QrCode")" formtarget="_blank"><span class="button-content"><i class="fa-solid fa-print"></i><span>In 180 QR</span></span></button>
+            </div>
+        </form>
+        <form method="post" asp-action="Save180Profile" hidden data-qr180-save-form>
+            @Html.AntiForgeryToken()
+            <input name="Profile.Id" data-save-field="id" /><input name="Profile.ProfileName" data-save-field="name" />
+            <input name="Profile.OffsetX" data-save-field="offsetX" /><input name="Profile.OffsetY" data-save-field="offsetY" />
+            <input name="Profile.PitchX" data-save-field="pitchX" /><input name="Profile.PitchY" data-save-field="pitchY" /><input name="Profile.QrSize" data-save-field="qrSize" />
+        </form>
     </article>
 
     @if (Model.HasGeneratedItems)
@@ -492,3 +519,27 @@
         </div>
     </section>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const panel = document.querySelector("[data-qr180-panel]");
+    if (!panel) return;
+    const select = panel.querySelector("[data-qr180-profile-select]");
+    const profileName = panel.querySelector("[data-qr180-profile-name]");
+    const values = Object.fromEntries([...panel.querySelectorAll("[data-qr180-value]")].map(input => [input.dataset.qr180Value, input]));
+    const applyProfile = () => {
+        const option = select.options[select.selectedIndex];
+        if (!option || !option.value) { profileName.value = ""; return; }
+        profileName.value = option.dataset.name || option.textContent.trim();
+        for (const key of Object.keys(values)) values[key].value = option.dataset[key] || values[key].value;
+    };
+    select.addEventListener("change", applyProfile);
+    panel.querySelector("[data-qr180-save]").addEventListener("click", () => {
+        const form = panel.querySelector("[data-qr180-save-form]");
+        form.querySelector('[data-save-field="id"]').value = select.value;
+        form.querySelector('[data-save-field="name"]').value = profileName.value.trim();
+        for (const key of Object.keys(values)) form.querySelector(`[data-save-field="${key}"]`).value = values[key].value;
+        form.submit();
+    });
+});
+</script>
