@@ -189,14 +189,7 @@
                         var hasPurchaseCheckin = group.Any(item => string.Equals(item.AttendanceType, "MuaHang", StringComparison.OrdinalIgnoreCase));
                         var employeeName = firstItem.HoTenNhanVien ?? "Nhân viên";
                         var eventItems = group
-                            .SelectMany(item => item.IsPurchase || item.IsQuickPurchase
-                                ? new[] { new { Item = item, IsCheckout = false, EventTime = item.ThoiDiem, ImagePath = item.ImgPath, IsViolation = item.IsCheckinViolation } }
-                                : new[]
-                                {
-                                    new { Item = item, IsCheckout = false, EventTime = item.ThoiDiem, ImagePath = item.ImgPath, IsViolation = item.IsCheckinViolation },
-                                    new { Item = item, IsCheckout = true, EventTime = item.ThoiDiemCheckOut, ImagePath = item.ImgPathCheckOut, IsViolation = item.IsCheckoutViolation }
-                                })
-                            .Where(entry => entry.EventTime.HasValue)
+                            .SelectMany(ChamCongTimelineEventFactory.Build)
                             .OrderBy(entry => entry.EventTime)
                             .ThenBy(entry => entry.Item.Id)
                             .ThenBy(entry => entry.IsCheckout ? 1 : 0)
@@ -257,7 +250,7 @@
                                             }
                                         </div>
                                         <div class="cham-cong-entry-content">
-                                            <strong><i class="fa-solid @eventIcon cham-cong-entry-time-icon" title="@eventActionLabel" aria-label="@eventActionLabel"></i>@entry.EventTime?.ToString("dd/MM/yyyy HH:mm")</strong>
+                                            <strong><i class="fa-solid @eventIcon cham-cong-entry-time-icon" title="@eventActionLabel" aria-label="@eventActionLabel"></i>@entry.EventTime.ToString("dd/MM/yyyy HH:mm")</strong>
                                             @if (isCustomerCheckin && item.IDYeuCau.HasValue)
                                             {
                                                 var works = (item.DanhSachCongViec ?? string.Empty)
@@ -2276,7 +2269,7 @@
                         if (item.thoiDiem) {
                             events.push({ item, isCheckout: false, sort: buildEventSortKey(item.thoiDiem), timeText: item.thoiDiem || item.checkinTime });
                         }
-                        if (item.thoiDiemCheckOut && !item.isQuickPurchase && !(item.attendanceType === "MuaHang" || item.isPurchase === true)) {
+                        if (item.thoiDiemCheckOut && !item.isQuickPurchase) {
                             events.push({ item, isCheckout: true, sort: buildEventSortKey(item.thoiDiemCheckOut), timeText: item.thoiDiemCheckOut || item.checkoutTime });
                         }
                     });

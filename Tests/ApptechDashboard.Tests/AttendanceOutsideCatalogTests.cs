@@ -141,4 +141,45 @@ public sealed class AttendanceOutsideCatalogTests
 
         Assert.Equal("Công ty ABC", history.DisplayDescription);
     }
+
+    [Theory]
+    [InlineData("MuaHang", null)]
+    [InlineData(null, 12)]
+    [InlineData(null, null)]
+    public void NormalAttendanceWithCheckout_GeneratesCheckinAndCheckoutEvents(string? checkInType, int? requestId)
+    {
+        var history = new ChamCongHistoryItem
+        {
+            CheckInType = checkInType,
+            IDYeuCau = requestId,
+            ThoiDiem = new DateTime(2026, 9, 21, 14, 3, 0),
+            ThoiDiemCheckOut = new DateTime(2026, 9, 21, 17, 30, 0)
+        };
+
+        var events = ChamCongTimelineEventFactory.Build(history);
+
+        Assert.Equal(2, events.Count);
+        Assert.False(events[0].IsCheckout);
+        Assert.True(events[1].IsCheckout);
+    }
+
+    [Fact]
+    public void QuickOutsideAttendance_GeneratesOneCombinedEvent()
+    {
+        var timestamp = new DateTime(2026, 9, 21, 14, 3, 0);
+        var history = new ChamCongHistoryItem
+        {
+            CheckInType = "MuaHang",
+            ThoiDiem = timestamp,
+            ThoiDiemCheckOut = timestamp,
+            ImgPath = "/quick.jpg",
+            ImgPathCheckOut = "/quick.jpg"
+        };
+
+        var events = ChamCongTimelineEventFactory.Build(history);
+
+        var combined = Assert.Single(events);
+        Assert.False(combined.IsCheckout);
+        Assert.True(history.IsQuickPurchase);
+    }
 }

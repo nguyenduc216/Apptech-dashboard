@@ -220,6 +220,39 @@ public sealed class ChamCongHistoryItem
     }
 }
 
+public sealed record ChamCongTimelineEvent(
+    ChamCongHistoryItem Item,
+    bool IsCheckout,
+    DateTime EventTime,
+    string? ImagePath,
+    bool IsViolation);
+
+public static class ChamCongTimelineEventFactory
+{
+    public static IReadOnlyList<ChamCongTimelineEvent> Build(ChamCongHistoryItem item)
+    {
+        if (item.IsQuickPurchase)
+        {
+            return item.ThoiDiem.HasValue
+                ? [new(item, false, item.ThoiDiem.Value, item.ImgPath, item.IsCheckinViolation)]
+                : [];
+        }
+
+        var events = new List<ChamCongTimelineEvent>(2);
+        if (item.ThoiDiem.HasValue)
+        {
+            events.Add(new(item, false, item.ThoiDiem.Value, item.ImgPath, item.IsCheckinViolation));
+        }
+
+        if (item.ThoiDiemCheckOut.HasValue)
+        {
+            events.Add(new(item, true, item.ThoiDiemCheckOut.Value, item.ImgPathCheckOut, item.IsCheckoutViolation));
+        }
+
+        return events;
+    }
+}
+
 public sealed class ChamCongCheckinRequest
 {
     public int? IDNhanVien { get; set; }
