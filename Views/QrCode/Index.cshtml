@@ -10,6 +10,9 @@
     var marginBottomHasError = ViewData.ModelState.TryGetValue("Request.MarginBottom", out var marginBottomState) && marginBottomState.Errors.Count > 0;
     var qrColumns = Math.Max(1, Model.Request.QrPerRow);
     var totalItems = Model.Items.Count;
+    var activePrinterProfile = Model.PrinterProfiles.FirstOrDefault(profile => profile.Id == Model.Print180.ProfileId)
+        ?? Model.PrinterProfiles.FirstOrDefault(profile => profile.IsDefault)
+        ?? Model.PrinterProfiles.FirstOrDefault();
     var qrStatusOptions = new[]
     {
         new { Value = QrCodeAssignmentQrStatus.MissingQr, Label = "Chưa có QR" }
@@ -232,11 +235,11 @@
                 <label class="login-field"><span>Cấu hình máy in</span><span class="login-input-shell select-shell"><i class="fa-solid fa-print"></i><select asp-for="Print180.ProfileId" data-qr180-profile-select>
                     @foreach (var profile in Model.PrinterProfiles)
                     {
-                        <option value="@profile.Id" data-name="@profile.ProfileName" data-offset-x="@profile.OffsetX.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-offset-y="@profile.OffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-pitch-x="@profile.PitchX.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-pitch-y="@profile.PitchY.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-qr-size="@profile.QrSize.ToString(System.Globalization.CultureInfo.InvariantCulture)">@profile.ProfileName</option>
+                        <option value="@profile.Id" data-name="@profile.ProfileName" data-is-default="@profile.IsDefault.ToString().ToLowerInvariant()" data-offset-x="@profile.OffsetX.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-offset-y="@profile.OffsetY.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-pitch-x="@profile.PitchX.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-pitch-y="@profile.PitchY.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-qr-size="@profile.QrSize.ToString(System.Globalization.CultureInfo.InvariantCulture)">@profile.ProfileName</option>
                     }
                     <option value="">Tạo cấu hình mới</option>
                 </select><span class="select-indicator"><i class="fa-solid fa-chevron-down"></i></span></span></label>
-                <label class="login-field"><span>Tên cấu hình</span><span class="login-input-shell"><i class="fa-solid fa-tag"></i><input type="text" maxlength="100" data-qr180-profile-name value="@(Model.PrinterProfiles.FirstOrDefault()?.ProfileName ?? "Mặc định")" /></span></label>
+                <label class="login-field"><span>Tên cấu hình <small data-qr180-default-badge>Cấu hình gốc</small></span><span class="login-input-shell"><i class="fa-solid fa-tag"></i><input type="text" maxlength="100" data-qr180-profile-name value="@(activePrinterProfile?.ProfileName ?? "Mặc định")" /></span><span class="qr-180-profile-hint" data-qr180-profile-hint>Profile Mặc định không thể ghi đè; hãy nhập tên khác để lưu bản hiệu chỉnh.</span></label>
             </div>
 
             <div class="qr-180-calibration-title"><strong>Hiệu chỉnh</strong><span>Đơn vị mm, nhập theo bước 0,05.</span></div>
@@ -250,7 +253,7 @@
             <div class="page-alert info qr-180-print-guide"><i class="fa-solid fa-circle-info"></i><div><strong>Khi in:</strong> chọn A4, Portrait, Scale 100% / Actual size; không chọn Fit to page hoặc Shrink oversized pages.</div></div>
             <div class="qr-generator-form-actions">
                 <button type="submit" class="secondary-button" formaction="@Url.Action("PrintCalibration180", "QrCode")" formtarget="_blank"><i class="fa-solid fa-crosshairs"></i><span>In thử căn chỉnh</span></button>
-                <button type="button" class="secondary-button" data-qr180-save><i class="fa-regular fa-floppy-disk"></i><span>Lưu cấu hình</span></button>
+                <button type="button" class="secondary-button" data-qr180-save><i class="fa-regular fa-floppy-disk"></i><span data-qr180-save-label>Lưu cấu hình</span></button>
                 <button type="submit" class="primary-button" formaction="@Url.Action("Print180", "QrCode")" formtarget="_blank"><span class="button-content"><i class="fa-solid fa-print"></i><span>In 180 QR</span></span></button>
             </div>
         </form>
@@ -526,17 +529,30 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!panel) return;
     const select = panel.querySelector("[data-qr180-profile-select]");
     const profileName = panel.querySelector("[data-qr180-profile-name]");
+    const saveLabel = panel.querySelector("[data-qr180-save-label]");
+    const defaultBadge = panel.querySelector("[data-qr180-default-badge]");
+    const profileHint = panel.querySelector("[data-qr180-profile-hint]");
     const values = Object.fromEntries([...panel.querySelectorAll("[data-qr180-value]")].map(input => [input.dataset.qr180Value, input]));
+    const syncProfileMode = () => {
+        const option = select.options[select.selectedIndex];
+        const isDefault = option?.dataset.isDefault === "true";
+        saveLabel.textContent = isDefault ? "Lưu thành cấu hình mới" : "Lưu cấu hình";
+        defaultBadge.hidden = !isDefault;
+        profileHint.hidden = !isDefault;
+    };
     const applyProfile = () => {
         const option = select.options[select.selectedIndex];
-        if (!option || !option.value) { profileName.value = ""; return; }
+        if (!option || !option.value) { profileName.value = ""; syncProfileMode(); return; }
         profileName.value = option.dataset.name || option.textContent.trim();
         for (const key of Object.keys(values)) values[key].value = option.dataset[key] || values[key].value;
+        syncProfileMode();
     };
     select.addEventListener("change", applyProfile);
+    syncProfileMode();
     panel.querySelector("[data-qr180-save]").addEventListener("click", () => {
         const form = panel.querySelector("[data-qr180-save-form]");
-        form.querySelector('[data-save-field="id"]').value = select.value;
+        const option = select.options[select.selectedIndex];
+        form.querySelector('[data-save-field="id"]').value = option?.dataset.isDefault === "true" ? "" : select.value;
         form.querySelector('[data-save-field="name"]').value = profileName.value.trim();
         for (const key of Object.keys(values)) form.querySelector(`[data-save-field="${key}"]`).value = values[key].value;
         form.submit();

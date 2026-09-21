@@ -6599,6 +6599,28 @@ body.report-fullscreen-open {
     font-size: 0.9rem;
 }
 
+.qr-180-settings-grid small[data-qr180-default-badge] {
+    display: inline-flex;
+    margin-left: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(9, 154, 116, 0.12);
+    color: #0d6a52;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.qr-180-settings-grid small[data-qr180-default-badge][hidden],
+.qr-180-profile-hint[hidden] {
+    display: none;
+}
+
+.qr-180-profile-hint {
+    color: #5c736a;
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
 .qr-180-calibration-grid {
     grid-template-columns: repeat(5, minmax(150px, 1fr));
     align-items: start;

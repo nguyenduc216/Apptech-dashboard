@@ -12,6 +12,14 @@ public interface IQr180PrinterProfileService
     Task<(bool Succeeded, string? ErrorMessage, int? ProfileId)> SaveAsync(Qr180ProfileSaveRequest request, CancellationToken cancellationToken = default);
 }
 
+public enum Qr180ProfileSaveMode
+{
+    Insert,
+    Update
+}
+
+public readonly record struct Qr180ProfileSaveDecision(Qr180ProfileSaveMode Mode, int? ProfileId);
+
 public sealed class Qr180PrinterProfileService(
     IOptions<SqlServerOptions> sqlOptions,
     IConfiguration configuration,
@@ -62,29 +70,34 @@ public sealed class Qr180PrinterProfileService(
         Qr180ProfileSaveRequest request,
         CancellationToken cancellationToken = default)
     {
+        var normalizedName = request.ProfileName.Trim();
+        if (string.Equals(normalizedName, "Mặc định", StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, "Tên \"Mặc định\" được dành cho cấu hình hệ thống. Vui lòng đặt tên khác.", null);
+        }
+
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await EnsureSchemaAsync(connection, cancellationToken);
+            var target = await GetProfileSaveTargetAsync(connection, request.Id, cancellationToken);
+            var decision = DecideSave(request.Id, target.Exists, target.IsDefault);
             await using var command = connection.CreateCommand();
-            command.CommandText = $"""
-                IF @Id IS NOT NULL AND EXISTS (SELECT 1 FROM [dbo].[{TableName}] WHERE Id = @Id AND IsDefault = 0)
-                BEGIN
+            command.CommandText = decision.Mode == Qr180ProfileSaveMode.Update
+                ? $"""
                     UPDATE [dbo].[{TableName}]
                     SET ProfileName = @ProfileName, OffsetX = @OffsetX, OffsetY = @OffsetY,
                         PitchX = @PitchX, PitchY = @PitchY, QrSize = @QrSize, UpdatedAt = SYSUTCDATETIME()
                     WHERE Id = @Id;
                     SELECT CAST(@Id AS int);
-                END
-                ELSE
-                BEGIN
+                  """
+                : $"""
                     INSERT INTO [dbo].[{TableName}] (ProfileName, OffsetX, OffsetY, PitchX, PitchY, QrSize, IsDefault)
                     VALUES (@ProfileName, @OffsetX, @OffsetY, @PitchX, @PitchY, @QrSize, 0);
                     SELECT CAST(SCOPE_IDENTITY() AS int);
-                END
-                """;
-            command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = request.Id is > 0 ? request.Id.Value : DBNull.Value });
-            command.Parameters.Add(new SqlParameter("@ProfileName", SqlDbType.NVarChar, 100) { Value = request.ProfileName.Trim() });
+                  """;
+            command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = decision.ProfileId is > 0 ? decision.ProfileId.Value : DBNull.Value });
+            command.Parameters.Add(new SqlParameter("@ProfileName", SqlDbType.NVarChar, 100) { Value = normalizedName });
             AddDecimal(command, "@OffsetX", request.OffsetX);
             AddDecimal(command, "@OffsetY", request.OffsetY);
             AddDecimal(command, "@PitchX", request.PitchX);
@@ -102,6 +115,28 @@ public sealed class Qr180PrinterProfileService(
             _logger.LogError(ex, "Failed to save QR 180 printer profile.");
             return (false, "Không thể lưu cấu hình máy in lúc này.", null);
         }
+    }
+
+    public static Qr180ProfileSaveDecision DecideSave(int? requestedId, bool profileExists, bool isDefault) =>
+        requestedId is > 0 && profileExists && !isDefault
+            ? new Qr180ProfileSaveDecision(Qr180ProfileSaveMode.Update, requestedId)
+            : new Qr180ProfileSaveDecision(Qr180ProfileSaveMode.Insert, null);
+
+    private static async Task<(bool Exists, bool IsDefault)> GetProfileSaveTargetAsync(
+        SqlConnection connection,
+        int? profileId,
+        CancellationToken cancellationToken)
+    {
+        if (profileId is not > 0)
+        {
+            return (false, false);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT IsDefault FROM [dbo].[{TableName}] WHERE Id = @Id";
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = profileId.Value });
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is null or DBNull ? (false, false) : (true, Convert.ToBoolean(result));
     }
 
     private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)

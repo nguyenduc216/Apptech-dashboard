@@ -26,10 +26,12 @@ public class QrCodeController(
     private readonly ILogger<QrCodeController> _logger = logger;
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index([FromQuery] int? printerProfileId = null)
     {
         SetPageMetadata();
-        return View(await BuildPageModelAsync(new QrCodeBatchRequestModel(), null, null, null, HttpContext.RequestAborted));
+        return View(await BuildPageModelAsync(
+            new QrCodeBatchRequestModel(), null, null, null, HttpContext.RequestAborted,
+            selectedPrinterProfileId: printerProfileId));
     }
 
     [HttpPost]
@@ -167,7 +169,7 @@ public class QrCodeController(
         var result = await _qr180PrinterProfileService.SaveAsync(request, HttpContext.RequestAborted);
         TempData[result.Succeeded ? "Qr180ProfileSuccess" : "Qr180ProfileError"] =
             result.Succeeded ? "Đã lưu cấu hình máy in." : result.ErrorMessage;
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { printerProfileId = result.Succeeded ? result.ProfileId : request.Id });
     }
 
     [HttpGet]
@@ -262,10 +264,13 @@ public class QrCodeController(
         DateTimeOffset? generatedAtUtc,
         (long FirstSequence, long LastSequence)? sequenceRange,
         CancellationToken cancellationToken,
-        Qr180PrintRequest? print180 = null)
+        Qr180PrintRequest? print180 = null,
+        int? selectedPrinterProfileId = null)
     {
         var (khoOptions, hangHoaOptions, _) = await _vatTuService.GetLookupDataAsync(cancellationToken);
         var printerProfiles = await _qr180PrinterProfileService.GetProfilesAsync(cancellationToken);
+
+        var resolvedPrint180 = ResolvePrint180Request(print180, printerProfiles, selectedPrinterProfileId);
 
         return new QrCodeBatchPageViewModel
         {
@@ -274,13 +279,44 @@ public class QrCodeController(
             GeneratedAtUtc = generatedAtUtc,
             FirstSequence = sequenceRange?.FirstSequence,
             LastSequence = sequenceRange?.LastSequence,
-            Print180 = print180 ?? new Qr180PrintRequest(),
+            Print180 = resolvedPrint180,
             PrinterProfiles = printerProfiles,
             Assignment = new QrCodeAssignmentViewModel
             {
                 KhoOptions = khoOptions,
                 HangHoaOptions = hangHoaOptions
             }
+        };
+    }
+
+    public static Qr180PrintRequest ResolvePrint180Request(
+        Qr180PrintRequest? current,
+        IReadOnlyList<Qr180PrinterProfile> profiles,
+        int? selectedProfileId)
+    {
+        if (selectedProfileId is not > 0 && current is not null)
+        {
+            return current;
+        }
+
+        var selected = selectedProfileId is > 0
+            ? profiles.FirstOrDefault(profile => profile.Id == selectedProfileId.Value)
+            : null;
+        selected ??= profiles.FirstOrDefault(profile => profile.IsDefault) ?? profiles.FirstOrDefault();
+        if (selected is null)
+        {
+            return current ?? new Qr180PrintRequest();
+        }
+
+        return new Qr180PrintRequest
+        {
+            PageCount = current?.PageCount ?? 1,
+            ProfileId = selected.Id,
+            OffsetX = selected.OffsetX,
+            OffsetY = selected.OffsetY,
+            PitchX = selected.PitchX,
+            PitchY = selected.PitchY,
+            QrSize = selected.QrSize
         };
     }
 

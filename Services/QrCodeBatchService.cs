@@ -14,9 +14,11 @@ public interface IQrCodeBatchService
     byte[] Generate180LabelSheetPdfDocument(IReadOnlyList<string> values, Qr180PrintSettings settings);
     byte[] Generate180CalibrationPdfDocument(Qr180PrintSettings settings);
     Qr180LayoutPosition Get180LayoutPosition(int indexWithinPage, Qr180PrintSettings settings);
+    IReadOnlyList<Qr180PageItemPlacement> Get180PagePlacements(IReadOnlyList<string> values, Qr180PrintSettings settings);
 }
 
 public readonly record struct Qr180LayoutPosition(decimal LeftMm, decimal TopMm, decimal SizeMm);
+public readonly record struct Qr180PageItemPlacement(int PageIndex, int IndexWithinPage, int ValueIndex, string Value, Qr180LayoutPosition Position);
 
 public sealed class QrCodeBatchService(
     IWebHostEnvironment webHostEnvironment,
@@ -205,27 +207,22 @@ public sealed class QrCodeBatchService(
             const int itemsPerPage = Label180Columns * Label180Rows;
             var pageWidth = 210m * MillimeterToPoint;
             var pageHeight = 297m * MillimeterToPoint;
+            var placements = Get180PagePlacements(values, settings);
             var pageCount = (int)Math.Ceiling(values.Count / (decimal)itemsPerPage);
 
             var contentStreams = new List<string>(pageCount);
             for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
             {
                 var pageBuilder = new StringBuilder();
-                var pageStart = pageIndex * itemsPerPage;
-                var pageEnd = Math.Min(pageStart + itemsPerPage, values.Count);
-
-                for (var itemIndex = pageStart; itemIndex < pageEnd; itemIndex++)
+                foreach (var placement in placements.Where(item => item.PageIndex == pageIndex))
                 {
-                    var indexWithinPage = itemIndex - pageStart;
-                    var position = Get180LayoutPosition(indexWithinPage, settings);
-
                     DrawQrCode(
                         pageBuilder,
-                        values[itemIndex],
-                        position.LeftMm * MillimeterToPoint,
-                        pageHeight - (position.TopMm * MillimeterToPoint),
-                        position.SizeMm * MillimeterToPoint,
-                        position.SizeMm * MillimeterToPoint);
+                        placement.Value,
+                        placement.Position.LeftMm * MillimeterToPoint,
+                        pageHeight - (placement.Position.TopMm * MillimeterToPoint),
+                        placement.Position.SizeMm * MillimeterToPoint,
+                        placement.Position.SizeMm * MillimeterToPoint);
                 }
 
                 contentStreams.Add(pageBuilder.ToString());
@@ -253,6 +250,12 @@ public sealed class QrCodeBatchService(
             var centerX = (position.LeftMm + (position.SizeMm / 2m)) * MillimeterToPoint;
             var centerY = pageHeight - ((position.TopMm + (position.SizeMm / 2m)) * MillimeterToPoint);
             var arm = Math.Min(2.5m, position.SizeMm / 4m) * MillimeterToPoint;
+            DrawRectangle(
+                builder,
+                position.LeftMm * MillimeterToPoint,
+                pageHeight - ((position.TopMm + position.SizeMm) * MillimeterToPoint),
+                position.SizeMm * MillimeterToPoint,
+                position.SizeMm * MillimeterToPoint);
             DrawSolidLine(builder, centerX - arm, centerY, centerX + arm, centerY);
             DrawSolidLine(builder, centerX, centerY - arm, centerX, centerY + arm);
         }
@@ -273,6 +276,29 @@ public sealed class QrCodeBatchService(
         var left = Label180BaseLeftMm + settings.OffsetX + (column * settings.PitchX) + ((settings.PitchX - settings.QrSize) / 2m);
         var top = Label180BaseTopMm + settings.OffsetY + (row * settings.PitchY) + ((settings.PitchY - settings.QrSize) / 2m);
         return new Qr180LayoutPosition(left, top, settings.QrSize);
+    }
+
+    public IReadOnlyList<Qr180PageItemPlacement> Get180PagePlacements(
+        IReadOnlyList<string> values,
+        Qr180PrintSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(settings);
+        const int itemsPerPage = Label180Columns * Label180Rows;
+        var placements = new List<Qr180PageItemPlacement>(values.Count);
+        for (var valueIndex = 0; valueIndex < values.Count; valueIndex++)
+        {
+            var pageIndex = valueIndex / itemsPerPage;
+            var indexWithinPage = valueIndex % itemsPerPage;
+            placements.Add(new Qr180PageItemPlacement(
+                pageIndex,
+                indexWithinPage,
+                valueIndex,
+                values[valueIndex],
+                Get180LayoutPosition(indexWithinPage, settings)));
+        }
+
+        return placements;
     }
 
     private async Task<(long FirstSequence, long LastSequence)> ReserveSequenceRangeAsync(
@@ -455,6 +481,14 @@ public sealed class QrCodeBatchService(
         builder.AppendLine("0.35 w");
         builder.AppendLine("0 G");
         builder.AppendLine(FormattableString.Invariant($"{startX:0.###} {startY:0.###} m {endX:0.###} {endY:0.###} l S"));
+    }
+
+    private static void DrawRectangle(StringBuilder builder, decimal left, decimal bottom, decimal width, decimal height)
+    {
+        builder.AppendLine("0.25 w");
+        builder.AppendLine("0.65 G");
+        builder.AppendLine(FormattableString.Invariant($"{left:0.###} {bottom:0.###} {width:0.###} {height:0.###} re S"));
+        builder.AppendLine("0 G");
     }
 
     private static byte[] BuildPdfDocument(

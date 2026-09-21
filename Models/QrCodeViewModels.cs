@@ -97,13 +97,28 @@ public sealed class Qr180PrinterProfile : Qr180PrintSettings
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
-public sealed class Qr180ProfileSaveRequest : Qr180PrintSettings
+public sealed class Qr180ProfileSaveRequest : Qr180PrintSettings, IValidatableObject
 {
     public int? Id { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập tên cấu hình máy in.")]
     [StringLength(100, ErrorMessage = "Tên cấu hình tối đa 100 ký tự.")]
     public string ProfileName { get; set; } = string.Empty;
+
+    IEnumerable<ValidationResult> IValidatableObject.Validate(ValidationContext validationContext)
+    {
+        foreach (var result in base.Validate(validationContext))
+        {
+            yield return result;
+        }
+
+        if (string.Equals(ProfileName.Trim(), "Mặc định", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return new ValidationResult(
+                "Tên \"Mặc định\" được dành cho cấu hình hệ thống. Vui lòng đặt tên khác.",
+                [nameof(ProfileName)]);
+        }
+    }
 }
 
 public sealed class QrCodePrintItem
