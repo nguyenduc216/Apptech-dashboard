@@ -2730,69 +2730,6 @@
                 }
             };
 
-            const waitForCheckinVideoFrame = async () => {
-                if (!(checkinVideo instanceof HTMLVideoElement)) {
-                    return false;
-                }
-
-                if (checkinVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
-                    checkinVideo.videoWidth <= 0 ||
-                    checkinVideo.videoHeight <= 0) {
-                    await new Promise((resolve, reject) => {
-                        const timeout = window.setTimeout(() => {
-                            cleanup();
-                            reject(new Error("Camera frame timeout."));
-                        }, 5000);
-                        const cleanup = () => {
-                            window.clearTimeout(timeout);
-                            checkinVideo.removeEventListener("loadedmetadata", handleReady);
-                            checkinVideo.removeEventListener("canplay", handleReady);
-                        };
-                        const handleReady = () => {
-                            if (checkinVideo.videoWidth > 0 && checkinVideo.videoHeight > 0) {
-                                cleanup();
-                                resolve();
-                            }
-                        };
-
-                        checkinVideo.addEventListener("loadedmetadata", handleReady);
-                        checkinVideo.addEventListener("canplay", handleReady);
-                        handleReady();
-                    });
-                }
-
-                await new Promise((resolve) => {
-                    if (typeof checkinVideo.requestVideoFrameCallback === "function") {
-                        checkinVideo.requestVideoFrameCallback(() => resolve());
-                    } else {
-                        window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
-                    }
-                });
-
-                return checkinVideo.videoWidth > 0 && checkinVideo.videoHeight > 0;
-            };
-
-            const isCanvasFrameTooDark = (context, width, height) => {
-                const sampleWidth = Math.min(80, width);
-                const sampleHeight = Math.min(60, height);
-                const startX = Math.max(0, Math.floor((width - sampleWidth) / 2));
-                const startY = Math.max(0, Math.floor((height - sampleHeight) / 2));
-                const imageData = context.getImageData(startX, startY, sampleWidth, sampleHeight).data;
-                let totalBrightness = 0;
-                let brightPixels = 0;
-                const totalPixels = sampleWidth * sampleHeight;
-
-                for (let index = 0; index < imageData.length; index += 4) {
-                    const brightness = (imageData[index] + imageData[index + 1] + imageData[index + 2]) / 3;
-                    totalBrightness += brightness;
-                    if (brightness > 24) {
-                        brightPixels++;
-                    }
-                }
-
-                return (totalBrightness / totalPixels) < 10 || brightPixels / totalPixels < 0.02;
-            };
-
             const drawCurrentCheckinFrame = async (context) => {
                 if (!(checkinVideo instanceof HTMLVideoElement)) {
                     return null;
@@ -2955,10 +2892,6 @@
                 }
             };
 
-            const buildCameraConstraints = (cameraId) => cameraId
-                ? { deviceId: { exact: cameraId } }
-                : { facingMode: { ideal: "environment" } };
-
             const startCheckinCamera = async () => {
                 if (!(checkinVideo instanceof HTMLVideoElement) || !navigator.mediaDevices?.getUserMedia) {
                     setCheckinStatus("\u0054\u0072\u00ec\u006e\u0068 \u0064\u0075\u0079\u1ec7\u0074 \u006b\u0068\u00f4\u006e\u0067 \u0068\u1ed7 \u0074\u0072\u1ee3 \u0063\u0061\u006d\u0065\u0072\u0061.", "error");
@@ -2969,20 +2902,15 @@
                 if (checkinCaptureButton instanceof HTMLButtonElement) {
                     checkinCaptureButton.disabled = true;
                 }
-                checkinStream = await navigator.mediaDevices.getUserMedia({
-                    video: buildCameraConstraints(selectedCheckinCameraId),
-                    audio: false
-                });
-                checkinVideo.srcObject = checkinStream;
-                checkinVideo.hidden = false;
+                setCheckinStatus("Đang ổn định ánh sáng và lấy nét camera...", "info");
                 if (checkinPreview instanceof HTMLImageElement) {
                     checkinPreview.hidden = true;
                 }
-                await checkinVideo.play();
-                await waitForCheckinVideoFrame();
+                checkinStream = await window.ApptechCamera.openCamera(checkinVideo, selectedCheckinCameraId, 1200);
                 if (checkinCaptureButton instanceof HTMLButtonElement) {
                     checkinCaptureButton.disabled = false;
                 }
+                setCheckinStatus("Camera đã sẵn sàng.", "success");
                 await loadCameraDevices();
             };
 
@@ -3433,9 +3361,24 @@
                     const context = checkinCanvas.getContext("2d");
                     if (context) {
                         const frame = await drawCurrentCheckinFrame(context);
-                        if (frame && !isCanvasFrameTooDark(context, frame.width, frame.height)) {
+                        if (frame) {
                             checkinImageBlob = await new Promise((resolve) => checkinCanvas.toBlob(resolve, "image/jpeg", 0.88));
                         }
+                    }
+                }
+
+                if (checkinImageBlob) {
+                    const brightness = await window.ApptechCamera.analyzeBrightness(checkinImageBlob);
+                    if (brightness.isUnderexposed) {
+                        checkinImageBlob = null;
+                        setCheckinStatus("Ảnh đang thiếu sáng hoặc ngược sáng. Vui lòng đổi hướng hoặc di chuyển tới nơi đủ sáng và chụp lại.", "warning");
+                        if (checkinStamp instanceof HTMLElement) {
+                            checkinStamp.hidden = true;
+                        }
+                        if (checkinCameraShell instanceof HTMLElement) {
+                            checkinCameraShell.classList.remove("is-captured");
+                        }
+                        return;
                     }
                 }
 
@@ -4425,13 +4368,15 @@
                 }
 
                 stopWorkCamera();
-                workCameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: buildCameraConstraints(selectedWorkCameraId),
-                    audio: false
-                });
-                workCameraVideo.srcObject = workCameraStream;
-                workCameraVideo.hidden = false;
-                await workCameraVideo.play();
+                if (workCameraCaptureButton instanceof HTMLButtonElement) {
+                    workCameraCaptureButton.disabled = true;
+                }
+                setWorkCameraStatus("Đang ổn định ánh sáng và lấy nét camera...", "info");
+                workCameraStream = await window.ApptechCamera.openCamera(workCameraVideo, selectedWorkCameraId, 1200);
+                if (workCameraCaptureButton instanceof HTMLButtonElement) {
+                    workCameraCaptureButton.disabled = false;
+                }
+                setWorkCameraStatus("Camera đã sẵn sàng.", "success");
                 await loadCameraDevices();
             };
 
@@ -4500,7 +4445,14 @@
                 }
 
                 context.drawImage(workCameraVideo, 0, 0, width, height);
-                workCameraBlob = await new Promise((resolve) => workCameraCanvas.toBlob(resolve, "image/jpeg", 0.88));
+                const nextBlob = await new Promise((resolve) => workCameraCanvas.toBlob(resolve, "image/jpeg", 0.88));
+                const brightness = await window.ApptechCamera.analyzeBrightness(nextBlob);
+                if (brightness.isUnderexposed) {
+                    workCameraBlob = null;
+                    setWorkCameraStatus("Ảnh đang thiếu sáng hoặc ngược sáng. Vui lòng đổi hướng hoặc di chuyển tới nơi đủ sáng và chụp lại.", "warning");
+                    return;
+                }
+                workCameraBlob = nextBlob;
                 if (!workCameraBlob) {
                     setWorkCameraStatus("Khong tao duoc anh tu camera.", "error");
                     return;

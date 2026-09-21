@@ -245,6 +245,7 @@
     </div>
 
     <script id="menu-data" type="application/json">@Html.Raw(menuJson)</script>
+    <script src="~/js/camera-helper.js" asp-append-version="true"></script>
     <script src="~/js/dashboard.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

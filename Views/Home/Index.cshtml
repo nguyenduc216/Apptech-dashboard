@@ -1710,27 +1710,26 @@
                 }
             };
 
-            const buildAttendanceCameraConstraints = () => selectedAttendanceCameraId
-                ? { deviceId: { exact: selectedAttendanceCameraId } }
-                : { facingMode: { ideal: "environment" } };
-
             const startCamera = async () => {
                 if (!navigator.mediaDevices?.getUserMedia) {
                     throw new Error("Trình duyệt không hỗ trợ camera.");
                 }
                 stopCamera();
-                cameraStream = await navigator.mediaDevices.getUserMedia({
-                    video: buildAttendanceCameraConstraints(),
-                    audio: false
-                });
+                if (captureButton instanceof HTMLButtonElement) {
+                    captureButton.disabled = true;
+                }
+                setStatus(cameraStatus, "Đang ổn định ánh sáng và lấy nét camera...", "info");
                 if (video instanceof HTMLVideoElement) {
-                    video.srcObject = cameraStream;
-                    await video.play();
+                    cameraStream = await window.ApptechCamera.openCamera(video, selectedAttendanceCameraId, 1200);
                 }
                 if (placeholder instanceof HTMLElement) {
                     placeholder.hidden = true;
                 }
                 await loadAttendanceCameraDevices();
+                if (captureButton instanceof HTMLButtonElement) {
+                    captureButton.disabled = false;
+                }
+                setStatus(cameraStatus, "Camera đã sẵn sàng.", "success");
             };
 
             const stopCamera = () => {
@@ -1851,7 +1850,17 @@
                 canvas.height = height;
                 const context = canvas.getContext("2d");
                 context?.drawImage(video, 0, 0, width, height);
-                capturedBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+                const nextBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+                const brightness = await window.ApptechCamera.analyzeBrightness(nextBlob);
+                if (brightness.isUnderexposed) {
+                    capturedBlob = null;
+                    setStatus(cameraStatus, "Ảnh đang thiếu sáng hoặc ngược sáng. Vui lòng đổi hướng hoặc di chuyển tới nơi đủ sáng và chụp lại.", "warning");
+                    if (retakeButton instanceof HTMLButtonElement) {
+                        retakeButton.disabled = true;
+                    }
+                    return;
+                }
+                capturedBlob = nextBlob;
                 if (preview instanceof HTMLImageElement && capturedBlob) {
                     preview.src = URL.createObjectURL(capturedBlob);
                     preview.hidden = false;
