@@ -66,11 +66,6 @@
                     <input asp-for="Schedule.AllowedTravelDeviationMinutes" type="number" min="0" max="240" step="1" inputmode="numeric" />
                     <small asp-validation-for="Schedule.AllowedTravelDeviationMinutes"></small>
                 </label>
-                <label class="attendance-time-field">
-                    <span>Khoảng thời gian tối đa giữa 2 lần chấm công để đánh giá di chuyển (phút)</span>
-                    <input asp-for="Schedule.MaxTravelEvaluationGapMinutes" type="number" min="1" max="1440" step="1" inputmode="numeric" />
-                    <small asp-validation-for="Schedule.MaxTravelEvaluationGapMinutes"></small>
-                </label>
             </div>
 
             <div class="settings-permission-actions">

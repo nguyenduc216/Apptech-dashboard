@@ -40,12 +40,15 @@ public sealed class TravelEvaluationService(
             var shift = ResolveShift(current.CheckinTime.Value.TimeOfDay, settings);
             if (shift is null) return;
 
-            var previous = await LoadPreviousAsync(connection, current, cancellationToken);
-            if (previous is null) return;
-
             var shiftStart = current.CheckinTime.Value.Date.Add(shift.Value.Start);
-            var hasPreviousInShift = previous.CheckinTime >= shiftStart;
-            if (!hasPreviousInShift) return;
+            var previous = await LoadPreviousInShiftAsync(
+                connection,
+                current,
+                shiftStart,
+                current.CheckinTime.Value,
+                cancellationToken);
+            if (previous is null) return;
+            if (!IsPreviousAttendanceInShift(previous.CheckinTime, current.CheckinTime.Value, shift.Value)) return;
 
             var previousTime = previous.CheckoutTime ?? previous.CheckinTime;
             var fromLatitude = previous.CheckoutTime.HasValue ? previous.CheckoutLatitude : previous.Latitude;
@@ -53,7 +56,7 @@ public sealed class TravelEvaluationService(
             if (!previousTime.HasValue || !fromLatitude.HasValue || !fromLongitude.HasValue) return;
 
             var actualMinutes = (decimal)(current.CheckinTime.Value - previousTime.Value).TotalMinutes;
-            if (!ShouldEvaluateTravel(hasPreviousInShift, actualMinutes, settings.MaxTravelEvaluationGapMinutes)) return;
+            if (actualMinutes < 0) return;
 
             var route = await GetRouteAsync(
                 fromLatitude.Value, fromLongitude.Value,
@@ -91,14 +94,28 @@ public sealed class TravelEvaluationService(
         return new(expectedMinutes, actualMinutes, deviation, deviation > allowedDeviationMinutes);
     }
 
-    public static bool ShouldEvaluateTravel(bool hasPreviousInShift, decimal actualMinutes, int maxGapMinutes) =>
-        hasPreviousInShift && actualMinutes >= 0 && actualMinutes <= maxGapMinutes;
-
     public static (TimeSpan Start, TimeSpan End)? ResolveShift(TimeSpan time, AttendanceScheduleSettingsForm settings)
     {
         if (time >= settings.MorningStart && time <= settings.MorningEnd) return (settings.MorningStart, settings.MorningEnd);
         if (time >= settings.AfternoonStart && time <= settings.AfternoonEnd) return (settings.AfternoonStart, settings.AfternoonEnd);
         return null;
+    }
+
+    public static bool IsPreviousAttendanceInShift(
+        DateTime? previousCheckinTime,
+        DateTime currentCheckinTime,
+        (TimeSpan Start, TimeSpan End) shift)
+    {
+        if (!previousCheckinTime.HasValue || previousCheckinTime.Value.Date != currentCheckinTime.Date)
+        {
+            return false;
+        }
+
+        var shiftStart = currentCheckinTime.Date.Add(shift.Start);
+        var shiftEnd = currentCheckinTime.Date.Add(shift.End);
+        return previousCheckinTime.Value >= shiftStart &&
+               previousCheckinTime.Value <= shiftEnd &&
+               previousCheckinTime.Value < currentCheckinTime;
     }
 
     private async Task<TravelRouteResult?> GetRouteAsync(decimal fromLat, decimal fromLng, decimal toLat, decimal toLng, CancellationToken cancellationToken)
@@ -125,14 +142,19 @@ public sealed class TravelEvaluationService(
         return await reader.ReadAsync(cancellationToken) ? MapPoint(reader) : null;
     }
 
-    private static async Task<AttendancePoint?> LoadPreviousAsync(SqlConnection connection, AttendancePoint current, CancellationToken cancellationToken)
+    private static async Task<AttendancePoint?> LoadPreviousInShiftAsync(
+        SqlConnection connection,
+        AttendancePoint current,
+        DateTime shiftStart,
+        DateTime currentCheckinTime,
+        CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT TOP (1) ID, IDNhanVien, ThoiDiem, ThoiDiemCheckOut, LatAddress, LongAddress, LatAddressCheckOut, LongAddressCheckOut FROM dbo.TblCheckinHistory WHERE IDNhanVien = @EmployeeId AND ID <> @Id AND ThoiDiem >= @DateFrom AND ThoiDiem < @CurrentTime ORDER BY ThoiDiem DESC, ID DESC";
+        command.CommandText = "SELECT TOP (1) ID, IDNhanVien, ThoiDiem, ThoiDiemCheckOut, LatAddress, LongAddress, LatAddressCheckOut, LongAddressCheckOut FROM dbo.TblCheckinHistory WHERE IDNhanVien = @EmployeeId AND ID <> @Id AND ThoiDiem >= @ShiftStart AND ThoiDiem < @CurrentTime ORDER BY ThoiDiem DESC, ID DESC";
         command.Parameters.Add(new SqlParameter("@EmployeeId", SqlDbType.Int) { Value = current.EmployeeId });
         command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = current.Id });
-        command.Parameters.Add(new SqlParameter("@DateFrom", SqlDbType.DateTime) { Value = current.CheckinTime!.Value.Date });
-        command.Parameters.Add(new SqlParameter("@CurrentTime", SqlDbType.DateTime) { Value = current.CheckinTime.Value });
+        command.Parameters.Add(new SqlParameter("@ShiftStart", SqlDbType.DateTime) { Value = shiftStart });
+        command.Parameters.Add(new SqlParameter("@CurrentTime", SqlDbType.DateTime) { Value = currentCheckinTime });
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? MapPoint(reader) : null;
     }

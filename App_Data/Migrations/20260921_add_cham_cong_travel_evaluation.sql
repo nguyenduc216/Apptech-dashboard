@@ -46,14 +46,4 @@ BEGIN
         VALUES (N'AllowedTravelDeviationMinutes', N'15');
     END;
 
-    IF NOT EXISTS
-    (
-        SELECT 1
-        FROM dbo.TblCauHinhHeThong
-        WHERE MaCauHinh = N'MaxTravelEvaluationGapMinutes'
-    )
-    BEGIN
-        INSERT INTO dbo.TblCauHinhHeThong (MaCauHinh, GiaTri)
-        VALUES (N'MaxTravelEvaluationGapMinutes', N'120');
-    END;
 END;

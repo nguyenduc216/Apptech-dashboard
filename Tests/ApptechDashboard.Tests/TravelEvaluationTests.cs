@@ -16,15 +16,38 @@ public sealed class TravelEvaluationTests
     }
 
     [Fact]
-    public void FirstCheckinInShift_IsNotEvaluatedWithoutPreviousAttendanceInShift()
+    public void FirstCheckinMorning_HasNoPreviousAttendanceInShift()
     {
-        Assert.False(TravelEvaluationService.ShouldEvaluateTravel(false, actualMinutes: 30, maxGapMinutes: 120));
+        var shift = TravelEvaluationService.ResolveShift(new TimeSpan(7, 45, 0), Settings)!.Value;
+
+        Assert.False(TravelEvaluationService.IsPreviousAttendanceInShift(null, new DateTime(2026, 9, 21, 7, 45, 0), shift));
     }
 
     [Fact]
-    public void LunchGapBeyondMaximum_IsNotEvaluated()
+    public void FirstCheckinAfternoon_IgnoresMorningAttendance()
     {
-        Assert.False(TravelEvaluationService.ShouldEvaluateTravel(true, actualMinutes: 121, maxGapMinutes: 120));
+        var current = new DateTime(2026, 9, 21, 13, 35, 0);
+        var shift = TravelEvaluationService.ResolveShift(current.TimeOfDay, Settings)!.Value;
+
+        Assert.False(TravelEvaluationService.IsPreviousAttendanceInShift(new DateTime(2026, 9, 21, 9, 0, 0), current, shift));
+    }
+
+    [Fact]
+    public void SecondCheckinSameShift_IsEvaluated()
+    {
+        var current = new DateTime(2026, 9, 21, 14, 30, 0);
+        var shift = TravelEvaluationService.ResolveShift(current.TimeOfDay, Settings)!.Value;
+
+        Assert.True(TravelEvaluationService.IsPreviousAttendanceInShift(new DateTime(2026, 9, 21, 13, 35, 0), current, shift));
+    }
+
+    [Fact]
+    public void PreviousDayAttendance_IsIgnored()
+    {
+        var current = new DateTime(2026, 9, 22, 8, 0, 0);
+        var shift = TravelEvaluationService.ResolveShift(current.TimeOfDay, Settings)!.Value;
+
+        Assert.False(TravelEvaluationService.IsPreviousAttendanceInShift(new DateTime(2026, 9, 21, 10, 0, 0), current, shift));
     }
 
     [Fact]
