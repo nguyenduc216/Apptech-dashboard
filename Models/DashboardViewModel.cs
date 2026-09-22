@@ -142,6 +142,7 @@ public sealed class ChamCongHistoryItem
     public string? GhiChuCheckOut { get; set; }
     public bool? DuyetCheckIn { get; set; }
     public bool IsCheckinViolation { get; set; }
+    public bool IsCheckoutTravelExempt { get; set; }
     public bool IsCheckoutViolation { get; set; }
     public IReadOnlyList<string> PurchaseWorkContent => ParsePurchaseNote(GhiChuNhanVien).WorkContent;
     public string? PurchaseNote => ParsePurchaseNote(GhiChuNhanVien).Note;

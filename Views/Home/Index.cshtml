@@ -708,7 +708,7 @@
                         }
                     </div>
                     <p class="crud-modal-subtitle">
-                        Danh sách phiếu yêu cầu/công việc của nhân viên
+                        Danh sách <strong data-construction-checkin-count>0</strong> phiếu yêu cầu/công việc của nhân viên
                         <strong data-construction-checkin-employee-name>@constructionInitialEmployeeName</strong>
                     </p>
                 </div>
@@ -734,7 +734,6 @@
                     </select>
                     <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
                 </label>
-                <span class="page-alert info construction-checkin-status" data-construction-checkin-status>Đang tải phiếu yêu cầu...</span>
             </div>
             <div class="construction-checkin-list" data-construction-checkin-list></div>
         </section>
@@ -1039,10 +1038,10 @@
             const constructionRefreshButton = root.querySelector("[data-construction-checkin-refresh]");
             const constructionEmployee = root.querySelector("[data-construction-checkin-employee]");
             const constructionEmployeeName = root.querySelector("[data-construction-checkin-employee-name]");
+            const constructionRequestCount = root.querySelector("[data-construction-checkin-count]");
             const constructionEmployeeSelect = root.querySelector("[data-construction-employee-select]");
             const constructionKeywordInput = root.querySelector("[data-construction-checkin-keyword]");
             const constructionSortSelect = root.querySelector("[data-construction-checkin-sort]");
-            const constructionStatus = root.querySelector("[data-construction-checkin-status]");
             const constructionList = root.querySelector("[data-construction-checkin-list]");
             const constructionMapShell = root.querySelector("[data-construction-map-shell]");
             const constructionMapCloseButtons = root.querySelectorAll("[data-construction-map-close]");
@@ -2332,8 +2331,10 @@
                 return "pending";
             };
 
-            const setConstructionStatus = (message, type = "info") => {
-                setStatus(constructionStatus, message, type);
+            const updateConstructionRequestCount = (count) => {
+                if (constructionRequestCount instanceof HTMLElement) {
+                    constructionRequestCount.textContent = `${Math.max(0, Number.parseInt(`${count}`, 10) || 0)}`;
+                }
             };
 
             const buildConstructionDetailUrl = (item) => {
@@ -2578,7 +2579,7 @@
             const loadConstructionRequests = async () => {
                 const selectedEmployeeId = resolveConstructionSelectedEmployee();
                 if (!selectedEmployeeId) {
-                    setConstructionStatus("Chưa xác định được nhân viên để tải phiếu yêu cầu.", "error");
+                    updateConstructionRequestCount(0);
                     if (constructionList instanceof HTMLElement) {
                         constructionThumbnailObserver?.disconnect();
                         constructionThumbnailObserver = null;
@@ -2609,7 +2610,6 @@
                     requestSequence
                 });
                 try {
-                    setConstructionStatus("Đang tải phiếu yêu cầu...", "info");
                     if (constructionRefreshButton instanceof HTMLButtonElement) {
                         constructionRefreshButton.disabled = true;
                         constructionRefreshButton.classList.add("is-loading");
@@ -2650,7 +2650,7 @@
                         constructionList.scrollTop = 0;
                         syncConstructionMapThumbs();
                     }
-                    setConstructionStatus(items.length > 0 ? `Đã tải ${items.length} phiếu yêu cầu.` : keyword ? "Không tìm thấy phiếu yêu cầu phù hợp." : "Không có phiếu yêu cầu phù hợp.", items.length > 0 ? "success" : "info");
+                    updateConstructionRequestCount(items.length);
                 } catch (error) {
                     if (error instanceof DOMException && error.name === "AbortError") {
                         return;
@@ -2667,7 +2667,7 @@
                         requestSequence,
                         error
                     });
-                    setConstructionStatus(errorMessage, "error");
+                    updateConstructionRequestCount(0);
                     if (constructionList instanceof HTMLElement) {
                         constructionThumbnailObserver?.disconnect();
                         constructionThumbnailObserver = null;
@@ -3774,7 +3774,10 @@
                 window.clearTimeout(constructionSearchTimer);
                 constructionEmployeeChangedByUser = true;
                 if (!resolveConstructionSelectedEmployee()) {
-                    setConstructionStatus("Nhân viên được chọn không hợp lệ.", "error");
+                    updateConstructionRequestCount(0);
+                    if (constructionList instanceof HTMLElement) {
+                        constructionList.innerHTML = `<div class="construction-checkin-empty">Nhân viên được chọn không hợp lệ.</div>`;
+                    }
                     return;
                 }
                 void loadConstructionRequests();

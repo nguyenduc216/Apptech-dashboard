@@ -85,6 +85,30 @@ public sealed class TravelEvaluationTests
     }
 
     [Fact]
+    public void EarlyCheckout_WithValidNextTravel_IsNotCountedAsEarlyLeave()
+    {
+        Assert.False(TravelEvaluationService.ShouldCountEarlyCheckout(
+            isBeforeShiftEnd: true,
+            hasValidNextTravel: true));
+    }
+
+    [Fact]
+    public void EarlyCheckout_WithoutValidNextTravel_IsStillCountedAsEarlyLeave()
+    {
+        Assert.True(TravelEvaluationService.ShouldCountEarlyCheckout(
+            isBeforeShiftEnd: true,
+            hasValidNextTravel: false));
+    }
+
+    [Fact]
+    public void OnTimeCheckout_IsNeverCountedAsEarlyLeave()
+    {
+        Assert.False(TravelEvaluationService.ShouldCountEarlyCheckout(
+            isBeforeShiftEnd: false,
+            hasValidNextTravel: false));
+    }
+
+    [Fact]
     public void WorkingTimesResolveToConfiguredShifts()
     {
         Assert.Equal(Settings.MorningStart, TravelEvaluationService.ResolveShift(new TimeSpan(8, 0, 0), Settings)?.Start);

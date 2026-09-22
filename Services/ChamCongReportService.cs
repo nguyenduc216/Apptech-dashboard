@@ -35,7 +35,11 @@ public sealed class ChamCongReportService(
 
     private sealed record AttendanceSchedule(TimeSpan Begin1, TimeSpan End1, TimeSpan Begin2, TimeSpan End2, int LateGraceMinutes1, int LateGraceMinutes2);
     private sealed record AttendanceShift(TimeSpan Begin, TimeSpan End, int LateGraceMinutes);
-    private sealed record AttendanceReportCheckin(int EmployeeId, DateTime CheckinTime, DateTime? CheckoutTime);
+    private sealed record AttendanceReportCheckin(
+        int EmployeeId,
+        DateTime CheckinTime,
+        DateTime? CheckoutTime,
+        bool IsCheckoutTravelExempt = false);
     private static readonly AttendanceSchedule DefaultAttendanceSchedule = new(
         new TimeSpan(7, 30, 0),
         new TimeSpan(11, 30, 0),
@@ -262,7 +266,14 @@ public sealed class ChamCongReportService(
                 travel.ExpectedTravelMinutes,
                 travel.ActualTravelMinutes,
                 travel.DeviationMinutes,
-                CAST(ISNULL(travel.IsWarning, 0) AS bit) AS IsTravelWarning
+                CAST(ISNULL(travel.IsWarning, 0) AS bit) AS IsTravelWarning,
+                CAST(CASE WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.TblChamCongTravelEvaluation AS travelExemption
+                    WHERE travelExemption.PreviousAttendanceId = ch.ID
+                      AND travelExemption.IsWarning = 0
+                ) THEN 1 ELSE 0 END AS bit) AS IsCheckoutTravelExempt
             FROM [{CheckinHistoryTableName}] AS ch
             LEFT JOIN dbo.TblChamCongTravelEvaluation AS travel ON travel.CurrentAttendanceId = ch.ID
             WHERE {(CompanyAttendancePredicate.Replace("CheckInType", "ch.CheckInType").Replace("IDYeuCau", "ch.IDYeuCau"))}
@@ -293,6 +304,7 @@ public sealed class ChamCongReportService(
 
             var day = checkinTime.Value.Day;
             var checkoutTime = GetNullableDateTime(reader, "ThoiDiemCheckOut");
+            var isCheckoutTravelExempt = GetNullableBoolean(reader, "IsCheckoutTravelExempt") ?? false;
             if (!detailsResult.TryGetValue(employeeId, out var detailsByDay))
             {
                 detailsByDay = [];
@@ -318,7 +330,8 @@ public sealed class ChamCongReportService(
                 ExpectedTravelMinutes = GetNullableDecimal(reader, "ExpectedTravelMinutes"),
                 ActualTravelMinutes = GetNullableDecimal(reader, "ActualTravelMinutes"),
                 DeviationMinutes = GetNullableDecimal(reader, "DeviationMinutes"),
-                IsTravelWarning = GetNullableBoolean(reader, "IsTravelWarning") ?? false
+                IsTravelWarning = GetNullableBoolean(reader, "IsTravelWarning") ?? false,
+                IsCheckoutTravelExempt = isCheckoutTravelExempt
             });
 
             if (!hoursResult.TryGetValue(employeeId, out var hoursByDay))
@@ -364,7 +377,9 @@ public sealed class ChamCongReportService(
                     lateEarlyResult[employeeId] = lateEarlyByDay;
                 }
 
-                var lateEarlyMinutes = CalculateLateEarlyMinutes(new AttendanceReportCheckin(employeeId, checkinTime.Value, checkoutTime), schedule);
+                var lateEarlyMinutes = CalculateLateEarlyMinutes(
+                    new AttendanceReportCheckin(employeeId, checkinTime.Value, checkoutTime, isCheckoutTravelExempt),
+                    schedule);
                 lateEarlyTotals[key] = lateEarlyTotals.GetValueOrDefault(key) + lateEarlyMinutes;
                 lateEarlyByDay[day] = Convert.ToInt32(Math.Round(lateEarlyTotals[key], MidpointRounding.AwayFromZero));
             }
@@ -413,7 +428,9 @@ public sealed class ChamCongReportService(
         var lateMinutes = item.CheckinTime > allowedBegin
             ? Convert.ToDecimal((item.CheckinTime - allowedBegin).TotalMinutes)
             : 0;
-        var earlyMinutes = item.CheckoutTime.Value < end
+        var earlyMinutes = TravelEvaluationService.ShouldCountEarlyCheckout(
+                item.CheckoutTime.Value < end,
+                item.IsCheckoutTravelExempt)
             ? Convert.ToDecimal((end - item.CheckoutTime.Value).TotalMinutes)
             : 0;
 

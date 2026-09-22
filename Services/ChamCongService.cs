@@ -842,7 +842,8 @@ public sealed class ChamCongService(
                 ImgPathCheckOut = GetNullableString(reader, "ImgPathCheckOut"),
                 GhiChuNhanVien = GetNullableString(reader, "GhiChuNhanVien"),
                 GhiChuCheckOut = GetNullableString(reader, "GhiChuCheckOut"),
-                DuyetCheckIn = GetNullableBoolean(reader, "DuyetCheckIn")
+                DuyetCheckIn = GetNullableBoolean(reader, "DuyetCheckIn"),
+                IsCheckoutTravelExempt = GetNullableBoolean(reader, "IsCheckoutTravelExempt") ?? false
             });
         }
 
@@ -888,9 +889,12 @@ public sealed class ChamCongService(
                 item.ThoiDiem.Value.TimeOfDay > checkinShift.Begin.Add(TimeSpan.FromMinutes(checkinShift.LateGraceMinutes));
 
             var checkoutEnd = ResolveCheckoutEnd(item.ThoiDiemCheckOut?.TimeOfDay, schedule);
-            item.IsCheckoutViolation = checkoutEnd.HasValue &&
+            var isBeforeShiftEnd = checkoutEnd.HasValue &&
                 item.ThoiDiemCheckOut.HasValue &&
                 item.ThoiDiemCheckOut.Value.TimeOfDay < checkoutEnd.Value;
+            item.IsCheckoutViolation = TravelEvaluationService.ShouldCountEarlyCheckout(
+                isBeforeShiftEnd,
+                item.IsCheckoutTravelExempt);
         }
     }
 
@@ -1000,7 +1004,14 @@ public sealed class ChamCongService(
                 ch.ImgPathCheckOut,
                 ch.GhiChuNhanVien,
                 ch.GhiChuCheckOut,
-                ch.DuyetCheckIn
+                ch.DuyetCheckIn,
+                CAST(CASE WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.TblChamCongTravelEvaluation AS travelExemption
+                    WHERE travelExemption.PreviousAttendanceId = ch.ID
+                      AND travelExemption.IsWarning = 0
+                ) THEN 1 ELSE 0 END AS bit) AS IsCheckoutTravelExempt
             FROM [{CheckinHistoryTableName}] AS ch
             LEFT JOIN [{RequestTableName}] AS yc ON yc.ID = ch.IDYeuCau
             LEFT JOIN [{LocationTableName}] AS dd ON dd.ID = COALESCE(ch.IDDiaDiem, yc.IDDiaDiem)

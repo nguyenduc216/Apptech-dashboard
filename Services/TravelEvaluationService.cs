@@ -94,6 +94,11 @@ public sealed class TravelEvaluationService(
         return new(expectedMinutes, actualMinutes, deviation, deviation > allowedDeviationMinutes);
     }
 
+    public static bool ShouldCountEarlyCheckout(bool isBeforeShiftEnd, bool hasValidNextTravel)
+    {
+        return isBeforeShiftEnd && !hasValidNextTravel;
+    }
+
     public static (TimeSpan Start, TimeSpan End)? ResolveShift(TimeSpan time, AttendanceScheduleSettingsForm settings)
     {
         if (time >= settings.MorningStart && time <= settings.MorningEnd) return (settings.MorningStart, settings.MorningEnd);

@@ -81,4 +81,5 @@ public sealed class ChamCongReportCheckinDetail
     public decimal? ActualTravelMinutes { get; set; }
     public decimal? DeviationMinutes { get; set; }
     public bool IsTravelWarning { get; set; }
+    public bool IsCheckoutTravelExempt { get; set; }
 }

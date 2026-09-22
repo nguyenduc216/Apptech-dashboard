@@ -83,12 +83,6 @@
     color: #123b70;
 }
 
-.construction-checkin-status {
-    grid-column: 1 / -1;
-    margin: 0;
-    width: 100%;
-}
-
 .construction-checkin-refresh {
     padding: 0;
     justify-content: center;
@@ -2075,18 +2069,45 @@ body.menu-open {
     min-height: 48px;
     min-width: 0;
     gap: 8px;
+    border-color: rgba(56, 189, 248, 0.45);
+    background: rgba(224, 242, 254, 0.92);
+    color: #075985;
+}
+
+.purchase-attendance-button:hover,
+.purchase-attendance-button:focus-visible {
+    border-color: rgba(14, 165, 233, 0.68);
+    background: #dbeafe;
+    color: #0369a1;
 }
 
 .construction-checkin-button {
     min-height: 48px;
     min-width: 0;
     gap: 8px;
+    border-color: rgba(202, 138, 4, 0.46);
+    background: rgba(254, 249, 195, 0.9);
+    color: #713f12;
+}
+
+.construction-checkin-button:hover,
+.construction-checkin-button:focus-visible {
+    border-color: rgba(202, 138, 4, 0.66);
+    background: #fef08a;
+    color: #854d0e;
 }
 
 .purchase-attendance-button.is-active {
-    border-color: rgba(231, 155, 61, 0.35);
-    background: rgba(231, 155, 61, 0.12);
-    color: #7b4c12;
+    border-color: rgba(2, 132, 199, 0.58);
+    background: #bae6fd;
+    color: #075985;
+}
+
+.purchase-attendance-button.is-active:hover,
+.purchase-attendance-button.is-active:focus-visible {
+    border-color: rgba(2, 132, 199, 0.76);
+    background: #7dd3fc;
+    color: #0c4a6e;
 }
 
 .purchase-attendance-fields {
@@ -4692,17 +4713,24 @@ body.report-fullscreen-open {
     right: 7px;
     display: inline-grid !important;
     place-items: center;
-    width: 25px;
-    height: 25px;
+    width: 28px;
+    height: 28px;
     margin: 0 !important;
-    border: 1px solid rgba(5, 117, 92, 0.28);
-    border-radius: 6px;
-    background: #d9f7ed;
-    color: #05755c;
-    font-size: 0.75rem;
+    border: 1px solid rgba(5, 117, 92, 0.46);
+    border-radius: 7px;
+    background: #6ee7b7;
+    color: #065f46;
+    font-size: 0.8rem;
     line-height: 1;
-    box-shadow: 0 2px 6px rgba(6, 79, 63, 0.12);
+    box-shadow: 0 4px 10px rgba(6, 79, 63, 0.22);
     z-index: 1;
+}
+
+.cham-cong-attendance-line.is-company-event .cham-cong-activity-type {
+    border-color: rgba(5, 150, 105, 0.52);
+    background: #6ee7b7;
+    color: #065f46;
+    box-shadow: 0 4px 10px rgba(5, 150, 105, 0.25);
 }
 
 .cham-cong-attendance-line.is-checkin,
@@ -4816,15 +4844,17 @@ body.report-fullscreen-open {
 }
 
 .cham-cong-attendance-line.is-customer-event .cham-cong-activity-type {
-    border-color: rgba(202, 138, 4, 0.38);
+    border-color: rgba(202, 138, 4, 0.58);
     background: #facc15;
     color: #713f12;
+    box-shadow: 0 4px 10px rgba(202, 138, 4, 0.28);
 }
 
 .cham-cong-attendance-line.is-purchase-event .cham-cong-activity-type {
-    border-color: rgba(3, 105, 161, 0.3);
-    background: #dbeafe;
-    color: #0369a1;
+    border-color: rgba(2, 132, 199, 0.56);
+    background: #38bdf8;
+    color: #0c4a6e;
+    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.26);
 }
 
 .cham-cong-timeline-item.has-purchase-checkin {
