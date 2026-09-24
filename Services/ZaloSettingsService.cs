@@ -61,7 +61,7 @@ public sealed class ZaloSettingsService : IZaloSettingsService
                         ApiBaseUrl, OAuthBaseUrl, PublicBaseUrl,
                         RefreshBeforeExpiryMinutes, AccessTokenLifetimeHours,
                         TextMessageEndpoint, TokenEndpoint, OAuthAuthorizePath,
-                        EnableSignatureValidation
+                        EnableSignatureValidation, EnableAutomaticCustomerNotifications
                     FROM [{TableName}]
                     WHERE Id = 1
                     """;
@@ -83,7 +83,8 @@ public sealed class ZaloSettingsService : IZaloSettingsService
                         TextMessageEndpoint = GetString(reader, "TextMessageEndpoint") ?? string.Empty,
                         TokenEndpoint = GetString(reader, "TokenEndpoint") ?? string.Empty,
                         OAuthAuthorizePath = GetString(reader, "OAuthAuthorizePath") ?? string.Empty,
-                        EnableSignatureValidation = Convert.ToBoolean(reader["EnableSignatureValidation"])
+                        EnableSignatureValidation = Convert.ToBoolean(reader["EnableSignatureValidation"]),
+                        EnableAutomaticCustomerNotifications = Convert.ToBoolean(reader["EnableAutomaticCustomerNotifications"])
                     };
                 }
             }
@@ -139,17 +140,18 @@ public sealed class ZaloSettingsService : IZaloSettingsService
                     TextMessageEndpoint = @TextMessageEndpoint, TokenEndpoint = @TokenEndpoint,
                     OAuthAuthorizePath = @OAuthAuthorizePath,
                     EnableSignatureValidation = @EnableSignatureValidation,
+                    EnableAutomaticCustomerNotifications = @EnableAutomaticCustomerNotifications,
                     UpdatedAtUtc = SYSUTCDATETIME()
                 WHEN NOT MATCHED THEN INSERT (
                     Id, AppId, AppSecret, OaId, OaSecretKey, OAuthRedirectUri,
                     ApiBaseUrl, OAuthBaseUrl, PublicBaseUrl, RefreshBeforeExpiryMinutes,
                     AccessTokenLifetimeHours, TextMessageEndpoint, TokenEndpoint,
-                    OAuthAuthorizePath, EnableSignatureValidation, UpdatedAtUtc
+                    OAuthAuthorizePath, EnableSignatureValidation, EnableAutomaticCustomerNotifications, UpdatedAtUtc
                 ) VALUES (
                     1, @AppId, @AppSecret, @OaId, @OaSecretKey, @OAuthRedirectUri,
                     @ApiBaseUrl, @OAuthBaseUrl, @PublicBaseUrl, @RefreshBeforeExpiryMinutes,
                     @AccessTokenLifetimeHours, @TextMessageEndpoint, @TokenEndpoint,
-                    @OAuthAuthorizePath, @EnableSignatureValidation, SYSUTCDATETIME()
+                    @OAuthAuthorizePath, @EnableSignatureValidation, @EnableAutomaticCustomerNotifications, SYSUTCDATETIME()
                 );
                 """;
             AddString(command, "@AppId", next.AppId);
@@ -166,6 +168,7 @@ public sealed class ZaloSettingsService : IZaloSettingsService
             AddString(command, "@TokenEndpoint", next.TokenEndpoint);
             AddString(command, "@OAuthAuthorizePath", next.OAuthAuthorizePath);
             command.Parameters.Add(new SqlParameter("@EnableSignatureValidation", SqlDbType.Bit) { Value = next.EnableSignatureValidation });
+            command.Parameters.Add(new SqlParameter("@EnableAutomaticCustomerNotifications", SqlDbType.Bit) { Value = next.EnableAutomaticCustomerNotifications });
             await command.ExecuteNonQueryAsync(cancellationToken);
             _current = next;
             _source = "Database";
@@ -209,8 +212,16 @@ public sealed class ZaloSettingsService : IZaloSettingsService
                     [TokenEndpoint] NVARCHAR(500) NOT NULL,
                     [OAuthAuthorizePath] NVARCHAR(500) NOT NULL,
                     [EnableSignatureValidation] BIT NOT NULL,
+                    [EnableAutomaticCustomerNotifications] BIT NOT NULL CONSTRAINT [DF_TblZaloSettings_EnableAutomaticCustomerNotifications] DEFAULT (0),
                     [UpdatedAtUtc] DATETIME2 NOT NULL
                 );
+            END;
+
+            IF COL_LENGTH('dbo.{TableName}', 'EnableAutomaticCustomerNotifications') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[{TableName}]
+                ADD [EnableAutomaticCustomerNotifications] BIT NOT NULL
+                    CONSTRAINT [DF_TblZaloSettings_EnableAutomaticCustomerNotifications] DEFAULT (0) WITH VALUES;
             END;
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -271,11 +282,12 @@ public sealed class ZaloSettingsService : IZaloSettingsService
             TextMessageEndpoint = GetValue(values, nameof(ZaloOptions.TextMessageEndpoint)) ?? string.Empty,
             TokenEndpoint = GetValue(values, nameof(ZaloOptions.TokenEndpoint)) ?? string.Empty,
             OAuthAuthorizePath = GetValue(values, nameof(ZaloOptions.OAuthAuthorizePath)) ?? string.Empty,
-            EnableSignatureValidation = ParseBool(GetValue(values, nameof(ZaloOptions.EnableSignatureValidation)))
+            EnableSignatureValidation = ParseBool(GetValue(values, nameof(ZaloOptions.EnableSignatureValidation))),
+            EnableAutomaticCustomerNotifications = ParseBool(GetValue(values, nameof(ZaloOptions.EnableAutomaticCustomerNotifications)))
         };
     }
 
-    private static ZaloOptions Merge(ZaloOptions? database, ZaloOptions appSettings, ZaloOptions environment)
+    internal static ZaloOptions Merge(ZaloOptions? database, ZaloOptions appSettings, ZaloOptions environment)
     {
         return new ZaloOptions
         {
@@ -294,7 +306,9 @@ public sealed class ZaloSettingsService : IZaloSettingsService
             TokenEndpoint = FirstConfigured(database?.TokenEndpoint, appSettings.TokenEndpoint, environment.TokenEndpoint) ?? "/v4/oa/access_token",
             OAuthAuthorizePath = FirstConfigured(database?.OAuthAuthorizePath, appSettings.OAuthAuthorizePath, environment.OAuthAuthorizePath) ?? "/v4/oa/permission",
             EnableSignatureValidation = database?.EnableSignatureValidation
-                ?? appSettings.EnableSignatureValidation
+                ?? appSettings.EnableSignatureValidation,
+            EnableAutomaticCustomerNotifications = database?.EnableAutomaticCustomerNotifications
+                ?? appSettings.EnableAutomaticCustomerNotifications
         };
     }
 
@@ -388,7 +402,8 @@ public sealed class ZaloSettingsService : IZaloSettingsService
         nameof(ZaloOptions.PublicBaseUrl), nameof(ZaloOptions.WebhookUrl),
         nameof(ZaloOptions.RefreshBeforeExpiryMinutes), nameof(ZaloOptions.AccessTokenLifetimeHours),
         nameof(ZaloOptions.TextMessageEndpoint), nameof(ZaloOptions.TokenEndpoint),
-        nameof(ZaloOptions.OAuthAuthorizePath), nameof(ZaloOptions.EnableSignatureValidation)
+        nameof(ZaloOptions.OAuthAuthorizePath), nameof(ZaloOptions.EnableSignatureValidation),
+        nameof(ZaloOptions.EnableAutomaticCustomerNotifications)
     ];
 
     private static void AddString(SqlCommand command, string name, string? value) =>
@@ -419,6 +434,7 @@ public sealed class ZaloSettingsService : IZaloSettingsService
         TextMessageEndpoint = source.TextMessageEndpoint,
         TokenEndpoint = source.TokenEndpoint,
         OAuthAuthorizePath = source.OAuthAuthorizePath,
-        EnableSignatureValidation = source.EnableSignatureValidation
+        EnableSignatureValidation = source.EnableSignatureValidation,
+        EnableAutomaticCustomerNotifications = source.EnableAutomaticCustomerNotifications
     };
 }

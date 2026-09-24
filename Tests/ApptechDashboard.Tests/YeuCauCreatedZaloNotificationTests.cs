@@ -15,6 +15,39 @@ namespace ApptechDashboard.Tests;
 public sealed class YeuCauCreatedZaloNotificationTests
 {
     [Fact]
+    public async Task Create_WhenAutomaticNotificationsAreOff_SavesWithoutSendingOrWarning()
+    {
+        var fixture = new ControllerFixture(notificationsEnabled: false);
+        fixture.RequestService
+            .Setup(service => service.CreateAsync(It.IsAny<YeuCauFormModel>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null, 41));
+
+        var result = await fixture.Controller.Create(ControllerFixture.ValidForm());
+
+        Assert.IsType<RedirectToActionResult>(result);
+        fixture.ZaloMessageService.Verify(
+            service => service.SendRequestCreatedNotificationAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        Assert.Equal("Lưu yêu cầu thành công.", fixture.Controller.TempData["StatusMessage"]);
+    }
+
+    [Fact]
+    public async Task ManualSendSchedule_RemainsAvailableWhenAutomaticNotificationsAreOff()
+    {
+        var fixture = new ControllerFixture(notificationsEnabled: false);
+        fixture.ZaloMessageService
+            .Setup(service => service.SendBookingConfirmationAsync(41, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ZaloSendResult.Ok("sent"));
+
+        var result = await fixture.Controller.SendZaloSchedule(41, null, null, null);
+
+        Assert.IsType<RedirectToActionResult>(result);
+        fixture.ZaloMessageService.Verify(
+            service => service.SendBookingConfirmationAsync(41, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task Create_SendsNotificationOnlyAfterRequestWasCreated()
     {
         var fixture = new ControllerFixture();
@@ -98,7 +131,7 @@ public sealed class YeuCauCreatedZaloNotificationTests
         public Mock<IZaloMessageService> ZaloMessageService { get; } = new();
         public YeuCauController Controller { get; }
 
-        public ControllerFixture()
+        public ControllerFixture(bool notificationsEnabled = true)
         {
             RequestService
                 .Setup(service => service.GetCheckinDistanceLimitMetersAsync(It.IsAny<CancellationToken>()))
@@ -119,6 +152,10 @@ public sealed class YeuCauCreatedZaloNotificationTests
                 RequestService.Object,
                 Mock.Of<IKhachHangService>(),
                 ZaloMessageService.Object,
+                Mock.Of<IZaloSettingsService>(service => service.Current == new ApptechDashboard.Configuration.ZaloOptions
+                {
+                    EnableAutomaticCustomerNotifications = notificationsEnabled
+                }),
                 Mock.Of<IZaloRequestService>(),
                 Mock.Of<IUserAccountService>(),
                 Mock.Of<IUserPermissionService>(),

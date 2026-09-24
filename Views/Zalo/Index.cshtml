@@ -56,9 +56,9 @@
             <small>@Model.WebhookUrl</small>
         </article>
         <article class="zalo-stat-card">
-            <span>Tin nhan gan nhat</span>
-            <strong>@Model.MessageLogs.Count</strong>
-            <small>20 log moi nhat</small>
+            <span>Thông báo khách hàng</span>
+            <strong>@(Model.Settings.EnableAutomaticCustomerNotifications ? "Đang bật" : "Tạm tắt")</strong>
+            <small>@(Model.Settings.EnableAutomaticCustomerNotifications ? "Tự động gửi tin khi tạo/cập nhật phiếu." : "Không tự động gửi tin khi tạo/cập nhật phiếu.")</small>
         </article>
     </div>
 
@@ -137,6 +137,14 @@
                     <input asp-for="Settings.EnableSignatureValidation" type="checkbox" />
                     <span class="zalo-switch" aria-hidden="true"></span>
                     <span>Kiem tra chu ky webhook</span>
+                </label>
+                <label class="zalo-switch-field zalo-wide">
+                    <input asp-for="Settings.EnableAutomaticCustomerNotifications" type="checkbox" />
+                    <span class="zalo-switch" aria-hidden="true"></span>
+                    <span>
+                        Gửi thông báo Zalo cho khách hàng
+                        <small>Bật để tự động gửi thông báo khi tạo phiếu và khi trạng thái phiếu/công việc thay đổi. Hiện tại: @(Model.Settings.EnableAutomaticCustomerNotifications ? "Đang bật" : "Tạm tắt").</small>
+                    </span>
                 </label>
             </div>
             <div class="zalo-form-footer">

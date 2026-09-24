@@ -326,6 +326,11 @@ public sealed class ZaloIntegrationService(
 
     public async Task<ZaloSendResult> SendRequestCreatedNotificationAsync(int yeuCauId, CancellationToken cancellationToken = default)
     {
+        if (!_zaloOptions.EnableAutomaticCustomerNotifications)
+        {
+            return ZaloSendResult.Ok("Automatic customer Zalo notifications are disabled.");
+        }
+
         var booking = await LoadBookingAsync(yeuCauId, cancellationToken);
         if (booking is null)
         {
@@ -361,6 +366,11 @@ public sealed class ZaloIntegrationService(
         RequestProgressChangeSet changes,
         CancellationToken cancellationToken = default)
     {
+        if (!_zaloOptions.EnableAutomaticCustomerNotifications)
+        {
+            return ZaloSendResult.Ok("Automatic customer Zalo notifications are disabled.");
+        }
+
         if (!changes.HasChanges)
         {
             return ZaloSendResult.Fail("Không có thay đổi trạng thái để gửi thông báo.");

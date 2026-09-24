@@ -35,6 +35,7 @@ public sealed class ZaloSettingsFormModel
     public string TokenEndpoint { get; set; } = "/v4/oa/access_token";
     public string OAuthAuthorizePath { get; set; } = "/v4/oa/permission";
     public bool EnableSignatureValidation { get; set; } = true;
+    public bool EnableAutomaticCustomerNotifications { get; set; } = false;
 }
 
 public sealed class ZaloMessageLogItem

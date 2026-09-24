@@ -62,7 +62,8 @@ public sealed class ZaloController(
                     TextMessageEndpoint = form.TextMessageEndpoint,
                     TokenEndpoint = form.TokenEndpoint,
                     OAuthAuthorizePath = form.OAuthAuthorizePath,
-                    EnableSignatureValidation = form.EnableSignatureValidation
+                    EnableSignatureValidation = form.EnableSignatureValidation,
+                    EnableAutomaticCustomerNotifications = form.EnableAutomaticCustomerNotifications
                 },
                 !string.IsNullOrWhiteSpace(form.AppSecret),
                 !string.IsNullOrWhiteSpace(form.OaSecretKey),
@@ -119,7 +120,8 @@ public sealed class ZaloController(
                 TextMessageEndpoint = options.TextMessageEndpoint,
                 TokenEndpoint = options.TokenEndpoint,
                 OAuthAuthorizePath = options.OAuthAuthorizePath,
-                EnableSignatureValidation = options.EnableSignatureValidation
+                EnableSignatureValidation = options.EnableSignatureValidation,
+                EnableAutomaticCustomerNotifications = options.EnableAutomaticCustomerNotifications
             },
             AppId = options.AppId,
             OaId = options.OaId,

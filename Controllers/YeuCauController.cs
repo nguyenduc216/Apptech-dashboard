@@ -15,6 +15,7 @@ public class YeuCauController(
     IYeuCauService yeuCauService,
     IKhachHangService khachHangService,
     IZaloMessageService zaloMessageService,
+    IZaloSettingsService zaloSettingsService,
     IZaloRequestService zaloRequestService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService,
@@ -40,6 +41,7 @@ public class YeuCauController(
     private readonly IYeuCauService _yeuCauService = yeuCauService;
     private readonly IKhachHangService _khachHangService = khachHangService;
     private readonly IZaloMessageService _zaloMessageService = zaloMessageService;
+    private readonly IZaloSettingsService _zaloSettingsService = zaloSettingsService;
     private readonly IZaloRequestService _zaloRequestService = zaloRequestService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
@@ -137,8 +139,8 @@ public class YeuCauController(
             return View("Detail", await BuildDetailModelAsync(model, model.IDDiaDiem, HttpContext.RequestAborted));
         }
 
-        var zaloResult = ZaloSendResult.Fail("Không xác định được phiếu yêu cầu để gửi Zalo.");
-        if (result.Id.HasValue)
+        ZaloSendResult? zaloResult = null;
+        if (_zaloSettingsService.Current.EnableAutomaticCustomerNotifications && result.Id.HasValue)
         {
             try
             {
@@ -160,9 +162,11 @@ public class YeuCauController(
             }
         }
 
-        TempData["StatusMessage"] = zaloResult.Succeeded
-            ? "Lưu yêu cầu thành công. Đã gửi thông báo và link đánh giá qua Zalo khách hàng."
-            : $"Lưu yêu cầu thành công. Chưa gửi được Zalo: {zaloResult.Message}";
+        TempData["StatusMessage"] = zaloResult is null
+            ? "Lưu yêu cầu thành công."
+            : zaloResult.Succeeded
+                ? "Lưu yêu cầu thành công. Đã gửi thông báo và link đánh giá qua Zalo khách hàng."
+                : $"Lưu yêu cầu thành công. Chưa gửi được Zalo: {zaloResult.Message}";
         TempData["StatusType"] = "success";
         return RedirectToAction(nameof(Edit), new
         {
@@ -267,6 +271,11 @@ public class YeuCauController(
         RequestProgressState? before,
         CancellationToken cancellationToken)
     {
+        if (!_zaloSettingsService.Current.EnableAutomaticCustomerNotifications)
+        {
+            return null;
+        }
+
         if (before is null)
         {
             _logger.LogWarning("Could not snapshot request {RequestId} progress before update; skipping Zalo progress notification.", requestId);

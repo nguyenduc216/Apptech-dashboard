@@ -135,6 +135,19 @@ public sealed class RequestProgressNotificationTests
     }
 
     [Fact]
+    public async Task Update_StatusChangedWithNotificationsOff_UpdatesWithoutSendingOrWarning()
+    {
+        var fixture = new ControllerFixture(notificationsEnabled: false);
+        fixture.SetProgressSequence(State("Tạo mới"), State("Đang thực hiện"));
+
+        var result = await fixture.Controller.Update(ControllerFixture.ValidForm());
+
+        Assert.IsType<RedirectToActionResult>(result);
+        fixture.VerifyNoProgressNotification();
+        Assert.Equal("Cập nhật yêu cầu thành công.", fixture.Controller.TempData["StatusMessage"]);
+    }
+
+    [Fact]
     public async Task Update_OnlyNoteOrEmployeeAssignmentChanged_DoesNotSendNotification()
     {
         var fixture = new ControllerFixture();
@@ -185,6 +198,24 @@ public sealed class RequestProgressNotificationTests
     }
 
     [Fact]
+    public async Task Complete_WithNotificationsOff_CompletesWithoutSendingOrWarning()
+    {
+        var fixture = new ControllerFixture(notificationsEnabled: false);
+        fixture.RequestService
+            .Setup(service => service.GetProgressStateAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(State("Đang thực hiện"));
+        fixture.RequestService
+            .Setup(service => service.CompleteAsync(1, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new YeuCauCompleteResult(true, false, null, DateTime.Now, 0, 0));
+
+        var result = await fixture.Controller.Complete(new YeuCauCompleteModel { Id = 1 });
+
+        Assert.IsType<RedirectToActionResult>(result);
+        fixture.VerifyNoProgressNotification();
+        Assert.Equal("Đã hoàn thành phiếu yêu cầu.", fixture.Controller.TempData["StatusMessage"]);
+    }
+
+    [Fact]
     public async Task Complete_AlreadyCompleted_DoesNotSendDuplicate()
     {
         var fixture = new ControllerFixture();
@@ -222,7 +253,7 @@ public sealed class RequestProgressNotificationTests
         public Mock<IZaloMessageService> ZaloMessageService { get; } = new();
         public YeuCauController Controller { get; }
 
-        public ControllerFixture()
+        public ControllerFixture(bool notificationsEnabled = true)
         {
             RequestService.Setup(service => service.GetCheckinDistanceLimitMetersAsync(It.IsAny<CancellationToken>())).ReturnsAsync(100m);
             RequestService.Setup(service => service.UpdateAsync(It.IsAny<YeuCauFormModel>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((true, null));
@@ -241,6 +272,10 @@ public sealed class RequestProgressNotificationTests
                 RequestService.Object,
                 Mock.Of<IKhachHangService>(),
                 ZaloMessageService.Object,
+                Mock.Of<IZaloSettingsService>(service => service.Current == new ApptechDashboard.Configuration.ZaloOptions
+                {
+                    EnableAutomaticCustomerNotifications = notificationsEnabled
+                }),
                 Mock.Of<IZaloRequestService>(),
                 Mock.Of<IUserAccountService>(),
                 Mock.Of<IUserPermissionService>(),
