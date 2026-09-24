@@ -87,6 +87,7 @@ public sealed class ZaloIntegrationService(
     IOptions<SqlServerOptions> sqlOptions,
     IZaloSettingsService zaloSettings,
     IZaloRequestService zaloRequestService,
+    IZaloTextApiClient zaloTextApiClient,
     IConfiguration configuration,
     IHttpClientFactory httpClientFactory,
     ILogger<ZaloIntegrationService> logger)
@@ -811,15 +812,35 @@ public sealed class ZaloIntegrationService(
 
         try
         {
-            var accessToken = await GetValidAccessTokenAsync(cancellationToken);
-            var client = _httpClientFactory.CreateClient("ZaloOA");
-            using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(_zaloOptions.TextMessageEndpoint));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            request.Content = new StringContent(requestJson, Encoding.UTF8);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-            using var response = await client.SendAsync(request, cancellationToken);
-            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            await SaveMessageLogAsync(connection, customerId, bookingId, zaloUserId, null, messageType, requestJson, responseJson, response.IsSuccessStatusCode, response.IsSuccessStatusCode ? null : responseJson, cancellationToken);
+            var result = await zaloTextApiClient.SendAsync(
+                requestObject.recipient,
+                message,
+                GetValidAccessTokenAsync,
+                ForceRefreshTokenAsync,
+                new ZaloSendContext(bookingId, customerId, messageType),
+                cancellationToken);
+            await SaveMessageLogAsync(
+                connection,
+                customerId,
+                bookingId,
+                zaloUserId,
+                null,
+                messageType,
+                requestJson,
+                result.ResponseJson,
+                result.ApiSucceeded,
+                result.ErrorMessage,
+                cancellationToken);
+
+            if (result.ApiSucceeded)
+            {
+                _logger.LogInformation(
+                    "Zalo direct message sent. RequestId: {RequestId}; CustomerId: {CustomerId}; MessageType: {MessageType}; MessageId: {MessageId}",
+                    bookingId,
+                    customerId,
+                    messageType,
+                    result.MessageId);
+            }
         }
         catch (Exception ex)
         {
@@ -897,19 +918,38 @@ public sealed class ZaloIntegrationService(
 
         try
         {
-            var accessToken = await GetValidAccessTokenAsync(cancellationToken);
-            var client = _httpClientFactory.CreateClient("ZaloOA");
-            using var request = new HttpRequestMessage(HttpMethod.Post, BuildApiUri(_zaloOptions.TextMessageEndpoint));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            request.Content = new StringContent(requestJson, Encoding.UTF8);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-            using var response = await client.SendAsync(request, cancellationToken);
-            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            await SaveMessageLogAsync(connection, booking.CustomerId, booking.RequestId, zaloUserId, phone, messageType, requestJson, responseJson, response.IsSuccessStatusCode, response.IsSuccessStatusCode ? null : responseJson, cancellationToken);
+            var result = await zaloTextApiClient.SendAsync(
+                recipient,
+                message,
+                GetValidAccessTokenAsync,
+                ForceRefreshTokenAsync,
+                new ZaloSendContext(booking.RequestId, booking.CustomerId, messageType),
+                cancellationToken);
+            await SaveMessageLogAsync(
+                connection,
+                booking.CustomerId,
+                booking.RequestId,
+                zaloUserId,
+                phone,
+                messageType,
+                requestJson,
+                result.ResponseJson,
+                result.ApiSucceeded,
+                result.ErrorMessage,
+                cancellationToken);
 
-            return response.IsSuccessStatusCode
-                ? ZaloSendResult.Ok("Da gui tin nhan Zalo OA.")
-                : ZaloSendResult.Fail($"Zalo API loi: {(int)response.StatusCode}");
+            if (result.ApiSucceeded)
+            {
+                _logger.LogInformation(
+                    "Zalo message sent. RequestId: {RequestId}; CustomerId: {CustomerId}; MessageType: {MessageType}; MessageId: {MessageId}",
+                    booking.RequestId,
+                    booking.CustomerId,
+                    messageType,
+                    result.MessageId);
+                return ZaloSendResult.Ok("Đã gửi tin nhắn Zalo OA.");
+            }
+
+            return ZaloSendResult.Fail(result.ErrorMessage ?? "Zalo API trả về lỗi không xác định.");
         }
         catch (Exception ex)
         {

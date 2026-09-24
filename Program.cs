@@ -88,6 +88,7 @@ builder.Services.AddScoped<ICommonAuditService, CommonAuditService>();
 builder.Services.AddScoped<ISimpleExcelService, SimpleExcelService>();
 builder.Services.AddSingleton<IZaloSettingsService, ZaloSettingsService>();
 builder.Services.AddScoped<IZaloRequestService, ZaloRequestService>();
+builder.Services.AddScoped<IZaloTextApiClient, ZaloTextApiClient>();
 builder.Services.AddScoped<ZaloIntegrationService>();
 builder.Services.AddScoped<IZaloAuthService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
 builder.Services.AddScoped<IZaloMessageService>(provider => provider.GetRequiredService<ZaloIntegrationService>());
