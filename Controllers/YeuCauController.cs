@@ -135,7 +135,13 @@ public class YeuCauController(
             return View("Detail", await BuildDetailModelAsync(model, model.IDDiaDiem, HttpContext.RequestAborted));
         }
 
-        TempData["StatusMessage"] = "Lưu yêu cầu thành công.";
+        var zaloResult = result.Id.HasValue
+            ? await _zaloMessageService.SendRequestCreatedNotificationAsync(result.Id.Value, HttpContext.RequestAborted)
+            : ZaloSendResult.Fail("Không xác định được phiếu yêu cầu để gửi Zalo.");
+
+        TempData["StatusMessage"] = zaloResult.Succeeded
+            ? "Lưu yêu cầu thành công. Đã gửi thông báo và link đánh giá qua Zalo khách hàng."
+            : $"Lưu yêu cầu thành công. Chưa gửi được Zalo: {zaloResult.Message}";
         TempData["StatusType"] = "success";
         return RedirectToAction(nameof(Edit), new
         {
