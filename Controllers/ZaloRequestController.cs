@@ -168,30 +168,47 @@ public sealed class ZaloRequestController(
     private static string RenderLanding(ZaloRequestLandingView model)
     {
         var works = model.Works.Count == 0
-            ? "<li>Chưa có danh sách công việc.</li>"
+            ? "<p class=\"empty-state\">Chưa có danh sách công việc.</p>"
             : string.Join("", model.Works.Select(work =>
-                $"<li><strong>{Encode(work.WorkName)}</strong><span>{Encode(work.Status ?? "Chưa cập nhật")}</span></li>"));
+            {
+                var status = string.IsNullOrWhiteSpace(work.Status) ? "Chưa cập nhật" : work.Status;
+                var employees = work.Employees.Count == 0
+                    ? "<p class=\"empty-employees\">Chưa phân công nhân viên.</p>"
+                    : $"<ul class=\"employee-list\">{string.Join("", work.Employees.Select(employee => $"<li>{Encode(employee.FullName)}</li>"))}</ul>";
+                return $$$"""
+                    <article class="work-card">
+                        <div class="work-header">
+                            <h3>{{{Encode(work.WorkName)}}}</h3>
+                            <span class="status-badge {{{GetWorkStatusCssClass(status)}}}">{{{Encode(status)}}}</span>
+                        </div>
+                        <div class="employees">
+                            <h4>Nhân viên thực hiện</h4>
+                            {{{employees}}}
+                        </div>
+                    </article>
+                    """;
+            }));
         var followUrl = string.IsNullOrWhiteSpace(model.OaId)
             ? "#"
             : $"https://zalo.me/{Uri.EscapeDataString(model.OaId)}";
         var execution = model.ExecutionDate?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa xác định";
         var connectionContent = model.ZaloConnected
             ? $$$"""
-                <section class="connected">
+                <div class="connection-card connected">
                     <h2>Đã kết nối Zalo thành công</h2>
                     {{{(string.IsNullOrWhiteSpace(model.ZaloDisplayName) ? "" : $"<p><strong>Tên Zalo:</strong> {Encode(model.ZaloDisplayName)}</p>")}}}
                     {{{(string.IsNullOrWhiteSpace(model.ZaloPhoneNumber) ? "" : $"<p><strong>Số điện thoại:</strong> {Encode(model.ZaloPhoneNumber)}</p>")}}}
                     <p class="hint">Thông tin Zalo đã được ghi nhận. Anh/chị có thể tiếp tục đánh giá công việc.</p>
-                </section>
+                </div>
                 """
             : $$$"""
-                <section>
+                <div class="connection-card">
                     <h2>Kết nối Zalo OA</h2>
                     <p class="hint">Hãy quan tâm Zalo OA, sau đó sao chép mã xác nhận bên dưới và gửi vào khung chat OA.</p>
                     <code class="verify-code" data-verify-code="{{{Encode(model.Token)}}}">{{{Encode(model.Token)}}}</code>
                     <button class="copy-code" type="button" data-copy-code>Sao chép mã xác nhận</button>
                     <div class="copy-status" data-copy-status aria-live="polite"></div>
-                </section>
+                </div>
                 """;
 
         return $$$"""
@@ -205,36 +222,73 @@ public sealed class ZaloRequestController(
                     *{box-sizing:border-box}body{margin:0;background:#edf8f5;color:#073f38;font-family:Arial,sans-serif}
                     main{width:min(680px,calc(100% - 28px));margin:24px auto;background:#fff;border:1px solid #cce6df;border-radius:8px;overflow:hidden;box-shadow:0 16px 36px rgba(5,73,64,.12)}
                     header{padding:24px;background:#087d69;color:#fff}h1{margin:0 0 6px;font-size:25px}header p{margin:0;opacity:.9}
-                    section{padding:22px;border-bottom:1px solid #e0eeea}h2{margin:0 0 14px;font-size:18px}.info{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+                    section{padding:22px}h2{margin:0 0 14px;font-size:18px}.info{display:grid;grid-template-columns:1fr 1fr;gap:12px}
                     .info div{padding:12px;background:#f3faf8;border-radius:6px}.info span{display:block;color:#66807c;font-size:12px;margin-bottom:4px}
-                    ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}li{display:flex;justify-content:space-between;gap:12px;padding:12px;border:1px solid #d7e9e5;border-radius:6px}li span{color:#607975}
-                    .actions{display:grid;gap:10px;padding:22px}.button{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px;border-radius:7px;text-decoration:none;font-weight:700}
+                    .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px;background:#f3faf8;border-bottom:1px solid #d7e9e5}.tab-button{min-height:44px;border:0;border-radius:7px;background:transparent;color:#496b65;font:inherit;font-weight:700;cursor:pointer}.tab-button.active{background:#087d69;color:#fff}.tab-panel[hidden]{display:none}
+                    .work-list{display:grid;gap:12px}.work-card{padding:16px;border:1px solid #d7e9e5;border-radius:8px;background:#fff}.work-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.work-header h3{margin:2px 0;font-size:17px}.status-badge{flex:0 0 auto;padding:5px 9px;border-radius:999px;background:#e9efed;color:#49635e;font-size:12px;font-weight:700}.status-badge.in-progress{background:#e7f1ff;color:#175c9c}.status-badge.completed{background:#def5e9;color:#176b43}.employees{margin-top:14px;padding-top:12px;border-top:1px solid #e6efed}.employees h4{margin:0 0 8px;font-size:13px;color:#58736e}.employee-list{margin:0;padding-left:20px;display:grid;gap:6px}.employee-list li{padding-left:2px}.empty-state,.empty-employees{margin:0;color:#66807c}.actions{display:grid;gap:10px}.button{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 16px;border-radius:7px;text-decoration:none;font-weight:700}
                     .follow{background:#087d69;color:#fff}.rating{border:1px solid #087d69;color:#087d69;background:#fff}.hint{margin:0;color:#58736e;line-height:1.5;font-size:14px}
                     code{display:block;margin-top:10px;padding:10px;background:#eff7f5;border-radius:6px;overflow-wrap:anywhere;color:#28645b}
                     .verify-code{font-size:18px;font-weight:700}
                     .copy-code{min-height:42px;margin-top:10px;border:1px solid #9fdccc;border-radius:7px;background:#fff;color:#08735f;font:inherit;font-weight:700;cursor:pointer}
                     .copy-status{min-height:20px;margin-top:8px;color:#08735f;font-weight:700;font-size:13px}
-                    .connected{background:#eefaf6}.connected h2{color:#08735f}.connected p{margin:8px 0}
-                    @media(max-width:520px){.info{grid-template-columns:1fr}main{margin:12px auto}header,section,.actions{padding:18px}}
+                    .connection-card{margin-top:16px;padding:16px;border:1px solid #d7e9e5;border-radius:8px}.connected{background:#eefaf6}.connected h2{color:#08735f}.connected p{margin:8px 0}
+                    @media(max-width:520px){.info{grid-template-columns:1fr}main{margin:12px auto}.tab-panel{padding:18px}.tabs{position:sticky;top:0;z-index:2}.work-header{display:grid}.status-badge{justify-self:start}}
                 </style>
             </head>
             <body>
                 <main>
                     <header><h1>Phiếu {{{Encode(model.RequestCode)}}}</h1><p>Thông tin lịch làm việc và đánh giá chất lượng</p></header>
-                    <section class="info">
-                        <div><span>Khách hàng</span><strong>{{{Encode(model.CustomerName)}}}</strong></div>
-                        <div><span>Số điện thoại</span><strong>{{{Encode(model.PhoneNumber ?? "-")}}}</strong></div>
-                        <div><span>Ngày thực hiện</span><strong>{{{execution}}}</strong></div>
-                        <div><span>Trạng thái đánh giá</span><strong>{{{(model.IsRated ? "Đã đánh giá" : "Chưa đánh giá")}}}</strong></div>
+                    <nav class="tabs" role="tablist" aria-label="Nội dung phiếu yêu cầu">
+                        <button class="tab-button active" type="button" role="tab" id="tab-info" aria-controls="panel-info" aria-selected="true" data-tab="info">Thông tin</button>
+                        <button class="tab-button" type="button" role="tab" id="tab-works" aria-controls="panel-works" aria-selected="false" data-tab="works">Công việc</button>
+                        <button class="tab-button" type="button" role="tab" id="tab-rating" aria-controls="panel-rating" aria-selected="false" data-tab="rating">Đánh giá</button>
+                    </nav>
+                    <section class="tab-panel" id="panel-info" role="tabpanel" aria-labelledby="tab-info" data-panel="info">
+                        <h2>Thông tin phiếu yêu cầu</h2>
+                        <div class="info">
+                            <div><span>Mã phiếu</span><strong>{{{Encode(model.RequestCode)}}}</strong></div>
+                            <div><span>Khách hàng</span><strong>{{{Encode(model.CustomerName)}}}</strong></div>
+                            <div><span>Số điện thoại</span><strong>{{{Encode(model.PhoneNumber ?? "-")}}}</strong></div>
+                            <div><span>Ngày thực hiện</span><strong>{{{execution}}}</strong></div>
+                            <div><span>Trạng thái đánh giá</span><strong>{{{(model.IsRated ? "Đã đánh giá" : "Chưa đánh giá")}}}</strong></div>
+                            <div><span>Kết nối Zalo</span><strong>{{{(model.ZaloConnected ? "Đã kết nối" : "Chưa kết nối")}}}</strong></div>
+                        </div>
+                        {{{connectionContent}}}
+                        {{{(model.ZaloConnected ? "" : $"<div class=\"actions\"><a class=\"button follow\" href=\"{followUrl}\" target=\"_blank\" rel=\"noopener\">Quan tâm Zalo OA để nhận thông báo</a></div>")}}}
                     </section>
-                    <section><h2>Công việc thực hiện</h2><ul>{{{works}}}</ul></section>
-                    {{{connectionContent}}}
-                    <div class="actions">
-                        {{{(model.ZaloConnected ? "" : $"<a class=\"button follow\" href=\"{followUrl}\" target=\"_blank\" rel=\"noopener\">Quan tâm Zalo OA để nhận thông báo</a>")}}}
-                        <a class="button rating" href="/zalo/request/{{{Uri.EscapeDataString(model.Token)}}}/rating">Tiếp tục đánh giá</a>
-                    </div>
+                    <section class="tab-panel" id="panel-works" role="tabpanel" aria-labelledby="tab-works" data-panel="works" hidden>
+                        <h2>Công việc thực hiện</h2>
+                        <div class="work-list">{{{works}}}</div>
+                    </section>
+                    <section class="tab-panel" id="panel-rating" role="tabpanel" aria-labelledby="tab-rating" data-panel="rating" hidden>
+                        <h2>Đánh giá chất lượng</h2>
+                        <p class="hint">Anh/chị có thể đánh giá tổng thể và từng công việc đã thực hiện.</p>
+                        <div class="actions"><a class="button rating" href="/zalo/request/{{{Uri.EscapeDataString(model.Token)}}}/rating">Tiếp tục đánh giá</a></div>
+                    </section>
                 </main>
                 <script>
+                    const tabs = Array.from(document.querySelectorAll("[data-tab]"));
+                    const panels = Array.from(document.querySelectorAll("[data-panel]"));
+                    const activateTab = tabName => {
+                        tabs.forEach(tab => {
+                            const active = tab.dataset.tab === tabName;
+                            tab.classList.toggle("active", active);
+                            tab.setAttribute("aria-selected", active ? "true" : "false");
+                            tab.tabIndex = active ? 0 : -1;
+                        });
+                        panels.forEach(panel => panel.hidden = panel.dataset.panel !== tabName);
+                    };
+                    tabs.forEach((tab, index) => {
+                        tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+                        tab.addEventListener("keydown", event => {
+                            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                            event.preventDefault();
+                            const offset = event.key === "ArrowRight" ? 1 : -1;
+                            const next = tabs[(index + offset + tabs.length) % tabs.length];
+                            activateTab(next.dataset.tab);
+                            next.focus();
+                        });
+                    });
                     const code = document.querySelector("[data-verify-code]")?.dataset.verifyCode || "";
                     const status = document.querySelector("[data-copy-status]");
                     document.querySelector("[data-copy-code]")?.addEventListener("click", async () => {
@@ -249,6 +303,19 @@ public sealed class ZaloRequestController(
             </body>
             </html>
             """;
+    }
+
+    private static string GetWorkStatusCssClass(string? status)
+    {
+        var normalized = YeuCauCongViecTrangThaiCatalog.Normalize(status);
+        if (string.Equals(normalized, YeuCauCongViecTrangThaiCatalog.DangThucHien, StringComparison.Ordinal))
+        {
+            return "in-progress";
+        }
+
+        return YeuCauCongViecTrangThaiCatalog.IsCompleted(normalized)
+            ? "completed"
+            : "neutral";
     }
 
     private static string RenderRating(ZaloRequestLandingView model)

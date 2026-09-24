@@ -662,26 +662,63 @@ public sealed class ZaloRequestService(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT ycvc.ID, cv.TenCongViec, ycvc.TrangThaiCongViec
+            SELECT
+                ycvc.ID AS WorkId,
+                cv.TenCongViec,
+                ycvc.TrangThaiCongViec,
+                nv.ID AS EmployeeId,
+                LTRIM(RTRIM(CONCAT(ISNULL(nv.Ho, N''), N' ', ISNULL(nv.Ten, N'')))) AS EmployeeFullName
             FROM [TblYeuCauCongViec] ycvc
             LEFT JOIN [TblCongViec] cv ON cv.ID = ycvc.IDCongViec
+            LEFT JOIN [TblYeuCauCongViecNhanVien] assignment
+                ON assignment.IDYeuCauCongViec = ycvc.ID
+            LEFT JOIN [TblNhanVien] nv ON nv.ID = assignment.IDNhanVien
             WHERE ycvc.IDYeuCau = @RequestId
-            ORDER BY ycvc.ID
+            ORDER BY ycvc.ID, nv.Ho, nv.Ten, nv.ID
             """;
         command.Parameters.Add(new SqlParameter("@RequestId", SqlDbType.Int) { Value = requestId });
-        var items = new List<ZaloRequestWorkItem>();
+        var rows = new List<ZaloRequestWorkEmployeeRow>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            items.Add(new ZaloRequestWorkItem
+            rows.Add(new ZaloRequestWorkEmployeeRow(
+                Convert.ToInt32(reader["WorkId"]),
+                GetString(reader, "TenCongViec") ?? "Công việc",
+                GetString(reader, "TrangThaiCongViec"),
+                reader["EmployeeId"] == DBNull.Value ? null : Convert.ToInt32(reader["EmployeeId"]),
+                GetString(reader, "EmployeeFullName")));
+        }
+
+        return GroupWorkRows(rows);
+    }
+
+    internal static IReadOnlyList<ZaloRequestWorkItem> GroupWorkRows(IEnumerable<ZaloRequestWorkEmployeeRow> rows)
+    {
+        var works = new List<ZaloRequestWorkItem>();
+        foreach (var group in rows.GroupBy(row => row.WorkId))
+        {
+            var first = group.First();
+            var employees = group
+                .Where(row => row.EmployeeId.HasValue && !string.IsNullOrWhiteSpace(row.EmployeeFullName))
+                .GroupBy(row => row.EmployeeId!.Value)
+                .Select(groupedEmployee => groupedEmployee.First())
+                .Select(employee => new ZaloRequestEmployeeItem
+                {
+                    EmployeeId = employee.EmployeeId,
+                    FullName = employee.EmployeeFullName!.Trim()
+                })
+                .ToList();
+
+            works.Add(new ZaloRequestWorkItem
             {
-                RequestWorkItemId = Convert.ToInt32(reader["ID"]),
-                WorkName = GetString(reader, "TenCongViec") ?? "Công việc",
-                Status = GetString(reader, "TrangThaiCongViec")
+                RequestWorkItemId = first.WorkId,
+                WorkName = first.WorkName,
+                Status = YeuCauCongViecTrangThaiCatalog.Normalize(first.Status),
+                Employees = employees
             });
         }
 
-        return items;
+        return works;
     }
 
     private static async Task<RequestLinkRecord?> LoadActiveLinkByRequestAsync(SqlConnection connection, int requestId, CancellationToken cancellationToken)
@@ -1017,6 +1054,13 @@ public sealed class ZaloRequestService(
         var ordinal = reader.GetOrdinal(name);
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
     }
+
+    internal sealed record ZaloRequestWorkEmployeeRow(
+        int WorkId,
+        string WorkName,
+        string? Status,
+        int? EmployeeId,
+        string? EmployeeFullName);
 
     private sealed record RequestRecord(
         int RequestId,

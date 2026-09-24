@@ -67,6 +67,13 @@ public sealed class ZaloRequestWorkItem
     public int? RequestWorkItemId { get; set; }
     public string WorkName { get; set; } = string.Empty;
     public string? Status { get; set; }
+    public IReadOnlyList<ZaloRequestEmployeeItem> Employees { get; set; } = [];
+}
+
+public sealed class ZaloRequestEmployeeItem
+{
+    public int? EmployeeId { get; set; }
+    public string FullName { get; set; } = string.Empty;
 }
 
 public sealed class ZaloRequestRatingSubmit
