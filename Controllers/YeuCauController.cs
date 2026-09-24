@@ -20,7 +20,8 @@ public class YeuCauController(
     IUserPermissionService userPermissionService,
     IDanhMucDichVuService danhMucDichVuService,
     ITravelEvaluationService travelEvaluationService,
-    IWebHostEnvironment webHostEnvironment) : Controller
+    IWebHostEnvironment webHostEnvironment,
+    ILogger<YeuCauController> logger) : Controller
 {
     private static readonly HashSet<string> AllowedCheckinImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -45,6 +46,7 @@ public class YeuCauController(
     private readonly IDanhMucDichVuService _danhMucDichVuService = danhMucDichVuService;
     private readonly ITravelEvaluationService _travelEvaluationService = travelEvaluationService;
     private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
+    private readonly ILogger<YeuCauController> _logger = logger;
 
     [HttpGet]
     public async Task<IActionResult> Index([FromQuery] YeuCauListQuery query)
@@ -135,9 +137,28 @@ public class YeuCauController(
             return View("Detail", await BuildDetailModelAsync(model, model.IDDiaDiem, HttpContext.RequestAborted));
         }
 
-        var zaloResult = result.Id.HasValue
-            ? await _zaloMessageService.SendRequestCreatedNotificationAsync(result.Id.Value, HttpContext.RequestAborted)
-            : ZaloSendResult.Fail("Không xác định được phiếu yêu cầu để gửi Zalo.");
+        var zaloResult = ZaloSendResult.Fail("Không xác định được phiếu yêu cầu để gửi Zalo.");
+        if (result.Id.HasValue)
+        {
+            try
+            {
+                zaloResult = await _zaloMessageService.SendRequestCreatedNotificationAsync(
+                    result.Id.Value,
+                    HttpContext.RequestAborted);
+            }
+            catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Request {RequestId} was created but its automatic Zalo notification failed.",
+                    result.Id.Value);
+                zaloResult = ZaloSendResult.Fail("Có lỗi khi gửi thông báo Zalo.");
+            }
+        }
 
         TempData["StatusMessage"] = zaloResult.Succeeded
             ? "Lưu yêu cầu thành công. Đã gửi thông báo và link đánh giá qua Zalo khách hàng."

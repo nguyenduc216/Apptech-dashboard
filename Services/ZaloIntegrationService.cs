@@ -870,7 +870,7 @@ public sealed class ZaloIntegrationService(
                 booking.RequestId,
                 null,
                 phone,
-                "PendingSendZaloMessage",
+                messageType,
                 "{}",
                 null,
                 false,
