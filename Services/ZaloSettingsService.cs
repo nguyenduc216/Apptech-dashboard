@@ -249,7 +249,7 @@ public sealed class ZaloSettingsService : IZaloSettingsService
                 {
                     if (provider.TryGet($"Zalo:{property}", out var value))
                     {
-                        values[property] = value;
+                        ApplyConfiguredProviderValue(values, property, value);
                     }
                 }
             }
@@ -344,6 +344,17 @@ public sealed class ZaloSettingsService : IZaloSettingsService
     private static bool IsConfigured(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         !value.Trim().StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+
+    internal static void ApplyConfiguredProviderValue(
+        IDictionary<string, string?> values,
+        string property,
+        string? value)
+    {
+        if (IsConfigured(value))
+        {
+            values[property] = value;
+        }
+    }
 
     private static string? NormalizePublicUrl(string? value)
     {

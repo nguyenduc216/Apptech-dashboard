@@ -29,6 +29,7 @@ public sealed class ZaloMessageIntegrationWiringTests
 
         Assert.Equal(1, Count(integrationSource, "new AuthenticationHeaderValue(\"Bearer\", accessToken)"));
         Assert.Contains("TryAddWithoutValidation(\"access_token\", accessToken)", transportSource);
+        Assert.Contains("TryAddWithoutValidation(\"appsecret_proof\", appSecretProof)", transportSource);
         Assert.DoesNotContain("AuthenticationHeaderValue(\"Bearer\"", transportSource);
     }
 

@@ -2,7 +2,7 @@ using System.Net;
 using System.Text;
 using ApptechDashboard.Configuration;
 using ApptechDashboard.Services;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -10,6 +10,17 @@ namespace ApptechDashboard.Tests;
 
 public sealed class ZaloTextApiClientTests
 {
+    [Fact]
+    public void GenerateAppSecretProof_UsesOfficialHmacSha256LowercaseHexAlgorithm()
+    {
+        var proof = ZaloTextApiClient.GenerateAppSecretProof("access-token", "app-secret");
+
+        Assert.Equal("dbf9c72b4c8f56924f8e07138f6d465c69cb5c9dbca908ce1403e993e1a5f799", proof);
+        Assert.Equal(proof, ZaloTextApiClient.GenerateAppSecretProof("access-token", "app-secret"));
+        Assert.NotEqual(proof, ZaloTextApiClient.GenerateAppSecretProof("new-token", "app-secret"));
+        Assert.NotEqual(proof, ZaloTextApiClient.GenerateAppSecretProof("access-token", "new-secret"));
+    }
+
     [Fact]
     public async Task SendAsync_Http200AndErrorZero_IsSuccessfulAndReadsMessageId()
     {
@@ -51,6 +62,9 @@ public sealed class ZaloTextApiClientTests
         Assert.Equal(2, fixture.Handler.Requests.Count);
         Assert.Equal("old-token", fixture.Handler.Requests[0].AccessToken);
         Assert.Equal("new-token", fixture.Handler.Requests[1].AccessToken);
+        Assert.Equal(ZaloTextApiClient.GenerateAppSecretProof("old-token", fixture.AppSecret), fixture.Handler.Requests[0].AppSecretProof);
+        Assert.Equal(ZaloTextApiClient.GenerateAppSecretProof("new-token", fixture.AppSecret), fixture.Handler.Requests[1].AppSecretProof);
+        Assert.NotEqual(fixture.Handler.Requests[0].AppSecretProof, fixture.Handler.Requests[1].AppSecretProof);
     }
 
     [Fact]
@@ -117,8 +131,27 @@ public sealed class ZaloTextApiClientTests
 
         var request = Assert.Single(fixture.Handler.Requests);
         Assert.Equal("old-token", request.AccessToken);
+        Assert.Equal(ZaloTextApiClient.GenerateAppSecretProof("old-token", fixture.AppSecret), request.AppSecretProof);
         Assert.Null(request.AuthorizationScheme);
         Assert.Null(request.AuthorizationParameter);
+    }
+
+    [Fact]
+    public async Task SendAsync_InvalidAppSecretProof_IsFinalFailureWithoutTokenRefresh()
+    {
+        var fixture = new ClientFixture(Json(HttpStatusCode.OK, """{"error":-242,"message":"Invalid appsecret_proof provided in the API argument"}"""));
+
+        var result = await fixture.SendAsync();
+
+        Assert.False(result.ApiSucceeded);
+        Assert.Equal(-242, result.ErrorCode);
+        Assert.Equal(0, fixture.RefreshCount);
+        Assert.Single(fixture.Handler.Requests);
+        Assert.Contains(fixture.Logger.Messages, message => message.Contains("ProofGenerated: True", StringComparison.Ordinal));
+        Assert.DoesNotContain(fixture.Logger.Messages, message =>
+            message.Contains("old-token", StringComparison.Ordinal) ||
+            message.Contains(fixture.AppSecret, StringComparison.Ordinal) ||
+            message.Contains(fixture.Handler.Requests[0].AppSecretProof!, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -159,14 +192,18 @@ public sealed class ZaloTextApiClientTests
             var settings = new Mock<IZaloSettingsService>();
             settings.SetupGet(value => value.Current).Returns(new ZaloOptions
             {
+                AppSecret = AppSecret,
                 ApiBaseUrl = "https://openapi.zalo.test",
                 TextMessageEndpoint = "/v3.0/oa/message/cs"
             });
-            Client = new ZaloTextApiClient(settings.Object, factory.Object, NullLogger<ZaloTextApiClient>.Instance);
+            Logger = new CapturingLogger<ZaloTextApiClient>();
+            Client = new ZaloTextApiClient(settings.Object, factory.Object, Logger);
         }
 
         public ZaloTextApiClient Client { get; }
         public SequenceHandler Handler { get; }
+        public string AppSecret { get; } = "test-app-secret";
+        public CapturingLogger<ZaloTextApiClient> Logger { get; }
         public int RefreshCount { get; private set; }
         public Exception? RefreshException { get; set; }
 
@@ -197,6 +234,7 @@ public sealed class ZaloTextApiClientTests
         {
             Requests.Add(new CapturedRequest(
                 request.Headers.TryGetValues("access_token", out var values) ? values.SingleOrDefault() : null,
+                request.Headers.TryGetValues("appsecret_proof", out var proofValues) ? proofValues.SingleOrDefault() : null,
                 request.Headers.Authorization?.Scheme,
                 request.Headers.Authorization?.Parameter,
                 request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken)));
@@ -206,7 +244,17 @@ public sealed class ZaloTextApiClientTests
 
     public sealed record CapturedRequest(
         string? AccessToken,
+        string? AppSecretProof,
         string? AuthorizationScheme,
         string? AuthorizationParameter,
         string? Body);
+
+    public sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
+    }
 }

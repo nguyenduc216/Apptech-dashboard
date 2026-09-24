@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ApptechDashboard.Configuration;
@@ -38,7 +39,7 @@ public sealed class ZaloTextApiClient(
         }, JsonOptions);
 
         var accessToken = await getAccessToken(cancellationToken);
-        var result = await SendAttemptAsync(accessToken, requestJson, cancellationToken);
+        var result = await SendAttemptAsync(accessToken, requestJson, context, cancellationToken);
         if (!result.IsInvalidAccessToken)
         {
             return result;
@@ -75,25 +76,57 @@ public sealed class ZaloTextApiClient(
             };
         }
 
-        return await SendAttemptAsync(accessToken, requestJson, cancellationToken);
+        return await SendAttemptAsync(accessToken, requestJson, context, cancellationToken);
     }
 
     private async Task<ZaloApiSendResponse> SendAttemptAsync(
         string accessToken,
         string requestJson,
+        ZaloSendContext context,
         CancellationToken cancellationToken)
     {
+        var options = zaloSettings.Current;
+        var appSecretConfigured = !string.IsNullOrWhiteSpace(options.AppSecret);
+        var appSecretProof = appSecretConfigured
+            ? GenerateAppSecretProof(accessToken, options.AppSecret!)
+            : null;
+
         var client = httpClientFactory.CreateClient("ZaloOA");
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            BuildApiUri(zaloSettings.Current, zaloSettings.Current.TextMessageEndpoint));
+            BuildApiUri(options, options.TextMessageEndpoint));
         request.Headers.TryAddWithoutValidation("access_token", accessToken);
+        if (appSecretProof is not null)
+        {
+            request.Headers.TryAddWithoutValidation("appsecret_proof", appSecretProof);
+        }
+
         request.Content = new StringContent(requestJson, Encoding.UTF8);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
         using var response = await client.SendAsync(request, cancellationToken);
         var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ParseResponse(response.IsSuccessStatusCode, (int)response.StatusCode, responseJson);
+        var result = ParseResponse(response.IsSuccessStatusCode, (int)response.StatusCode, responseJson);
+        if (result.ErrorCode == -242)
+        {
+            logger.LogWarning(
+                "Zalo rejected appsecret_proof. RequestId: {RequestId}; CustomerId: {CustomerId}; MessageType: {MessageType}; AppSecretConfigured: {AppSecretConfigured}; ProofGenerated: {ProofGenerated}; ErrorCode: {ErrorCode}",
+                context.RequestId,
+                context.CustomerId,
+                context.MessageType,
+                appSecretConfigured,
+                appSecretProof is not null,
+                result.ErrorCode);
+        }
+
+        return result;
+    }
+
+    internal static string GenerateAppSecretProof(string accessToken, string appSecret)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(appSecret));
+        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(accessToken)))
+            .ToLowerInvariant();
     }
 
     internal static ZaloApiSendResponse ParseResponse(bool httpSucceeded, int statusCode, string responseJson)
