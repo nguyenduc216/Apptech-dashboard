@@ -51,6 +51,8 @@ public interface IYeuCauService
 
     Task<IReadOnlyList<YeuCauCongViecFormItem>> GetAssignedWorksAsync(int yeuCauId, CancellationToken cancellationToken = default);
 
+    Task<RequestProgressState?> GetProgressStateAsync(int yeuCauId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<YeuCauCheckinItem>> GetCheckinsAsync(int yeuCauId, CancellationToken cancellationToken = default);
 
     Task<decimal?> GetCheckinDistanceLimitMetersAsync(CancellationToken cancellationToken = default);
@@ -1494,6 +1496,60 @@ public sealed class YeuCauService(
         {
             _logger.LogError(ex, "Failed to load assigned works for TblYeuCau {Id}.", yeuCauId);
             return [];
+        }
+    }
+
+    public async Task<RequestProgressState?> GetProgressStateAsync(
+        int yeuCauId,
+        CancellationToken cancellationToken = default)
+    {
+        if (yeuCauId <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP (1) ID, MaYeuCau, TrangThaiYeuCau
+                FROM [{TableName}]
+                WHERE ID = @Id;
+
+                SELECT ycvc.ID, cv.TenCongViec, ycvc.TrangThaiCongViec
+                FROM [{WorkTableName}] ycvc
+                LEFT JOIN [TblCongViec] cv ON cv.ID = ycvc.IDCongViec
+                WHERE ycvc.IDYeuCau = @Id
+                ORDER BY ycvc.ID;
+                """;
+            command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = yeuCauId });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return null;
+            }
+
+            var requestCode = GetNullableString(reader, "MaYeuCau") ?? $"YC-{yeuCauId}";
+            var requestStatus = YeuCauTrangThaiCatalog.Normalize(GetNullableString(reader, "TrangThaiYeuCau"));
+            var works = new List<RequestWorkProgressState>();
+            if (await reader.NextResultAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    works.Add(new RequestWorkProgressState(
+                        Convert.ToInt32(reader["ID"]),
+                        GetNullableString(reader, "TenCongViec") ?? "Công việc",
+                        YeuCauCongViecTrangThaiCatalog.Normalize(GetNullableString(reader, "TrangThaiCongViec"))));
+                }
+            }
+
+            return new RequestProgressState(yeuCauId, requestCode, requestStatus, works);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load progress state for TblYeuCau {Id}.", yeuCauId);
+            return null;
         }
     }
 

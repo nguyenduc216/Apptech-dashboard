@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ApptechDashboard.Configuration;
+using ApptechDashboard.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +23,10 @@ public interface IZaloMessageService
 {
     Task<ZaloSendResult> SendBookingConfirmationAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendRequestCreatedNotificationAsync(int yeuCauId, CancellationToken cancellationToken = default);
+    Task<ZaloSendResult> SendRequestProgressNotificationAsync(
+        int yeuCauId,
+        RequestProgressChangeSet changes,
+        CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendBookingReminderAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendRatingRequestAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendRatingResultMessageAsync(
@@ -350,6 +355,94 @@ public sealed class ZaloIntegrationService(
             cancellationToken,
             requireZaloUserId: true);
     }
+
+    public async Task<ZaloSendResult> SendRequestProgressNotificationAsync(
+        int yeuCauId,
+        RequestProgressChangeSet changes,
+        CancellationToken cancellationToken = default)
+    {
+        if (!changes.HasChanges)
+        {
+            return ZaloSendResult.Fail("Không có thay đổi trạng thái để gửi thông báo.");
+        }
+
+        var booking = await LoadBookingAsync(yeuCauId, cancellationToken);
+        if (booking is null)
+        {
+            return ZaloSendResult.Fail("Không tìm thấy phiếu yêu cầu.");
+        }
+
+        if (booking.CustomerId <= 0)
+        {
+            return ZaloSendResult.Fail("Phiếu yêu cầu chưa có khách hàng để gửi Zalo.");
+        }
+
+        var requestLink = await zaloRequestService.CreateLinkAsync(yeuCauId, cancellationToken);
+        if (requestLink is null)
+        {
+            return ZaloSendResult.Fail("Không thể tạo link public cho phiếu yêu cầu.");
+        }
+
+        var message = BuildRequestProgressMessage(booking.RequestCode, changes, requestLink.QrUrl);
+        return await SendMessageAsync(
+            booking,
+            message,
+            "RequestProgressUpdated",
+            cancellationToken,
+            requireZaloUserId: true);
+    }
+
+    internal static string BuildRequestProgressMessage(
+        string requestCode,
+        RequestProgressChangeSet changes,
+        string publicLink)
+    {
+        var heading = changes.RequestChange is null ? "AppTech cập nhật tiến độ phiếu" : "AppTech cập nhật phiếu";
+        var builder = new StringBuilder($"{heading} {NormalizeMessageLine(requestCode)}.");
+        if (changes.RequestChange is not null)
+        {
+            builder.Append("\n\nTrạng thái phiếu:\n")
+                .Append(NormalizeMessageLine(changes.RequestChange.OldStatus))
+                .Append(" → ")
+                .Append(NormalizeMessageLine(changes.RequestChange.NewStatus));
+        }
+
+        if (changes.WorkChanges.Count > 0)
+        {
+            builder.Append("\n\nTiến độ công việc:");
+            foreach (var work in changes.WorkChanges)
+            {
+                builder.Append("\n• ")
+                    .Append(TrimTo(NormalizeMessageLine(work.WorkName), 100))
+                    .Append(": ")
+                    .Append(NormalizeMessageLine(work.OldStatus))
+                    .Append(" → ")
+                    .Append(NormalizeMessageLine(work.NewStatus));
+            }
+        }
+
+        var linkSection = $"\n\nXem chi tiết:\n{publicLink}";
+        if (builder.Length + linkSection.Length > 1800)
+        {
+            builder = new StringBuilder($"{heading} {NormalizeMessageLine(requestCode)}.");
+            if (changes.RequestChange is not null)
+            {
+                builder.Append("\n\nTrạng thái phiếu:\n")
+                    .Append(NormalizeMessageLine(changes.RequestChange.OldStatus))
+                    .Append(" → ")
+                    .Append(NormalizeMessageLine(changes.RequestChange.NewStatus));
+            }
+
+            builder.Append("\n\nCó ")
+                .Append(changes.WorkChanges.Count)
+                .Append(" công việc vừa được cập nhật.");
+        }
+
+        return builder.Append(linkSection).ToString();
+    }
+
+    private static string NormalizeMessageLine(string? value) =>
+        string.Join(" ", (value ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     public async Task<ZaloSendResult> SendBookingReminderAsync(int yeuCauId, CancellationToken cancellationToken = default)
     {

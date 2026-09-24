@@ -76,6 +76,33 @@ public sealed class ZaloRequestEmployeeItem
     public string FullName { get; set; } = string.Empty;
 }
 
+public sealed record RequestProgressState(
+    int RequestId,
+    string RequestCode,
+    string RequestStatus,
+    IReadOnlyList<RequestWorkProgressState> Works);
+
+public sealed record RequestWorkProgressState(
+    int RequestWorkItemId,
+    string WorkName,
+    string Status);
+
+public sealed record RequestStatusChange(string OldStatus, string NewStatus);
+
+public sealed record ZaloWorkStatusChange(
+    int RequestWorkItemId,
+    string WorkName,
+    string OldStatus,
+    string NewStatus);
+
+public sealed record RequestProgressChangeSet(
+    string RequestCode,
+    RequestStatusChange? RequestChange,
+    IReadOnlyList<ZaloWorkStatusChange> WorkChanges)
+{
+    public bool HasChanges => RequestChange is not null || WorkChanges.Count > 0;
+}
+
 public sealed class ZaloRequestRatingSubmit
 {
     public string? Token { get; set; }

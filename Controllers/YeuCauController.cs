@@ -188,6 +188,9 @@ public class YeuCauController(
             return View("Detail", await BuildDetailModelAsync(model, model.IDDiaDiem, HttpContext.RequestAborted));
         }
 
+        var progressBefore = model.Id is > 0
+            ? await _yeuCauService.GetProgressStateAsync(model.Id.Value, HttpContext.RequestAborted)
+            : null;
         var result = await _yeuCauService.UpdateAsync(model, GetCurrentAuditUser(), HttpContext.RequestAborted);
         if (!result.Succeeded)
         {
@@ -195,7 +198,12 @@ public class YeuCauController(
             return View("Detail", await BuildDetailModelAsync(model, model.IDDiaDiem, HttpContext.RequestAborted));
         }
 
-        TempData["StatusMessage"] = "Cập nhật yêu cầu thành công.";
+        var zaloResult = model.Id is > 0
+            ? await TrySendProgressNotificationAsync(model.Id.Value, progressBefore, HttpContext.RequestAborted)
+            : null;
+        TempData["StatusMessage"] = zaloResult is { Succeeded: false }
+            ? $"Cập nhật yêu cầu thành công. Chưa gửi được thông báo Zalo: {zaloResult.Message}"
+            : "Cập nhật yêu cầu thành công.";
         TempData["StatusType"] = "success";
         return RedirectToAction(nameof(Edit), new
         {
@@ -235,14 +243,65 @@ public class YeuCauController(
             return RedirectToAction(nameof(Edit), routeValues);
         }
 
+        var progressBefore = await _yeuCauService.GetProgressStateAsync(model.Id, HttpContext.RequestAborted);
         var result = await _yeuCauService.CompleteAsync(model.Id, GetCurrentAuditUser(), HttpContext.RequestAborted);
+        ZaloSendResult? zaloResult = null;
+        if (result.Succeeded && !result.AlreadyCompleted)
+        {
+            zaloResult = await TrySendProgressNotificationAsync(model.Id, progressBefore, HttpContext.RequestAborted);
+        }
+
         TempData["StatusMessage"] = result.Succeeded
             ? result.AlreadyCompleted
                 ? "Phiếu yêu cầu đã được hoàn thành trước đó."
-                : "Đã hoàn thành phiếu yêu cầu."
+                : zaloResult is { Succeeded: false }
+                    ? $"Đã hoàn thành phiếu yêu cầu. Chưa gửi được thông báo Zalo: {zaloResult.Message}"
+                    : "Đã hoàn thành phiếu yêu cầu."
             : result.ErrorMessage ?? "Không thể hoàn thành phiếu yêu cầu.";
         TempData["StatusType"] = result.Succeeded ? "success" : "error";
         return RedirectToAction(nameof(Edit), routeValues);
+    }
+
+    private async Task<ZaloSendResult?> TrySendProgressNotificationAsync(
+        int requestId,
+        RequestProgressState? before,
+        CancellationToken cancellationToken)
+    {
+        if (before is null)
+        {
+            _logger.LogWarning("Could not snapshot request {RequestId} progress before update; skipping Zalo progress notification.", requestId);
+            return null;
+        }
+
+        var after = await _yeuCauService.GetProgressStateAsync(requestId, cancellationToken);
+        if (after is null)
+        {
+            _logger.LogWarning("Could not load request {RequestId} progress after update; skipping Zalo progress notification.", requestId);
+            return null;
+        }
+
+        var changes = RequestProgressChangeDetector.Detect(before, after);
+        if (!changes.HasChanges)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _zaloMessageService.SendRequestProgressNotificationAsync(
+                requestId,
+                changes,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Request {RequestId} was updated but its Zalo progress notification failed.", requestId);
+            return ZaloSendResult.Fail("Có lỗi khi gửi thông báo tiến độ Zalo.");
+        }
     }
 
     [HttpPost]
