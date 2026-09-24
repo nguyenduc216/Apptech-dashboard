@@ -1874,6 +1874,10 @@
                             <span>Trạng thái</span>
                             <strong data-zalo-qr-status>Chưa quét</strong>
                         </div>
+                        <div class="zalo-qr-status" data-zalo-qr-profile hidden>
+                            <span>Thông tin Zalo</span>
+                            <strong data-zalo-qr-profile-text></strong>
+                        </div>
                         <label>
                             <span>Link gửi khách hàng</span>
                             <input type="text" readonly data-zalo-qr-url />
@@ -1988,6 +1992,8 @@
             const zaloQrImage = zaloQrShell?.querySelector("[data-zalo-qr-image]");
             const zaloQrLoading = zaloQrShell?.querySelector("[data-zalo-qr-loading]");
             const zaloQrStatus = zaloQrShell?.querySelector("[data-zalo-qr-status]");
+            const zaloQrProfile = zaloQrShell?.querySelector("[data-zalo-qr-profile]");
+            const zaloQrProfileText = zaloQrShell?.querySelector("[data-zalo-qr-profile-text]");
             const zaloQrUrl = zaloQrShell?.querySelector("[data-zalo-qr-url]");
             const zaloQrCopyButton = zaloQrShell?.querySelector("[data-zalo-qr-copy]");
             const zaloQrOpenLink = zaloQrShell?.querySelector("[data-zalo-qr-open-link]");
@@ -2018,6 +2024,25 @@
                 }
             };
 
+            const updateZaloQrConnection = (data) => {
+                if (!data?.zaloConnected) {
+                    return false;
+                }
+
+                updateZaloQrStatus(data.rated ? "Rated" : "ZaloConnected");
+                const profileParts = [data.zaloDisplayName, data.zaloPhoneNumber, data.zaloUserId]
+                    .filter(value => typeof value === "string" && value.trim());
+                if (zaloQrProfile instanceof HTMLElement) {
+                    zaloQrProfile.hidden = profileParts.length === 0;
+                }
+                if (zaloQrProfileText instanceof HTMLElement) {
+                    zaloQrProfileText.textContent = profileParts.join(" · ");
+                }
+                setZaloQrMessage("Khách hàng đã kết nối Zalo OA.");
+                stopZaloQrPolling();
+                return true;
+            };
+
             const stopZaloQrPolling = () => {
                 if (zaloQrPollTimer) {
                     window.clearInterval(zaloQrPollTimer);
@@ -2040,7 +2065,7 @@
 
                     const data = await response.json();
                     updateZaloQrStatus(data.status);
-                    if (data.rated || data.status === "Expired") {
+                    if (updateZaloQrConnection(data) || data.rated || data.status === "Expired") {
                         stopZaloQrPolling();
                     }
                 } catch {
@@ -2064,6 +2089,9 @@
                 zaloQrToken = "";
                 updateZaloQrStatus("Created");
                 setZaloQrMessage("");
+                if (zaloQrProfile instanceof HTMLElement) {
+                    zaloQrProfile.hidden = true;
+                }
                 if (zaloQrLoading instanceof HTMLElement) {
                     zaloQrLoading.hidden = false;
                 }
@@ -2102,12 +2130,10 @@
                         zaloQrOpenLink.href = data.qrUrl;
                     }
                     updateZaloQrStatus(data.status);
-                    if (data.zaloConnected) {
-                        setZaloQrMessage("Khach hang da ket noi Zalo OA. Khi quet QR se vao thang trang danh gia.");
-                    } else {
+                    if (!updateZaloQrConnection(data)) {
                         setZaloQrMessage("Khach hang chua ket noi Zalo OA. QR se hien buoc huong dan ket noi truoc khi danh gia.");
+                        zaloQrPollTimer = window.setInterval(pollZaloQrStatus, 4000);
                     }
-                    zaloQrPollTimer = window.setInterval(pollZaloQrStatus, 4000);
                 } catch (error) {
                     if (zaloQrLoading instanceof HTMLElement) {
                         zaloQrLoading.hidden = true;

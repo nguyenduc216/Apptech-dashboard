@@ -16,11 +16,19 @@ public interface IZaloRequestService
     Task<ZaloRequestLandingView?> GetRatingViewAsync(string token, CancellationToken cancellationToken = default);
     Task<CustomerZaloProfileInfo> GetCustomerZaloProfileAsync(int customerId, CancellationToken cancellationToken = default);
     Task<RequestRatingInfo> GetRequestRatingAsync(int requestId, CancellationToken cancellationToken = default);
+    Task<ZaloRequestWebhookContext?> ResolveWebhookContextAsync(
+        IReadOnlyCollection<string> candidates,
+        CancellationToken cancellationToken = default);
+    Task<bool> UpdateKnownFollowingStatusAsync(
+        string zaloUserId,
+        string? oaId,
+        bool isFollowing,
+        CancellationToken cancellationToken = default);
     Task<(ZaloRequestRatingResult? Result, string? Error)> SubmitRatingAsync(
         ZaloRequestRatingSubmit request,
         CancellationToken cancellationToken = default);
-    Task MapWebhookUserAsync(
-        string userExternalId,
+    Task<ZaloRequestWebhookMapResult> MapWebhookUserAsync(
+        ZaloRequestWebhookContext context,
         string zaloUserId,
         string? oaId,
         string source,
@@ -103,15 +111,17 @@ public sealed class ZaloRequestService(
                 link.ExpiresAtUtc,
                 profile.ZaloDisplayName,
                 COALESCE(profile.ZaloPhoneNumber, profile.PhoneNumber) AS ZaloPhoneNumber,
+                profile.ZaloUserId,
                 rating.RatingScore,
                 rating.SubmittedAtUtc AS RatingSubmittedAtUtc
             FROM [{LinkTable}] link
             OUTER APPLY (
-                SELECT TOP (1) ZaloDisplayName, ZaloPhoneNumber, PhoneNumber
+                SELECT TOP (1) ZaloDisplayName, ZaloPhoneNumber, PhoneNumber, ZaloUserId
                 FROM [{ProfileTable}] p
-                WHERE p.CustomerId = link.CustomerId
+                WHERE (p.RequestId = link.RequestId OR p.CustomerId = link.CustomerId)
                   AND NULLIF(LTRIM(RTRIM(p.ZaloUserId)), N'') IS NOT NULL
-                ORDER BY p.UpdatedAtUtc DESC, p.CreatedAtUtc DESC
+                ORDER BY CASE WHEN p.RequestId = link.RequestId THEN 0 ELSE 1 END,
+                         p.UpdatedAtUtc DESC, p.CreatedAtUtc DESC
             ) profile
             OUTER APPLY (
                 SELECT TOP (1) RatingScore, SubmittedAtUtc
@@ -150,6 +160,7 @@ public sealed class ZaloRequestService(
             expiresAt,
             GetString(reader, "ZaloDisplayName"),
             GetString(reader, "ZaloPhoneNumber"),
+            GetString(reader, "ZaloUserId"),
             ratingScore,
             ratingSubmittedAt);
     }
@@ -327,8 +338,85 @@ public sealed class ZaloRequestService(
         }
     }
 
-    public async Task MapWebhookUserAsync(
-        string userExternalId,
+    public async Task<ZaloRequestWebhookContext?> ResolveWebhookContextAsync(
+        IReadOnlyCollection<string> candidates,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = candidates
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+            .Select(candidate => candidate.Trim())
+            .Where(candidate => candidate.Length <= 200)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (normalized.Length == 0)
+        {
+            return null;
+        }
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await EnsureSchemaAsync(connection, cancellationToken);
+        foreach (var candidate in normalized)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP (1) RequestId, CustomerId, Token, UserExternalId, Status, ExpiresAtUtc
+                FROM [{LinkTable}]
+                WHERE (Token = @Candidate OR UserExternalId = @Candidate)
+                  AND ExpiresAtUtc > SYSUTCDATETIME()
+                  AND Status IN (N'Created', N'Opened', N'ZaloConnected', N'Rated')
+                  AND RequestId > 0
+                  AND CustomerId > 0
+                ORDER BY CASE WHEN Token = @Candidate THEN 0 ELSE 1 END, CreatedAtUtc DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@Candidate", SqlDbType.NVarChar, 200) { Value = candidate });
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                return new ZaloRequestWebhookContext(
+                    Convert.ToInt32(reader["RequestId"]),
+                    Convert.ToInt32(reader["CustomerId"]),
+                    GetString(reader, "Token") ?? string.Empty,
+                    GetString(reader, "UserExternalId") ?? string.Empty,
+                    GetString(reader, "Status") ?? "Created",
+                    GetDateTime(reader, "ExpiresAtUtc") ?? DateTime.MinValue);
+            }
+        }
+
+        return null;
+    }
+
+    public async Task<bool> UpdateKnownFollowingStatusAsync(
+        string zaloUserId,
+        string? oaId,
+        bool isFollowing,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(zaloUserId))
+        {
+            return false;
+        }
+
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await EnsureSchemaAsync(connection, cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            UPDATE [{ProfileTable}]
+            SET IsFollowingOa = @IsFollowingOa,
+                LastInteractionAtUtc = SYSUTCDATETIME(),
+                UpdatedAtUtc = SYSUTCDATETIME()
+            WHERE ZaloUserId = @ZaloUserId AND OaId = @OaId
+            """;
+        command.Parameters.Add(new SqlParameter("@IsFollowingOa", SqlDbType.Bit) { Value = isFollowing });
+        command.Parameters.Add(new SqlParameter("@ZaloUserId", SqlDbType.NVarChar, 200) { Value = zaloUserId.Trim() });
+        command.Parameters.Add(new SqlParameter("@OaId", SqlDbType.NVarChar, 100)
+        {
+            Value = string.IsNullOrWhiteSpace(oaId) ? "default" : oaId.Trim()
+        });
+        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+    }
+
+    public async Task<ZaloRequestWebhookMapResult> MapWebhookUserAsync(
+        ZaloRequestWebhookContext context,
         string zaloUserId,
         string? oaId,
         string source,
@@ -337,22 +425,72 @@ public sealed class ZaloRequestService(
         string? phoneNumber,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(userExternalId) || string.IsNullOrWhiteSpace(zaloUserId))
+        if (context.RequestId <= 0 || context.CustomerId <= 0 ||
+            string.IsNullOrWhiteSpace(context.Token) || string.IsNullOrWhiteSpace(zaloUserId))
         {
-            return;
+            return ZaloRequestWebhookMapResult.Fail("Invalid request/customer/Zalo mapping context.");
         }
 
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await EnsureSchemaAsync(connection, cancellationToken);
-        var link = await LoadLinkByExternalIdAsync(connection, userExternalId, cancellationToken);
-        if (link is null)
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        try
         {
-            return;
-        }
+            var normalizedOaId = string.IsNullOrWhiteSpace(oaId) ? "default" : oaId.Trim();
+            await using (var linkCommand = connection.CreateCommand())
+            {
+                linkCommand.Transaction = transaction;
+                linkCommand.CommandText = $"""
+                    SELECT TOP (1) Status
+                    FROM [{LinkTable}] WITH (UPDLOCK, HOLDLOCK)
+                    WHERE Token = @Token
+                      AND RequestId = @RequestId
+                      AND CustomerId = @CustomerId
+                      AND ExpiresAtUtc > SYSUTCDATETIME()
+                      AND Status IN (N'Created', N'Opened', N'ZaloConnected', N'Rated')
+                    """;
+                linkCommand.Parameters.Add(new SqlParameter("@Token", SqlDbType.NVarChar, 200) { Value = context.Token });
+                linkCommand.Parameters.Add(new SqlParameter("@RequestId", SqlDbType.Int) { Value = context.RequestId });
+                linkCommand.Parameters.Add(new SqlParameter("@CustomerId", SqlDbType.Int) { Value = context.CustomerId });
+                var currentStatus = (await linkCommand.ExecuteScalarAsync(cancellationToken))?.ToString();
+                if (string.IsNullOrWhiteSpace(currentStatus))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    logger.LogWarning(
+                        "Zalo request mapping rejected because the verification link is no longer valid. RequestId={RequestId}, CustomerId={CustomerId}",
+                        context.RequestId,
+                        context.CustomerId);
+                    return ZaloRequestWebhookMapResult.Fail("Request verification link is no longer valid.");
+                }
+            }
 
-        await using var command = connection.CreateCommand();
-        var isFollowing = !string.Equals(source, "user_unfollow_oa", StringComparison.OrdinalIgnoreCase);
-        command.CommandText = $"""
+            await using (var conflictCommand = connection.CreateCommand())
+            {
+                conflictCommand.Transaction = transaction;
+                conflictCommand.CommandText = $"""
+                    SELECT TOP (1) CustomerId
+                    FROM [{ProfileTable}] WITH (UPDLOCK, HOLDLOCK)
+                    WHERE ZaloUserId = @ZaloUserId AND OaId = @OaId
+                    """;
+                conflictCommand.Parameters.Add(new SqlParameter("@ZaloUserId", SqlDbType.NVarChar, 200) { Value = zaloUserId.Trim() });
+                conflictCommand.Parameters.Add(new SqlParameter("@OaId", SqlDbType.NVarChar, 100) { Value = normalizedOaId });
+                var existingCustomer = await conflictCommand.ExecuteScalarAsync(cancellationToken);
+                if (existingCustomer != null && existingCustomer != DBNull.Value && Convert.ToInt32(existingCustomer) != context.CustomerId)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    logger.LogWarning(
+                        "Zalo request mapping rejected because user is already linked to another customer. RequestId={RequestId}, CustomerId={CustomerId}, ZaloUserId={ZaloUserId}",
+                        context.RequestId,
+                        context.CustomerId,
+                        zaloUserId);
+                    return ZaloRequestWebhookMapResult.Fail("Zalo user is already linked to another customer.");
+                }
+            }
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            var isFollowing = !string.Equals(source, "user_unfollow_oa", StringComparison.OrdinalIgnoreCase);
+            command.CommandText = $"""
             MERGE [{ProfileTable}] AS target
             USING (SELECT @ZaloUserId AS ZaloUserId, @OaId AS OaId) AS source
                 ON target.ZaloUserId = source.ZaloUserId AND target.OaId = source.OaId
@@ -377,23 +515,60 @@ public sealed class ZaloRequestService(
             UPDATE [{LinkTable}]
             SET Status = CASE WHEN Status = N'Rated' THEN Status ELSE N'ZaloConnected' END,
                 UpdatedAtUtc = SYSUTCDATETIME()
-            WHERE UserExternalId = @UserExternalId;
+            WHERE Token = @Token AND RequestId = @RequestId AND CustomerId = @CustomerId;
 
             UPDATE [TblKhachHang]
             SET ZaloID = @ZaloUserId, ZaloLastUpdate = GETDATE(), Updated_Date = GETDATE()
             WHERE ID = @CustomerId;
+
+            IF OBJECT_ID(N'dbo.TblZaloUserMappings', N'U') IS NOT NULL
+            BEGIN
+                MERGE [TblZaloUserMappings] AS target
+                USING (SELECT @OaId AS OaId, @ZaloUserId AS ZaloUserId) AS source
+                    ON target.OaId = source.OaId AND target.ZaloUserId = source.ZaloUserId
+                WHEN MATCHED AND target.CustomerId = @CustomerId THEN UPDATE SET
+                    UserExternalId = @UserExternalId,
+                    Source = @Source,
+                    LastSeenAtUtc = SYSUTCDATETIME()
+                WHEN NOT MATCHED THEN INSERT (
+                    Id, CustomerId, ZaloUserId, UserExternalId, OaId, Source, FirstSeenAtUtc, LastSeenAtUtc
+                ) VALUES (
+                    NEWID(), @CustomerId, @ZaloUserId, @UserExternalId, @OaId, @Source, SYSUTCDATETIME(), SYSUTCDATETIME()
+                );
+            END;
             """;
-        command.Parameters.Add(new SqlParameter("@CustomerId", SqlDbType.Int) { Value = link.CustomerId.HasValue ? link.CustomerId.Value : DBNull.Value });
-        command.Parameters.Add(new SqlParameter("@RequestId", SqlDbType.Int) { Value = link.RequestId });
-        command.Parameters.Add(new SqlParameter("@ZaloUserId", SqlDbType.NVarChar, 200) { Value = zaloUserId.Trim() });
-        command.Parameters.Add(new SqlParameter("@UserExternalId", SqlDbType.NVarChar, 200) { Value = userExternalId.Trim() });
-        command.Parameters.Add(new SqlParameter("@OaId", SqlDbType.NVarChar, 100) { Value = string.IsNullOrWhiteSpace(oaId) ? "default" : oaId.Trim() });
-        command.Parameters.Add(new SqlParameter("@Source", SqlDbType.NVarChar, 80) { Value = source });
-        AddString(command, "@ZaloDisplayName", displayName);
-        AddString(command, "@ZaloAvatarUrl", avatarUrl);
-        AddString(command, "@ZaloPhoneNumber", phoneNumber);
-        command.Parameters.Add(new SqlParameter("@IsFollowingOa", SqlDbType.Bit) { Value = isFollowing });
-        await command.ExecuteNonQueryAsync(cancellationToken);
+            command.Parameters.Add(new SqlParameter("@CustomerId", SqlDbType.Int) { Value = context.CustomerId });
+            command.Parameters.Add(new SqlParameter("@RequestId", SqlDbType.Int) { Value = context.RequestId });
+            command.Parameters.Add(new SqlParameter("@Token", SqlDbType.NVarChar, 200) { Value = context.Token });
+            command.Parameters.Add(new SqlParameter("@ZaloUserId", SqlDbType.NVarChar, 200) { Value = zaloUserId.Trim() });
+            command.Parameters.Add(new SqlParameter("@UserExternalId", SqlDbType.NVarChar, 200) { Value = context.UserExternalId });
+            command.Parameters.Add(new SqlParameter("@OaId", SqlDbType.NVarChar, 100) { Value = normalizedOaId });
+            command.Parameters.Add(new SqlParameter("@Source", SqlDbType.NVarChar, 80) { Value = source });
+            AddString(command, "@ZaloDisplayName", displayName);
+            AddString(command, "@ZaloAvatarUrl", avatarUrl);
+            AddString(command, "@ZaloPhoneNumber", phoneNumber);
+            command.Parameters.Add(new SqlParameter("@IsFollowingOa", SqlDbType.Bit) { Value = isFollowing });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            logger.LogInformation(
+                "Zalo customer linked successfully. CustomerId={CustomerId}, RequestId={RequestId}, ZaloUserId={ZaloUserId}",
+                context.CustomerId,
+                context.RequestId,
+                zaloUserId);
+            return ZaloRequestWebhookMapResult.Success(context.Status is "ZaloConnected" or "Rated");
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            logger.LogError(
+                ex,
+                "Zalo request mapping failed. RequestId={RequestId}, CustomerId={CustomerId}, ZaloUserId={ZaloUserId}",
+                context.RequestId,
+                context.CustomerId,
+                zaloUserId);
+            return ZaloRequestWebhookMapResult.Fail(ex.Message);
+        }
     }
 
     private async Task<ZaloRequestLinkResult> BuildLinkResultAsync(
@@ -419,6 +594,7 @@ public sealed class ZaloRequestService(
             profile?.Connected == true,
             profile?.ZaloDisplayName,
             profile?.ZaloPhoneNumber,
+            profile?.ZaloUserId,
             rating?.HasRating == true,
             rating?.RatingScore,
             rating?.SubmittedAtUtc,

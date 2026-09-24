@@ -9,6 +9,7 @@ public sealed record ZaloRequestLinkResult(
     bool ZaloConnected,
     string? ZaloDisplayName,
     string? ZaloPhoneNumber,
+    string? ZaloUserId,
     bool Rated,
     int? RatingScore,
     DateTime? RatingSubmittedAtUtc,
@@ -24,8 +25,26 @@ public sealed record ZaloRequestLinkStatus(
     DateTime? ExpiresAtUtc,
     string? ZaloDisplayName,
     string? ZaloPhoneNumber,
+    string? ZaloUserId,
     int? RatingScore,
     DateTime? RatingSubmittedAtUtc);
+
+public sealed record ZaloRequestWebhookContext(
+    int RequestId,
+    int CustomerId,
+    string Token,
+    string UserExternalId,
+    string Status,
+    DateTime ExpiresAtUtc);
+
+public sealed record ZaloRequestWebhookMapResult(
+    bool Succeeded,
+    bool AlreadyConnected,
+    string? Error)
+{
+    public static ZaloRequestWebhookMapResult Success(bool alreadyConnected) => new(true, alreadyConnected, null);
+    public static ZaloRequestWebhookMapResult Fail(string error) => new(false, false, error);
+}
 
 public sealed class ZaloRequestLandingView
 {

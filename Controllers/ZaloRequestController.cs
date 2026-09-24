@@ -40,6 +40,7 @@ public sealed class ZaloRequestController(
                 zaloConnected = result.ZaloConnected,
                 zaloDisplayName = result.ZaloDisplayName,
                 zaloPhoneNumber = result.ZaloPhoneNumber,
+                zaloUserId = result.ZaloUserId,
                 rated = result.Rated,
                 ratingScore = result.RatingScore,
                 ratingSubmittedAtUtc = result.RatingSubmittedAtUtc
@@ -61,6 +62,7 @@ public sealed class ZaloRequestController(
                 zaloConnected = status.ZaloConnected,
                 zaloDisplayName = status.ZaloDisplayName,
                 zaloPhoneNumber = status.ZaloPhoneNumber,
+                zaloUserId = status.ZaloUserId,
                 rated = status.Rated,
                 ratingScore = status.RatingScore,
                 ratingSubmittedAtUtc = status.RatingSubmittedAtUtc,
@@ -119,11 +121,6 @@ public sealed class ZaloRequestController(
     public async Task<IActionResult> Landing(string token, CancellationToken cancellationToken)
     {
         var model = await requestService.OpenAsync(token, cancellationToken);
-        if (model?.ZaloConnected == true && !model.IsRated)
-        {
-            return Redirect($"/zalo/request/{Uri.EscapeDataString(token)}/rating");
-        }
-
         return Content(model is null ? RenderInvalid() : RenderLanding(model), "text/html; charset=utf-8");
     }
 
@@ -178,6 +175,24 @@ public sealed class ZaloRequestController(
             ? "#"
             : $"https://zalo.me/{Uri.EscapeDataString(model.OaId)}";
         var execution = model.ExecutionDate?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa xác định";
+        var connectionContent = model.ZaloConnected
+            ? $$$"""
+                <section class="connected">
+                    <h2>Đã kết nối Zalo thành công</h2>
+                    {{{(string.IsNullOrWhiteSpace(model.ZaloDisplayName) ? "" : $"<p><strong>Tên Zalo:</strong> {Encode(model.ZaloDisplayName)}</p>")}}}
+                    {{{(string.IsNullOrWhiteSpace(model.ZaloPhoneNumber) ? "" : $"<p><strong>Số điện thoại:</strong> {Encode(model.ZaloPhoneNumber)}</p>")}}}
+                    <p class="hint">Thông tin Zalo đã được ghi nhận. Anh/chị có thể tiếp tục đánh giá công việc.</p>
+                </section>
+                """
+            : $$$"""
+                <section>
+                    <h2>Kết nối Zalo OA</h2>
+                    <p class="hint">Hãy quan tâm Zalo OA, sau đó sao chép mã xác nhận bên dưới và gửi vào khung chat OA.</p>
+                    <code class="verify-code" data-verify-code="{{{Encode(model.Token)}}}">{{{Encode(model.Token)}}}</code>
+                    <button class="copy-code" type="button" data-copy-code>Sao chép mã xác nhận</button>
+                    <div class="copy-status" data-copy-status aria-live="polite"></div>
+                </section>
+                """;
 
         return $$$"""
             <!doctype html>
@@ -199,6 +214,7 @@ public sealed class ZaloRequestController(
                     .verify-code{font-size:18px;font-weight:700}
                     .copy-code{min-height:42px;margin-top:10px;border:1px solid #9fdccc;border-radius:7px;background:#fff;color:#08735f;font:inherit;font-weight:700;cursor:pointer}
                     .copy-status{min-height:20px;margin-top:8px;color:#08735f;font-weight:700;font-size:13px}
+                    .connected{background:#eefaf6}.connected h2{color:#08735f}.connected p{margin:8px 0}
                     @media(max-width:520px){.info{grid-template-columns:1fr}main{margin:12px auto}header,section,.actions{padding:18px}}
                 </style>
             </head>
@@ -212,20 +228,9 @@ public sealed class ZaloRequestController(
                         <div><span>Trạng thái đánh giá</span><strong>{{{(model.IsRated ? "Đã đánh giá" : "Chưa đánh giá")}}}</strong></div>
                     </section>
                     <section><h2>Công việc thực hiện</h2><ul>{{{works}}}</ul></section>
-                    <section>
-                        <h2>Kết nối Zalo OA</h2>
-                        <p class="hint">Khách hàng cần chủ động quan tâm hoặc tương tác với OA. Sau khi Zalo gửi webhook hợp lệ, hệ thống mới cập nhật được Zalo ID.</p>
-                        <code>Mã liên kết: {{{Encode(model.UserExternalId)}}}</code>
-                    </section>
-                    <section>
-                        <h2>Ma xac nhan Zalo</h2>
-                        <p class="hint">Neu anh/chi da quan tam OA, hay sao chep ma nay va gui vao khung chat Zalo OA de he thong ghi nhan thong tin Zalo.</p>
-                        <code class="verify-code" data-verify-code="{{{Encode(model.Token)}}}">{{{Encode(model.Token)}}}</code>
-                        <button class="copy-code" type="button" data-copy-code>Sao chep ma xac nhan</button>
-                        <div class="copy-status" data-copy-status aria-live="polite"></div>
-                    </section>
+                    {{{connectionContent}}}
                     <div class="actions">
-                        <a class="button follow" href="{{{followUrl}}}" target="_blank" rel="noopener">Quan tâm Zalo OA để nhận thông báo</a>
+                        {{{(model.ZaloConnected ? "" : $"<a class=\"button follow\" href=\"{followUrl}\" target=\"_blank\" rel=\"noopener\">Quan tâm Zalo OA để nhận thông báo</a>")}}}
                         <a class="button rating" href="/zalo/request/{{{Uri.EscapeDataString(model.Token)}}}/rating">Tiếp tục đánh giá</a>
                     </div>
                 </main>
