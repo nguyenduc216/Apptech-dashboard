@@ -21,6 +21,7 @@ public interface IZaloAuthService
 public interface IZaloMessageService
 {
     Task<ZaloSendResult> SendBookingConfirmationAsync(int yeuCauId, CancellationToken cancellationToken = default);
+    Task<ZaloSendResult> SendRequestCreatedNotificationAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendBookingReminderAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendRatingRequestAsync(int yeuCauId, CancellationToken cancellationToken = default);
     Task<ZaloSendResult> SendRatingResultMessageAsync(
@@ -315,6 +316,38 @@ public sealed class ZaloIntegrationService(
         var link = await CreateLinkAsync(booking.CustomerId, yeuCauId, "BookingReminder", 30, cancellationToken);
         var message = $"Xin chao {booking.CustomerName}, lich lam viec cua anh/chi voi cong ty duoc hen vao {booking.WorkTimeText}. Dia diem: {booking.Address}. Xem/ket noi Zalo: {link.Link}";
         return await SendMessageAsync(booking, message, "BookingReminder", cancellationToken);
+    }
+
+    public async Task<ZaloSendResult> SendRequestCreatedNotificationAsync(int yeuCauId, CancellationToken cancellationToken = default)
+    {
+        var booking = await LoadBookingAsync(yeuCauId, cancellationToken);
+        if (booking is null)
+        {
+            return ZaloSendResult.Fail("Không tìm thấy phiếu yêu cầu.");
+        }
+
+        if (booking.CustomerId <= 0)
+        {
+            return ZaloSendResult.Fail("Phiếu yêu cầu chưa có khách hàng để gửi Zalo.");
+        }
+
+        var requestLink = await zaloRequestService.CreateLinkAsync(yeuCauId, cancellationToken);
+        if (requestLink is null)
+        {
+            return ZaloSendResult.Fail("Không thể tạo link đánh giá cho phiếu yêu cầu.");
+        }
+
+        var message =
+            $"Xin chào {booking.CustomerName}, AppTech đã tạo phiếu yêu cầu {booking.RequestCode}. " +
+            $"Thời gian thực hiện: {booking.WorkTimeText}. Địa điểm: {booking.Address}. " +
+            $"Anh/chị có thể xem thông tin và đánh giá công việc tại: {requestLink.QrUrl}";
+
+        return await SendMessageAsync(
+            booking,
+            message,
+            "RequestCreatedNotification",
+            cancellationToken,
+            requireZaloUserId: true);
     }
 
     public async Task<ZaloSendResult> SendBookingReminderAsync(int yeuCauId, CancellationToken cancellationToken = default)
@@ -924,6 +957,7 @@ public sealed class ZaloIntegrationService(
 
         return new ZaloBookingInfo(
             reader.GetInt32(reader.GetOrdinal("ID")),
+            GetNullableString(reader, "MaYeuCau") ?? $"YC-{yeuCauId}",
             GetNullableInt32(reader, "IDKhachHang") ?? 0,
             GetNullableString(reader, "TenKhachHang") ?? "khach hang",
             workText,
@@ -1544,6 +1578,7 @@ public sealed class ZaloIntegrationService(
 
     private sealed record ZaloBookingInfo(
         int RequestId,
+        string RequestCode,
         int CustomerId,
         string CustomerName,
         string WorkTimeText,
