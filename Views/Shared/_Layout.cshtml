@@ -6,6 +6,31 @@
     var currentPath = Context.Request.Path.Value ?? "/";
     var pageTitle = ViewData["Title"]?.ToString() ?? "Dashboard";
     var breadcrumb = ViewData["Breadcrumb"]?.ToString() ?? "Trang chủ / Dashboard";
+    var breadcrumbParts = breadcrumb
+        .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var breadcrumbLinks = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Trang chủ"] = Url.RouteUrl("dashboard"),
+        ["Quản lý yêu cầu"] = Url.RouteUrl("yeu-cau"),
+        ["Khách hàng"] = Url.RouteUrl("khach-hang"),
+        ["Nhân viên"] = Url.RouteUrl("nhan-vien"),
+        ["Công việc"] = Url.RouteUrl("cong-viec"),
+        ["Danh mục dịch vụ"] = Url.RouteUrl("danh-muc-dich-vu"),
+        ["Nội dung chấm công ngoài"] = Url.RouteUrl("danh-muc-cham-cong-ngoai"),
+        ["Đơn vị tính"] = Url.RouteUrl("don-vi-tinh"),
+        ["Phòng ban"] = Url.RouteUrl("phong-ban"),
+        ["Vai trò"] = Url.RouteUrl("vai-tro"),
+        ["Kho"] = Url.RouteUrl("kho"),
+        ["Hàng hóa"] = Url.RouteUrl("hang-hoa"),
+        ["Vật tư"] = Url.RouteUrl("vat-tu"),
+        ["Nhập kho"] = Url.RouteUrl("nhap-kho"),
+        ["Xuất kho"] = Url.RouteUrl("xuat-kho"),
+        ["Nhà cung cấp"] = Url.RouteUrl("nha-cung-cap"),
+        ["QR Code"] = Url.RouteUrl("qrcode"),
+        ["Cài đặt"] = Url.RouteUrl("setting"),
+        ["Quản lý Zalo OA"] = Url.RouteUrl("zalo-management"),
+        ["Chấm công"] = Url.RouteUrl("bao-cao-cham-cong")
+    };
     var displayName = User.FindFirstValue("display_name") ?? User.Identity?.Name ?? "Tài khoản";
     var roleLabel = User.FindFirstValue("role_label") ?? "Người dùng hệ thống";
     var avatarUrl = User.FindFirstValue("avatar_url");
@@ -234,7 +259,26 @@
 
         <div class="main-panel">
             <section class="page-overview">
-                <div class="crumbs">@breadcrumb</div>
+                <nav class="crumbs" aria-label="Breadcrumb">
+                    @for (var index = 0; index < breadcrumbParts.Length; index++)
+                    {
+                        var part = breadcrumbParts[index];
+                        var isCurrent = index == breadcrumbParts.Length - 1;
+                        if (!isCurrent && breadcrumbLinks.TryGetValue(part, out var breadcrumbUrl) && !string.IsNullOrWhiteSpace(breadcrumbUrl))
+                        {
+                            <a href="@breadcrumbUrl">@part</a>
+                        }
+                        else
+                        {
+                            <span @(isCurrent ? "aria-current=page" : null)>@part</span>
+                        }
+
+                        @if (!isCurrent)
+                        {
+                            <span class="crumb-separator" aria-hidden="true">/</span>
+                        }
+                    }
+                </nav>
                 <h1 class="page-title">@pageTitle</h1>
             </section>
 

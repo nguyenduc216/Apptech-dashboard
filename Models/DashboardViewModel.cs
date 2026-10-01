@@ -185,6 +185,17 @@ public sealed class ChamCongHistoryItem
         _ => "Chấm công văn phòng"
     };
 
+    public string GetEventDescription(bool isCheckout)
+    {
+        var note = isCheckout
+            ? GhiChuCheckOut
+            : IsPurchase ? PurchaseNote : GhiChuNhanVien;
+
+        return string.IsNullOrWhiteSpace(note)
+            ? DisplayDescription
+            : note.Trim();
+    }
+
     private (IReadOnlyList<string> WorkContent, string? Note, bool IsLegacy) ParsePurchaseNote(string? rawValue)
     {
         if (!IsPurchase)

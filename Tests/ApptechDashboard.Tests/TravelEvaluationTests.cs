@@ -221,6 +221,20 @@ public sealed class TravelEvaluationTests
     }
 
     [Fact]
+    public void AttendanceReportPredicate_QualifiesColumnsWithoutCorruptingSqlParameter()
+    {
+        var field = typeof(ChamCongReportService).GetField(
+            "CompanyAttendancePredicate",
+            BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("CompanyAttendancePredicate was not found.");
+        var predicate = Assert.IsType<string>(field.GetRawConstantValue());
+
+        Assert.Contains("ch.CheckInType = @CheckInType", predicate);
+        Assert.Contains("ch.IDYeuCau IS NULL", predicate);
+        Assert.DoesNotContain("@ch.", predicate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void AttendanceWithoutEvaluation_UsesIdempotentCleanup()
     {
         Assert.DoesNotContain("THROW", TravelEvaluationCleanup.DeleteRelatedSql, StringComparison.OrdinalIgnoreCase);

@@ -1,7 +1,7 @@
 @model ZaloManagementViewModel
 @{
     ViewData["Title"] = "Quan ly Zalo OA";
-    ViewData["Breadcrumb"] = "Trang chu / He thong / Quan ly Zalo OA";
+    ViewData["Breadcrumb"] = "Trang chủ / Hệ thống / Quản lý Zalo OA";
     var statusMessage = TempData["StatusMessage"]?.ToString();
     var statusType = TempData["StatusType"]?.ToString() ?? "info";
     var tokenClass = Model.AccessTokenExpiresAtUtc.HasValue && (Model.MinutesUntilExpiry ?? 0) > 120

@@ -328,7 +328,7 @@
                                 <div class="yeu-cau-location-preview">
                                     <div class="yeu-cau-location-preview-card">
                                         <span class="yeu-cau-preview-label">Khách hàng</span>
-                                        <strong data-preview-customer>@(selectedLocation?.TenKhachHangDisplay ?? "Chưa chọn")</strong>
+                                        <strong data-preview-customer>@(selectedLocation?.TenKhachHangDisplay ?? (!string.IsNullOrWhiteSpace(Model.CustomerName) ? Model.CustomerName : "Chưa chọn"))</strong>
                                     </div>
 
                                     <div class="yeu-cau-location-preview-card">

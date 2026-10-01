@@ -27,7 +27,7 @@ public sealed class ChamCongReportService(
     private const string CheckinHistoryTableName = "TblCheckinHistory";
     private const string SystemConfigTableName = "TblCauHinhHeThong";
     private const string ChamCongType = "ChamCong";
-    private const string CompanyAttendancePredicate = "(CheckInType = @CheckInType OR (CheckInType IS NULL AND IDYeuCau IS NULL))";
+    private const string CompanyAttendancePredicate = "(ch.CheckInType = @CheckInType OR (ch.CheckInType IS NULL AND ch.IDYeuCau IS NULL))";
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -80,15 +80,24 @@ public sealed class ChamCongReportService(
             return model;
         }
 
+        var loadStage = "open-connection";
+        var errorReference = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
+        var requestedEmployeeIds = employeeIds is null || employeeIds.Count == 0
+            ? "all"
+            : string.Join(',', employeeIds.Where(id => id > 0).Distinct().OrderBy(id => id));
+
         try
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
+            loadStage = "load-employees";
             var allEmployees = await LoadEmployeesAsync(connection, cancellationToken);
             var selectedEmployeeIds = NormalizeSelectedEmployeeIds(employeeIds, allEmployees);
             var employees = selectedEmployeeIds.Count == 0
                 ? allEmployees
                 : allEmployees.Where(employee => selectedEmployeeIds.Contains(employee.EmployeeId)).ToList();
+            loadStage = "load-attendance-schedule";
             var schedule = await GetAttendanceScheduleAsync(connection, cancellationToken);
+            loadStage = "load-attendance-metrics";
             var metrics = await LoadAttendanceMetricsAsync(connection, month, year, schedule, cancellationToken);
 
             foreach (var employee in employees)
@@ -126,13 +135,50 @@ public sealed class ChamCongReportService(
             model.Employees = employees;
             return model;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load attendance report for {Month}/{Year}.", month, year);
-            model.StatusMessage = "Không thể tải báo cáo chấm công.";
+            if (IsMissingTravelEvaluationTable(ex))
+            {
+                _logger.LogError(
+                    ex,
+                    "Attendance report failed at {LoadStage} for {Month}/{Year}, tab {ActiveTab}, requested employees {RequestedEmployeeIds}. " +
+                    "The travel evaluation table is missing; verify migration 20260921_add_cham_cong_travel_evaluation.sql. Error reference: {ErrorReference}.",
+                    loadStage,
+                    month,
+                    year,
+                    model.ActiveTab,
+                    requestedEmployeeIds,
+                    errorReference);
+            }
+            else
+            {
+                _logger.LogError(
+                    ex,
+                    "Attendance report failed at {LoadStage} for {Month}/{Year}, tab {ActiveTab}, requested employees {RequestedEmployeeIds}. Error reference: {ErrorReference}.",
+                    loadStage,
+                    month,
+                    year,
+                    model.ActiveTab,
+                    requestedEmployeeIds,
+                    errorReference);
+            }
+
+            model.StatusMessage = $"Không thể tải báo cáo chấm công. Mã tra cứu: {errorReference}.";
             model.StatusType = "error";
             return model;
         }
+    }
+
+    private static bool IsMissingTravelEvaluationTable(Exception exception)
+    {
+        return exception is SqlException sqlException
+            && sqlException.Errors.Cast<SqlError>().Any(error =>
+                error.Number == 208
+                && error.Message.Contains("TblChamCongTravelEvaluation", StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlyList<ChamCongReportDay> BuildDays(int month, int year)
@@ -276,7 +322,7 @@ public sealed class ChamCongReportService(
                 ) THEN 1 ELSE 0 END AS bit) AS IsCheckoutTravelExempt
             FROM [{CheckinHistoryTableName}] AS ch
             LEFT JOIN dbo.TblChamCongTravelEvaluation AS travel ON travel.CurrentAttendanceId = ch.ID
-            WHERE {(CompanyAttendancePredicate.Replace("CheckInType", "ch.CheckInType").Replace("IDYeuCau", "ch.IDYeuCau"))}
+            WHERE {CompanyAttendancePredicate}
               AND ch.ThoiDiem >= @DateFrom
               AND ch.ThoiDiem < @DateTo
               AND ch.IDNhanVien IS NOT NULL

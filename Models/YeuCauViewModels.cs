@@ -802,6 +802,7 @@ public sealed class YeuCauDetailViewModel
     public IReadOnlyList<YeuCauTrangThaiOption> WorkStatusOptions { get; set; } = YeuCauCongViecTrangThaiCatalog.Options;
     public IReadOnlyList<YeuCauCheckinItem> Checkins { get; set; } = [];
     public YeuCauLocationOption? SelectedLocation { get; set; }
+    public string? CustomerName { get; set; }
     public string GeneratedCode { get; set; } = string.Empty;
     public string? StatusMessage { get; set; }
     public string StatusType { get; set; } = "info";

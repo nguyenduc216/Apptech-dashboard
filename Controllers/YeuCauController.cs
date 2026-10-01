@@ -937,6 +937,10 @@ public class YeuCauController(
             form.IDKhachHang = selectedLocation.IDKhachHang;
         }
 
+        var customer = form.IDKhachHang.HasValue && form.IDKhachHang.Value > 0
+            ? await _khachHangService.GetByIdAsync(form.IDKhachHang.Value, cancellationToken)
+            : null;
+
         var generatedCode = await _yeuCauService.GenerateNextCodeAsync(form.NgayYeuCau, cancellationToken);
         var checkinDistanceLimitMeters = await _yeuCauService.GetCheckinDistanceLimitMetersAsync(cancellationToken);
         if (!HasPositiveDistanceLimit(checkinDistanceLimitMeters))
@@ -989,6 +993,7 @@ public class YeuCauController(
                 ? await _yeuCauService.GetCheckinsAsync(form.Id.Value, cancellationToken)
                 : [],
             SelectedLocation = selectedLocation,
+            CustomerName = customer?.TenKhachHang,
             GeneratedCode = generatedCode,
             CurrentEmployeeId = currentEmployeeId,
             CurrentUserIsAdmin = isAdmin,

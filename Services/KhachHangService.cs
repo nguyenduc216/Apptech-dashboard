@@ -238,7 +238,12 @@ public sealed class KhachHangService(
                 return (false, "Không thể thêm mới khách hàng.", null);
             }
 
-            await SyncDiaDiemLamViecAsync(connection, transaction, newId, normalizedLocations, currentUser, cancellationToken);
+            var locationSyncError = await SyncDiaDiemLamViecAsync(connection, transaction, newId, normalizedLocations, currentUser, cancellationToken);
+            if (locationSyncError is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, locationSyncError, null);
+            }
             await transaction.CommitAsync(cancellationToken);
 
             return (true, null, newId);
@@ -304,7 +309,12 @@ public sealed class KhachHangService(
                 return (false, "Không tìm thấy khách hàng để cập nhật.");
             }
 
-            await SyncDiaDiemLamViecAsync(connection, transaction, model.Id.Value, normalizedLocations, currentUser, cancellationToken);
+            var locationSyncError = await SyncDiaDiemLamViecAsync(connection, transaction, model.Id.Value, normalizedLocations, currentUser, cancellationToken);
+            if (locationSyncError is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, locationSyncError);
+            }
             await transaction.CommitAsync(cancellationToken);
 
             return (true, null);
@@ -469,6 +479,12 @@ public sealed class KhachHangService(
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
+            if (await LocationIsInUseAsync(connection, transaction, locationId, cancellationToken))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, "Địa điểm đang được sử dụng trên phiếu yêu cầu hoặc lịch sử check-in nên không thể xóa.");
+            }
+
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = $"""
@@ -507,6 +523,12 @@ public sealed class KhachHangService(
         {
             await using var connection = await OpenConnectionAsync(cancellationToken);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+            if (await CustomerHasUsedLocationsAsync(connection, transaction, id, cancellationToken))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return (false, "Khách hàng có địa điểm đang được sử dụng trên phiếu yêu cầu hoặc lịch sử check-in nên không thể xóa.");
+            }
 
             await using (var deleteLocationCommand = connection.CreateCommand())
             {
@@ -626,7 +648,7 @@ public sealed class KhachHangService(
         return items;
     }
 
-    private static async Task SyncDiaDiemLamViecAsync(
+    private static async Task<string?> SyncDiaDiemLamViecAsync(
         SqlConnection connection,
         SqlTransaction transaction,
         int khachHangId,
@@ -634,26 +656,78 @@ public sealed class KhachHangService(
         string currentUser,
         CancellationToken cancellationToken)
     {
-        await using (var deleteCommand = connection.CreateCommand())
+        var existingIds = new HashSet<int>();
+        await using (var readCommand = connection.CreateCommand())
         {
-            deleteCommand.Transaction = transaction;
-            deleteCommand.CommandText = $"""
-                DELETE FROM [{LocationTableName}]
+            readCommand.Transaction = transaction;
+            readCommand.CommandText = $"""
+                SELECT ID
+                FROM [{LocationTableName}] WITH (UPDLOCK, HOLDLOCK)
                 WHERE IDKhachHang = @IDKhachHang
                 """;
-            deleteCommand.Parameters.Add(new SqlParameter("@IDKhachHang", SqlDbType.Int) { Value = khachHangId });
-            await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+            readCommand.Parameters.Add(new SqlParameter("@IDKhachHang", SqlDbType.Int) { Value = khachHangId });
+            await using var reader = await readCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                existingIds.Add(reader.GetInt32(0));
+            }
         }
 
-        if (items.Count == 0)
+        var postedIds = items
+            .Where(item => item.Id is > 0)
+            .Select(item => item.Id!.Value)
+            .ToHashSet();
+
+        if (postedIds.Any(id => !existingIds.Contains(id)))
         {
-            return;
+            return "Có địa điểm không thuộc khách hàng hiện tại. Vui lòng tải lại dữ liệu.";
+        }
+
+        foreach (var locationId in existingIds.Except(postedIds))
+        {
+            if (await LocationIsInUseAsync(connection, transaction, locationId, cancellationToken))
+            {
+                return "Không thể xóa địa điểm đang được sử dụng trên phiếu yêu cầu hoặc lịch sử check-in.";
+            }
+
+            await using var deleteCommand = connection.CreateCommand();
+            deleteCommand.Transaction = transaction;
+            deleteCommand.CommandText = $"DELETE FROM [{LocationTableName}] WHERE ID = @Id AND IDKhachHang = @IDKhachHang";
+            deleteCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = locationId });
+            deleteCommand.Parameters.Add(new SqlParameter("@IDKhachHang", SqlDbType.Int) { Value = khachHangId });
+            await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         var auditUser = TrimToLength(currentUser, 50);
         for (var index = 0; index < items.Count; index++)
         {
             var item = items[index];
+
+            if (item.Id is > 0)
+            {
+                await using var updateCommand = connection.CreateCommand();
+                updateCommand.Transaction = transaction;
+                updateCommand.CommandText = $"""
+                    UPDATE [{LocationTableName}]
+                    SET DiaChi = @DiaChi,
+                        NguoiLienHe = @NguoiLienHe,
+                        DienThoai = @DienThoai,
+                        LongAddress = @LongAddress,
+                        LatAddress = @LatAddress,
+                        TrangThaiSuDung = @TrangThaiSuDung,
+                        Updated_Date = GETDATE(),
+                        Updated_by = @UpdatedBy,
+                        Updated_LongLat_Date = CASE WHEN @LongAddress IS NULL OR @LatAddress IS NULL THEN NULL ELSE GETDATE() END,
+                        Updated_LongLat_By = CASE WHEN @LongAddress IS NULL OR @LatAddress IS NULL THEN NULL ELSE @UpdatedLongLatBy END,
+                        isRoot = @IsRoot
+                    WHERE ID = @Id AND IDKhachHang = @IDKhachHang
+                    """;
+                FillLocationParameters(updateCommand, khachHangId, item, currentUser);
+                updateCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = item.Id.Value });
+                updateCommand.Parameters.Add(new SqlParameter("@IsRoot", SqlDbType.Bit) { Value = index == 0 });
+                await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+                continue;
+            }
 
             await using var insertCommand = connection.CreateCommand();
             insertCommand.Transaction = transaction;
@@ -716,6 +790,50 @@ public sealed class KhachHangService(
 
             await insertCommand.ExecuteNonQueryAsync(cancellationToken);
         }
+
+        await EnsureSingleRootLocationAsync(connection, transaction, khachHangId, cancellationToken);
+        return null;
+    }
+
+    private static async Task<bool> LocationIsInUseAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int locationId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT CASE WHEN
+                EXISTS (SELECT 1 FROM [TblYeuCau] WHERE IDDiaDiem = @Id)
+                OR EXISTS (SELECT 1 FROM [TblCheckinHistory] WHERE IDDiaDiem = @Id)
+            THEN 1 ELSE 0 END
+            """;
+        command.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = locationId });
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0) == 1;
+    }
+
+    private static async Task<bool> CustomerHasUsedLocationsAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int customerId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            SELECT CASE WHEN EXISTS (
+                SELECT 1
+                FROM [{LocationTableName}] AS dd
+                WHERE dd.IDKhachHang = @CustomerId
+                  AND (
+                      EXISTS (SELECT 1 FROM [TblYeuCau] AS yc WHERE yc.IDDiaDiem = dd.ID)
+                      OR EXISTS (SELECT 1 FROM [TblCheckinHistory] AS ch WHERE ch.IDDiaDiem = dd.ID)
+                  )
+            ) THEN 1 ELSE 0 END
+            """;
+        command.Parameters.Add(new SqlParameter("@CustomerId", SqlDbType.Int) { Value = customerId });
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0) == 1;
     }
 
     private static IReadOnlyList<KhachHangDiaDiemFormItem> NormalizeDiaDiemLamViec(IEnumerable<KhachHangDiaDiemFormItem>? items)

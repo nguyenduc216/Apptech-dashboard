@@ -1410,6 +1410,23 @@ button {
     font-size: 0.92rem;
 }
 
+.crumbs a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.crumbs a:hover,
+.crumbs a:focus-visible {
+    color: var(--teal-600);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.crumb-separator {
+    margin: 0 0.35rem;
+    color: rgba(100, 129, 120, 0.65);
+}
+
 .page-title {
     margin: 0;
     font-size: 1.9rem;

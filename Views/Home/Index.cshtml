@@ -216,6 +216,7 @@
                                     var purchaseStatus = item.IsQuickPurchase ? "Nhanh" : item.IsOpen ? "Đang thực hiện" : "Hoàn tất";
                                     var activityTypeLabel = isPurchaseCheckin ? "Chấm công ngoài" : isCustomerCheckin ? "Chấm công công việc" : "Chấm công văn phòng";
                                     var activityTypeIcon = isPurchaseCheckin ? "fa-route" : isCustomerCheckin ? "fa-list-check" : "fa-building";
+                                    var displayDescription = item.GetEventDescription(entry.IsCheckout);
                                     <section class="cham-cong-attendance-line @eventClass @(!isCustomerCheckin && !isPurchaseCheckin && entry.IsViolation ? "is-attendance-violation" : "") @(isPurchaseCheckin ? "is-purchase-event" : isCustomerCheckin ? "is-customer-event" : "is-company-event")"
                                              @(isPurchaseCheckin ? "data-purchase-detail-open" : null)
                                              data-purchase-id="@(isPurchaseCheckin ? item.Id.ToString(invariantCulture) : null)"
@@ -265,12 +266,12 @@
                                                         data-request-contact="@item.NguoiLienHe"
                                                         data-request-phone="@item.DienThoai"
                                                         data-request-works="@string.Join("||", works)">
-                                                    @item.DisplayDescription
+                                                    @displayDescription
                                                 </button>
                                             }
                                             else
                                             {
-                                                <span class="cham-cong-entry-meta">@item.DisplayDescription</span>
+                                                <span class="cham-cong-entry-meta">@displayDescription</span>
                                                 @if (isPurchaseCheckin && !item.IsQuickPurchase)
                                                 {
                                                     <span class="purchase-attendance-status">@purchaseStatus</span>
@@ -2019,7 +2020,7 @@
                     purchaseTimeInput.disabled = !isPurchaseCheckinMode();
                 }
                 if (purchaseSpeechButton instanceof HTMLButtonElement) {
-                    purchaseSpeechButton.hidden = !isPurchaseCheckinMode() || !isPurchaseSpeechSupported;
+                    purchaseSpeechButton.hidden = !isPurchaseSpeechSupported;
                 }
                 if (noteLabel instanceof HTMLElement) {
                     noteLabel.textContent = isPurchaseMode()
@@ -2230,6 +2231,11 @@
                     const isPurchaseCheckin = item.attendanceType === "MuaHang" || item.isPurchase === true;
                     const summary = item.requestSummary || {};
                     const workText = Array.isArray(summary.congViecs) ? summary.congViecs.join("||") : "";
+                    const rawEventNote = event.isCheckout
+                        ? item.ghiChuCheckOut
+                        : isPurchaseCheckin ? item.ghiChu : item.ghiChuNhanVien;
+                    const eventNote = typeof rawEventNote === "string" ? rawEventNote.trim() : "";
+                    const displayDescription = eventNote || item.displayDescription;
                     const metaHtml = isCustomerCheckin
                         ? `<button type="button"
                                    class="cham-cong-request-chip"
@@ -2240,10 +2246,10 @@
                                    data-request-address="${escapeHtml(summary.diaChi || item.locationDisplayText || item.diaChi || "Chưa có địa chỉ")}"
                                    data-request-contact="${escapeHtml(summary.nguoiLienHe || "")}"
                                    data-request-phone="${escapeHtml(summary.dienThoai || "")}"
-                                   data-request-works="${escapeHtml(workText)}">${escapeHtml(item.displayDescription || summary.tenKhachHang || item.tenKhachHang || "Khách hàng chưa xác định")}</button>`
+                                   data-request-works="${escapeHtml(workText)}">${escapeHtml(displayDescription || summary.tenKhachHang || item.tenKhachHang || "Khách hàng chưa xác định")}</button>`
                         : isPurchaseCheckin
-                            ? `<span class="cham-cong-entry-meta">${escapeHtml(item.displayDescription || "Chấm công ngoài")}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang thực hiện" : "Hoàn tất"}</span>`}`
-                            : `<span class="cham-cong-entry-meta">${escapeHtml(item.displayDescription || "Chấm công văn phòng")}</span>`;
+                            ? `<span class="cham-cong-entry-meta">${escapeHtml(displayDescription || "Chấm công ngoài")}</span>${item.isQuickPurchase ? "" : `<span class="purchase-attendance-status">${item.isOpen ? "Đang thực hiện" : "Hoàn tất"}</span>`}`
+                            : `<span class="cham-cong-entry-meta">${escapeHtml(displayDescription || "Chấm công văn phòng")}</span>`;
                     const imagePath = event.isCheckout ? item.imgPathCheckOut : item.imgPath;
                     const isViolation = !isCustomerCheckin && !isPurchaseCheckin && (event.isCheckout ? item.isCheckoutViolation : item.isCheckinViolation);
                     const lineClass = event.isCheckout ? "is-checkout-complete" : "is-checkin";

@@ -142,6 +142,46 @@ public sealed class AttendanceOutsideCatalogTests
         Assert.Equal("Công ty ABC", history.DisplayDescription);
     }
 
+    [Fact]
+    public void AttendanceEvent_UsesCheckinNoteBeforeDefaultDescription()
+    {
+        var history = new ChamCongHistoryItem { GhiChuNhanVien = "Khách cửa A đang thang máy" };
+
+        Assert.Equal("Khách cửa A đang thang máy", history.GetEventDescription(isCheckout: false));
+    }
+
+    [Fact]
+    public void AttendanceEvent_UsesTheNoteForEachDirection()
+    {
+        var history = new ChamCongHistoryItem
+        {
+            GhiChuNhanVien = "Ghi chú vào",
+            GhiChuCheckOut = "Ghi chú ra"
+        };
+
+        Assert.Equal("Ghi chú vào", history.GetEventDescription(isCheckout: false));
+        Assert.Equal("Ghi chú ra", history.GetEventDescription(isCheckout: true));
+    }
+
+    [Fact]
+    public void AttendanceEvent_FallsBackToStandardDescriptionWhenNoteIsBlank()
+    {
+        var history = new ChamCongHistoryItem { GhiChuNhanVien = "   " };
+
+        Assert.Equal("Chấm công văn phòng", history.GetEventDescription(isCheckout: false));
+    }
+
+    [Fact]
+    public void AttendanceSpeechInput_IsAvailableForOfficeCheckinAndCheckoutModes()
+    {
+        var source = ReadRepositoryFile("Views", "Home", "Index.cshtml");
+
+        Assert.Contains("purchaseSpeechButton.hidden = !isPurchaseSpeechSupported;", source);
+        Assert.DoesNotContain("purchaseSpeechButton.hidden = !isPurchaseCheckinMode() || !isPurchaseSpeechSupported;", source);
+        Assert.Contains("checkinButton?.addEventListener(\"click\", () => void openCameraModal(\"checkin\"))", source);
+        Assert.Contains("checkoutButton?.addEventListener(\"click\", () => void openCameraModal(\"checkout\"))", source);
+    }
+
     [Theory]
     [InlineData("MuaHang", null)]
     [InlineData(null, 12)]
@@ -182,5 +222,22 @@ public sealed class AttendanceOutsideCatalogTests
         Assert.False(combined.IsCheckout);
         Assert.True(combined.IsCombined);
         Assert.True(history.IsQuickPurchase);
+    }
+
+    private static string ReadRepositoryFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. parts]);
+            if (File.Exists(candidate))
+            {
+                return File.ReadAllText(candidate);
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find repository file: {Path.Combine(parts)}");
     }
 }
