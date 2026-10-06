@@ -55,6 +55,14 @@ public interface IVatTuService
         string qrCode,
         string currentUser,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<VatTuExportHistoryItem>> GetExportHistoryAsync(
+        int vatTuId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<VatTuListItem>> GetAllForExportAsync(
+        string? keyword,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class VatTuService(
@@ -207,6 +215,109 @@ public sealed class VatTuService(
         {
             _logger.LogError(ex, "Failed to load TblChiTietHangHoa list.");
             return ([], 0, 1, 0, pageSize);
+        }
+    }
+
+    public async Task<IReadOnlyList<VatTuListItem>> GetAllForExportAsync(
+        string? keyword,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            var normalizedKeyword = NormalizeKeyword(keyword);
+            var keywordTerms = SplitKeywordTerms(normalizedKeyword);
+            var whereClause = BuildWhereClause(keywordTerms);
+            var hasTrangThaiSuDungColumn = await HasTrangThaiSuDungColumnAsync(connection, transaction: null, cancellationToken);
+            var trangThaiSuDungSelect = hasTrangThaiSuDungColumn
+                ? "CAST(ISNULL(ct.TrangThaiSuDung, 0) AS bit) AS TrangThaiSuDung,"
+                : "CAST(1 AS bit) AS TrangThaiSuDung,";
+            var hasPhieuNhapChiTietColumn = await HasPhieuNhapChiTietColumnAsync(connection, transaction: null, cancellationToken);
+            var phieuNhapChiTietSelect = hasPhieuNhapChiTietColumn
+                ? "ct.IDPhieuNhapChiTiet,"
+                : "CAST(NULL AS int) AS IDPhieuNhapChiTiet,";
+            var hasDonViNhapColumn = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "IDDonViNhap", cancellationToken);
+            var donViNhapExpression = hasDonViNhapColumn ? "ct.IDDonViNhap" : "CAST(NULL AS int)";
+            var donViNhapSelect = $"{donViNhapExpression} AS IDDonViNhap,";
+            var donGiaBanLeSelect = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "DonGiaBanLe", cancellationToken)
+                ? "ct.DonGiaBanLe,"
+                : "CAST(0 AS decimal(18,2)) AS DonGiaBanLe,";
+            var hasPhanLoaiColumn = await HasColumnAsync(connection, transaction: null, "TblChiTietHangHoa", "IDPhanLoaiHangHoa", cancellationToken);
+            var phanLoaiSelect = hasPhanLoaiColumn ? "ct.IDPhanLoaiHangHoa," : "CAST(NULL AS int) AS IDPhanLoaiHangHoa,";
+            var phanLoaiJoin = hasPhanLoaiColumn ? "LEFT JOIN [TblHangHoaPhanLoai] plhh ON plhh.ID = ct.IDPhanLoaiHangHoa" : string.Empty;
+            var phanLoaiNameSelect = hasPhanLoaiColumn ? "plhh.TenPhanLoai AS TenPhanLoaiHangHoa," : "CAST(NULL AS nvarchar(250)) AS TenPhanLoaiHangHoa,";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT
+                    ct.ID,
+                    {trangThaiSuDungSelect}
+                    ct.IDKho,
+                    ct.IDHangHoa,
+                    {phanLoaiSelect}
+                    ct.IDDonVinTinh,
+                    {donViNhapSelect}
+                    ct.TenChiTiet,
+                    ct.QRCode,
+                    ct.SoLuongTon,
+                    {donGiaBanLeSelect}
+                    ct.MaSoLo,
+                    ct.LuuTaiKho,
+                    ct.GhiChu,
+                    ct.Image,
+                    {phieuNhapChiTietSelect}
+                    ct.Created_Date,
+                    ct.Created_By,
+                    ct.Updated_Date,
+                    ct.Updated_By,
+                    kho.TenKho,
+                    kho.MaKho,
+                    hh.TenHangHoa,
+                    hh.MaHangHoa,
+                    {phanLoaiNameSelect}
+                    dvt.TenDonVi,
+                    dvt.TenVietTat,
+                    dvtNhap.TenDonVi AS TenDonViNhap,
+                    dvtNhap.TenVietTat AS TenVietTatDonViNhap,
+                    pn.ID AS IDPhieuNhapKho,
+                    pn.MaPhieu AS MaPhieuNhap,
+                    pxLatest.ID AS IDPhieuXuatKho,
+                    pxLatest.MaPhieu AS MaPhieuXuat
+                FROM [{TableName}] ct
+                LEFT JOIN [TblKho] kho ON kho.ID = ct.IDKho
+                LEFT JOIN [TblHangHoa] hh ON hh.ID = ct.IDHangHoa
+                {phanLoaiJoin}
+                LEFT JOIN [TblDonViTinh] dvt ON dvt.ID = ct.IDDonVinTinh
+                LEFT JOIN [TblDonViTinh] dvtNhap ON dvtNhap.ID = {donViNhapExpression}
+                LEFT JOIN [TblPhieuNhapKhoChiTiet] pnct ON pnct.ID = ct.IDPhieuNhapChiTiet
+                LEFT JOIN [TblPhieuNhapKho] pn ON pn.ID = pnct.IDPhieuNhapKho
+                OUTER APPLY (
+                    SELECT TOP (1)
+                        px.ID,
+                        px.MaPhieu
+                    FROM [TblPhieuXuatKhoChiTiet] pxct
+                    INNER JOIN [TblPhieuXuatKho] px ON px.ID = pxct.IDPhieuXuatKho
+                    WHERE pxct.IDChiTietHangHoa = ct.ID
+                    ORDER BY px.NgayXuatKho DESC, px.ID DESC
+                ) pxLatest
+                WHERE {whereClause}
+                ORDER BY ct.ID DESC
+                """;
+            AddFilterParameters(command, keywordTerms);
+
+            var items = new List<VatTuListItem>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                items.Add(MapItem(reader));
+            }
+
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load TblChiTietHangHoa list for export.");
+            return [];
         }
     }
 
@@ -1031,6 +1142,63 @@ public sealed class VatTuService(
         {
             _logger.LogError(ex, "Failed to assign QRCode to TblChiTietHangHoa {Id}.", itemId);
             return (false, "Không thể cập nhật mã QR cho vật tư lúc này.");
+        }
+    }
+
+    public async Task<IReadOnlyList<VatTuExportHistoryItem>> GetExportHistoryAsync(
+        int vatTuId,
+        CancellationToken cancellationToken = default)
+    {
+        if (vatTuId <= 0)
+        {
+            return [];
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT
+                    px.ID AS PhieuXuatId,
+                    px.MaPhieu,
+                    px.NgayXuatKho,
+                    px.NguoiXuatKho,
+                    px.NoiDungXuatKho,
+                    px.TrangThaiPhieu,
+                    ct.SoLuongXuat
+                FROM [TblPhieuXuatKhoChiTiet] ct
+                INNER JOIN [TblPhieuXuatKho] px ON px.ID = ct.IDPhieuXuatKho
+                WHERE ct.IDChiTietHangHoa = @VatTuId
+                  AND (
+                      LOWER(LTRIM(RTRIM(px.TrangThaiPhieu))) IN ('xuat-kho', 'da-xuat')
+                  )
+                ORDER BY px.NgayXuatKho DESC, px.ID DESC
+                """;
+            command.Parameters.Add(new SqlParameter("@VatTuId", SqlDbType.Int) { Value = vatTuId });
+
+            var items = new List<VatTuExportHistoryItem>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                items.Add(new VatTuExportHistoryItem
+                {
+                    PhieuXuatId = reader.GetInt32(reader.GetOrdinal("PhieuXuatId")),
+                    MaPhieuXuat = GetNullableString(reader, "MaPhieu") ?? string.Empty,
+                    NgayXuat = GetNullableDateTime(reader, "NgayXuatKho"),
+                    NguoiXuat = GetNullableString(reader, "NguoiXuatKho"),
+                    SoLuongXuat = GetNullableDecimal(reader, "SoLuongXuat") ?? 0,
+                    GhiChu = GetNullableString(reader, "NoiDungXuatKho"),
+                    TrangThaiPhieu = GetNullableString(reader, "TrangThaiPhieu")
+                });
+            }
+
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load export history for TblChiTietHangHoa {Id}.", vatTuId);
+            return [];
         }
     }
 

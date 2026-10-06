@@ -68,6 +68,24 @@ public class XuatKhoController(
     }
 
     [HttpGet]
+    public async Task<IActionResult> SearchVatTuSuggestions([FromQuery] string? keyword)
+    {
+        var normalizedKeyword = keyword?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            return Json(new { succeeded = true, totalCount = 0, items = Array.Empty<string>() });
+        }
+
+        var suggestions = await _xuatKhoService.SearchVatTuSuggestionsAsync(normalizedKeyword, HttpContext.RequestAborted);
+        return Json(new
+        {
+            succeeded = true,
+            totalCount = suggestions.Count,
+            items = suggestions
+        });
+    }
+
+    [HttpGet]
     public async Task<IActionResult> FindVatTuByQrCode([FromQuery] string? value)
     {
         var qrValue = value?.Trim();

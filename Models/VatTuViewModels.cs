@@ -70,6 +70,17 @@ public sealed class VatTuListItem
     public string? UpdatedBy { get; set; }
 }
 
+public sealed class VatTuExportHistoryItem
+{
+    public int PhieuXuatId { get; set; }
+    public string MaPhieuXuat { get; set; } = string.Empty;
+    public DateTime? NgayXuat { get; set; }
+    public string? NguoiXuat { get; set; }
+    public decimal SoLuongXuat { get; set; }
+    public string? GhiChu { get; set; }
+    public string? TrangThaiPhieu { get; set; }
+}
+
 public sealed class VatTuImageItem
 {
     public int? Id { get; set; }
@@ -142,6 +153,9 @@ public sealed class VatTuFormModel
     public string? Keyword { get; set; }
     public int Page { get; set; } = 1;
     public string ActiveTab { get; set; } = "thong-tin";
+
+    [ValidateNever]
+    public List<VatTuExportHistoryItem> ExportHistory { get; set; } = [];
 }
 
 public sealed class VatTuDeleteModel

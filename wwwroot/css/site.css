@@ -8636,6 +8636,50 @@ body.report-fullscreen-open {
     outline: none;
 }
 
+.phieu-kho-suggestion-field {
+    position: relative;
+}
+
+.phieu-kho-suggestion-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid rgba(17, 79, 67, 0.14);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 16px 28px rgba(13, 56, 45, 0.14);
+}
+
+.phieu-kho-suggestion-item {
+    width: 100%;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #20473d;
+    font-size: 0.9rem;
+    text-align: left;
+    line-height: 1.45;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.phieu-kho-suggestion-item:hover,
+.phieu-kho-suggestion-item:focus-visible,
+.phieu-kho-suggestion-item.is-active {
+    background: rgba(12, 179, 134, 0.1);
+    color: #0a7458;
+    outline: none;
+}
+
 @media (max-width: 900px) {
     .khach-hang-location-summary-layout {
         grid-template-columns: 1fr;
@@ -9328,6 +9372,37 @@ body.report-fullscreen-open {
 
 .vat-tu-image-empty.is-hidden {
     display: none;
+}
+
+.vat-tu-export-history-wrap {
+    display: grid;
+    gap: 12px;
+}
+
+.vat-tu-export-history-empty {
+    display: grid;
+    gap: 8px;
+    place-items: center;
+    min-height: 120px;
+    padding: 24px;
+    border-radius: 9px;
+    border: 1px dashed rgba(23, 98, 138, 0.2);
+    color: #507081;
+    background: rgba(255, 255, 255, 0.54);
+    text-align: center;
+}
+
+.vat-tu-export-history-empty i {
+    font-size: 1.6rem;
+    color: rgba(23, 98, 138, 0.45);
+}
+
+.vat-tu-export-history-table-wrap {
+    overflow-x: auto;
+}
+
+.vat-tu-export-history-table {
+    min-width: 560px;
 }
 
 .vat-tu-camera-shell {

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
@@ -21,6 +21,7 @@ public interface ISimpleExcelService
     byte[] BuildHangHoaImportResult(IReadOnlyList<HangHoaImportRowResult> rows);
     byte[] BuildChamCongReport(ChamCongReportViewModel model);
     byte[] BuildCongViecReport(CongViecReportViewModel model);
+    byte[] BuildNhapXuatKhoReport(NhapXuatKhoReportViewModel model);
 }
 
 public sealed class SimpleExcelService : ISimpleExcelService
@@ -279,6 +280,34 @@ public sealed class SimpleExcelService : ISimpleExcelService
         }).ToArray();
 
         return BuildWorkbook("BaoCaoCongViec", headers, rows);
+    }
+
+    public byte[] BuildNhapXuatKhoReport(NhapXuatKhoReportViewModel model)
+    {
+        var headers = new[]
+        {
+            "TT", "Loai phieu", "Ngay", "Ma phieu", "Vat tu (chi tiet)", "Hang hoa",
+            "Ma hang hoa", "Kho", "Don vi tinh", "So luong", "Don gia", "Thanh tien", "Ghi chu", "Nguoi thao tac"
+        };
+        var rows = model.Items.Select((item, index) => (IReadOnlyList<string?>)new string?[]
+        {
+            (index + 1).ToString(CultureInfo.InvariantCulture),
+            item.LoaiDisplay,
+            item.Ngay?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture),
+            item.MaPhieu,
+            item.TenChiTiet,
+            item.TenHangHoa,
+            item.MaHangHoa,
+            item.TenKho,
+            item.DonViTinh,
+            item.SoLuong.ToString("0.##", CultureInfo.InvariantCulture),
+            item.DonGia.ToString("0.##", CultureInfo.InvariantCulture),
+            item.ThanhTien.ToString("0.##", CultureInfo.InvariantCulture),
+            item.IsNhap ? item.NoiDung : (string.IsNullOrWhiteSpace(item.NoiDung) ? item.MucDich : (item.NoiDung + " (" + item.MucDich + ")")),
+            item.NguoiThaoTac
+        }).ToArray();
+
+        return BuildWorkbook("BaoCaoNhapXuatKho", headers, rows);
     }
 
     private static byte[] BuildTemplate(string sheetName, params string[] headers)

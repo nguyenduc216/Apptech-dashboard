@@ -16,6 +16,7 @@ public interface INhapKhoService
         CancellationToken cancellationToken = default);
 
     Task<NhapKhoListItem?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> SearchVatTuSuggestionsAsync(string? keyword, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<NhapKhoDetailItem>> GetDetailsAsync(int phieuId, CancellationToken cancellationToken = default);
     Task<string> GenerateNextMaPhieuAsync(DateTime ngayNhapKho, CancellationToken cancellationToken = default);
     Task<(IReadOnlyList<NhapKhoLookupOption> KhoOptions, IReadOnlyList<NhapKhoLookupOption> HangHoaOptions, IReadOnlyList<NhapKhoLookupOption> PhanLoaiHangHoaOptions, IReadOnlyList<NhapKhoLookupOption> DonViTinhOptions, IReadOnlyList<NhapKhoLookupOption> NhaCungCapOptions)> GetLookupDataAsync(CancellationToken cancellationToken = default);
@@ -71,7 +72,17 @@ public sealed class NhapKhoService(
                         pn.NoiDungNhapKho COLLATE {SearchCollation} LIKE @Keyword OR
                         pn.NguoiNhapKho COLLATE {SearchCollation} LIKE @Keyword OR
                         kho.TenKho COLLATE {SearchCollation} LIKE @Keyword OR
-                        ncc.TenNhaCungCap COLLATE {SearchCollation} LIKE @Keyword
+                        ncc.TenNhaCungCap COLLATE {SearchCollation} LIKE @Keyword OR
+                        EXISTS (
+                            SELECT 1
+                            FROM [{DetailTableName}] pnct
+                            LEFT JOIN [TblHangHoa] pncthh ON pncthh.ID = pnct.IDHangHoa
+                            WHERE pnct.IDPhieuNhapKho = pn.ID
+                              AND (
+                                  pncthh.TenHangHoa COLLATE {SearchCollation} LIKE @Keyword OR
+                                  pncthh.MaHangHoa COLLATE {SearchCollation} LIKE @Keyword
+                              )
+                        )
                     )
                     """);
                 countCommand.Parameters.Add(new SqlParameter("@Keyword", SqlDbType.NVarChar, 250) { Value = $"%{normalizedKeyword}%" });
@@ -201,6 +212,49 @@ public sealed class NhapKhoService(
         {
             _logger.LogError(ex, "Failed to load TblPhieuNhapKho {Id}.", id);
             return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<string>> SearchVatTuSuggestionsAsync(string? keyword, CancellationToken cancellationToken = default)
+    {
+        var normalizedKeyword = NormalizeKeyword(keyword);
+        if (string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            return [];
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP (10)
+                    LTRIM(RTRIM(hh.TenHangHoa)) AS TenVatTu
+                FROM [{DetailTableName}] pnct
+                INNER JOIN [TblHangHoa] hh ON hh.ID = pnct.IDHangHoa
+                WHERE hh.TenHangHoa COLLATE {SearchCollation} LIKE @Keyword
+                GROUP BY LTRIM(RTRIM(hh.TenHangHoa))
+                ORDER BY COUNT(1) DESC, LTRIM(RTRIM(hh.TenHangHoa)) ASC
+                """;
+            command.Parameters.Add(new SqlParameter("@Keyword", SqlDbType.NVarChar, 250) { Value = $"%{normalizedKeyword}%" });
+
+            var suggestions = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    suggestions.Add(name);
+                }
+            }
+
+            return suggestions;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load VatTu suggestions for NhapKho.");
+            return [];
         }
     }
 

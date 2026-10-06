@@ -45,6 +45,25 @@ public class NhapKhoController(
     }
 
     [HttpGet]
+    public async Task<IActionResult> SearchVatTuSuggestions([FromQuery] string? keyword)
+    {
+        var normalizedKeyword = keyword?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            return Json(new { succeeded = true, totalCount = 0, items = Array.Empty<string>() });
+        }
+
+        var suggestions = await _nhapKhoService.SearchVatTuSuggestionsAsync(normalizedKeyword, HttpContext.RequestAborted);
+        return Json(new
+        {
+            succeeded = true,
+            totalCount = suggestions.Count,
+            items = suggestions
+        });
+    }
+
+
+    [HttpGet]
     public async Task<IActionResult> Export(int id)
     {
         var item = await _nhapKhoService.GetByIdAsync(id, HttpContext.RequestAborted);

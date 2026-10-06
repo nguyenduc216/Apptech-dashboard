@@ -12,12 +12,14 @@ namespace ApptechDashboard.Controllers;
 public class ReportController(
     IChamCongReportService chamCongReportService,
     ICongViecReportService congViecReportService,
+    INhapXuatKhoReportService nhapXuatKhoReportService,
     ISimpleExcelService simpleExcelService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService) : Controller
 {
     private readonly IChamCongReportService _chamCongReportService = chamCongReportService;
     private readonly ICongViecReportService _congViecReportService = congViecReportService;
+    private readonly INhapXuatKhoReportService _nhapXuatKhoReportService = nhapXuatKhoReportService;
     private readonly ISimpleExcelService _simpleExcelService = simpleExcelService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
@@ -53,6 +55,59 @@ public class ReportController(
         ViewData["Title"] = "Báo cáo công việc";
         ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Công việc";
         return View(model);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> NhapXuatKho([FromQuery] NhapXuatKhoReportQuery query)
+    {
+        if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var model = await _nhapXuatKhoReportService.GetReportAsync(
+            query.Loai,
+            query.FromDate,
+            query.ToDate,
+            query.VatTu,
+            query.HangHoa,
+            query.KhoId,
+            query.MaPhieu,
+            HttpContext.RequestAborted);
+
+        ViewData["Title"] = "Báo cáo nhập xuất kho";
+        ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất kho";
+        return View(model);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportNhapXuatKho([FromQuery] NhapXuatKhoReportQuery query)
+    {
+        if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var model = await _nhapXuatKhoReportService.GetReportAsync(
+            query.Loai,
+            query.FromDate,
+            query.ToDate,
+            query.VatTu,
+            query.HangHoa,
+            query.KhoId,
+            query.MaPhieu,
+            HttpContext.RequestAborted);
+
+        var loai = model.Filter.Loai switch
+        {
+            NhapXuatKhoReportLoai.Nhap => "nhap",
+            NhapXuatKhoReportLoai.Xuat => "xuat",
+            _ => "tat-ca"
+        };
+        return File(
+            _simpleExcelService.BuildNhapXuatKhoReport(model),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"bao-cao-nhap-xuat-kho-{loai}-{DateTime.Now:yyyyMMdd-HHmm}.xlsx");
     }
 
     [HttpGet]
@@ -137,6 +192,26 @@ public class ReportController(
         var expectedCode = NormalizePermissionCode(PermissionCatalogService.WorkReportViewPermissionCode);
         return permissions.Any(permission =>
             string.Equals(permission.PermissionCode, PermissionCatalogService.WorkReportViewPermissionCode, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(NormalizePermissionCode(permission.PermissionCode), expectedCode, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<bool> CanViewNhapXuatKhoReportAsync(CancellationToken cancellationToken)
+    {
+        var account = await GetCurrentAccountAsync(cancellationToken);
+        if (IsAdminAccount(account))
+        {
+            return true;
+        }
+
+        if (account is null)
+        {
+            return false;
+        }
+
+        var permissions = await UserPermissionSession.GetOrLoadAsync(HttpContext, _userPermissionService, cancellationToken);
+        var expectedCode = NormalizePermissionCode(PermissionCatalogService.WarehouseInOutReportViewPermissionCode);
+        return permissions.Any(permission =>
+            string.Equals(permission.PermissionCode, PermissionCatalogService.WarehouseInOutReportViewPermissionCode, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(NormalizePermissionCode(permission.PermissionCode), expectedCode, StringComparison.OrdinalIgnoreCase));
     }
 

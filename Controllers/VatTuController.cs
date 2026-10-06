@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using ApptechDashboard.Models;
 using ApptechDashboard.Services;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -46,6 +48,102 @@ public class VatTuController(
         }
 
         return View(model);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ExportExcel([FromQuery] string? keyword)
+    {
+        var items = await _vatTuService.GetAllForExportAsync(keyword, HttpContext.RequestAborted);
+        var viCulture = CultureInfo.GetCultureInfo("vi-VN");
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Danh sách vật tư");
+
+        // Header row
+        var headers = new[]
+        {
+            "STT",
+            "Tên chi tiết",
+            "Hàng hóa",
+            "Mã hàng hóa",
+            "Phân loại",
+            "Tồn kho",
+            "Đơn vị tính",
+            "Đơn vị nhập",
+            "Đơn giá bán lẻ",
+            "Kho",
+            "Mã kho",
+            "Vị trí lưu kho",
+            "Mã số lô",
+            "QR Code",
+            "Phiếu nhập",
+            "Phiếu xuất",
+            "Ghi chú",
+            "Ngày tạo",
+            "Người tạo",
+            "Ngày cập nhật",
+            "Người cập nhật"
+        };
+
+        for (var col = 1; col <= headers.Length; col++)
+        {
+            var cell = worksheet.Cell(1, col);
+            cell.Value = headers[col - 1];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#4472C4");
+            cell.Style.Font.FontColor = XLColor.White;
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        }
+
+        // Data rows
+        for (var row = 0; row < items.Count; row++)
+        {
+            var item = items[row];
+            var rowIndex = row + 2;
+
+            worksheet.Cell(rowIndex, 1).Value = row + 1;
+            worksheet.Cell(rowIndex, 2).Value = item.TenChiTiet;
+            worksheet.Cell(rowIndex, 3).Value = item.TenHangHoa ?? string.Empty;
+            worksheet.Cell(rowIndex, 4).Value = item.MaHangHoa ?? string.Empty;
+            worksheet.Cell(rowIndex, 5).Value = item.TenPhanLoaiHangHoa ?? string.Empty;
+            worksheet.Cell(rowIndex, 6).Value = item.SoLuongTon;
+            worksheet.Cell(rowIndex, 7).Value = !string.IsNullOrWhiteSpace(item.TenVietTatDonViTinh)
+                ? item.TenVietTatDonViTinh
+                : item.TenDonViTinh ?? string.Empty;
+            worksheet.Cell(rowIndex, 8).Value = !string.IsNullOrWhiteSpace(item.TenVietTatDonViNhap)
+                ? item.TenVietTatDonViNhap
+                : item.TenDonViNhap ?? string.Empty;
+            worksheet.Cell(rowIndex, 9).Value = item.DonGiaBanLe;
+            worksheet.Cell(rowIndex, 10).Value = item.TenKho ?? string.Empty;
+            worksheet.Cell(rowIndex, 11).Value = item.MaKho ?? string.Empty;
+            worksheet.Cell(rowIndex, 12).Value = item.ViTriLuuKho ?? string.Empty;
+            worksheet.Cell(rowIndex, 13).Value = item.MaSoLo ?? string.Empty;
+            worksheet.Cell(rowIndex, 14).Value = item.QRCode ?? string.Empty;
+            worksheet.Cell(rowIndex, 15).Value = item.MaPhieuNhap ?? string.Empty;
+            worksheet.Cell(rowIndex, 16).Value = item.MaPhieuXuat ?? string.Empty;
+            worksheet.Cell(rowIndex, 17).Value = item.GhiChu ?? string.Empty;
+            worksheet.Cell(rowIndex, 18).Value = item.CreatedDate.HasValue
+                ? item.CreatedDate.Value.ToString("dd/MM/yyyy HH:mm", viCulture)
+                : string.Empty;
+            worksheet.Cell(rowIndex, 19).Value = item.CreatedBy ?? string.Empty;
+            worksheet.Cell(rowIndex, 20).Value = item.UpdatedDate.HasValue
+                ? item.UpdatedDate.Value.ToString("dd/MM/yyyy HH:mm", viCulture)
+                : string.Empty;
+            worksheet.Cell(rowIndex, 21).Value = item.UpdatedBy ?? string.Empty;
+        }
+
+        // Auto-fit columns
+        worksheet.Columns().AdjustToContents();
+
+        // Freeze header row
+        worksheet.SheetView.FreezeRows(1);
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        var fileName = $"vat-tu-{DateTime.Now:yyyyMMdd-HHmmss}.xlsx";
+        return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 
     [HttpGet]
@@ -304,6 +402,8 @@ public class VatTuController(
             return model;
         }
 
+        var exportHistory = await _vatTuService.GetExportHistoryAsync(item.Id, cancellationToken);
+
         model.PopupMode = VatTuPopupMode.Edit;
         model.Form = new VatTuFormModel
         {
@@ -332,6 +432,7 @@ public class VatTuController(
             MaPhieuXuat = item.MaPhieuXuat,
             ExistingImages = item.Images.ToList(),
             PrimaryImageSelection = !string.IsNullOrWhiteSpace(item.ImageUrl) ? $"existing:{item.ImageUrl}" : null,
+            ExportHistory = exportHistory.ToList(),
             Keyword = query.Keyword,
             Page = currentPage
         };
@@ -354,6 +455,11 @@ public class VatTuController(
         if (string.IsNullOrWhiteSpace(form.ActiveTab))
         {
             form.ActiveTab = "thong-tin";
+        }
+
+        if (form.Id.HasValue && form.Id.Value > 0)
+        {
+            form.ExportHistory = (await _vatTuService.GetExportHistoryAsync(form.Id.Value, cancellationToken)).ToList();
         }
 
         var model = new VatTuManagementViewModel

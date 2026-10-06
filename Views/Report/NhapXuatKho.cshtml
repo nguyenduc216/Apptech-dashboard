@@ -1,0 +1,187 @@
+@model NhapXuatKhoReportViewModel
+@{
+    ViewData["Title"] = "Báo cáo nhập xuất kho";
+    ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất kho";
+}
+
+<section class="master-data-page cong-viec-report-page" data-nhap-xuat-kho-report>
+    <article class="panel master-data-panel cham-cong-report-panel">
+        <div class="panel-header master-data-header">
+            <div>
+                <h3>Báo cáo nhập xuất kho</h3>
+                <p>Danh sách vật tư nhập kho, xuất kho theo dòng thời gian.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+        {
+            <div class="page-alert @Model.StatusType master-data-status-alert">
+                @Model.StatusMessage
+            </div>
+        }
+
+        <form method="get" asp-action="NhapXuatKho" class="master-data-filter-form cham-cong-report-filter">
+            <label class="master-data-filter-field" for="loai">
+                <span>Loại phiếu</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                    <select id="loai" name="loai">
+                        @foreach (var option in NhapXuatKhoReportLoai.Options)
+                        {
+                            <option value="@option.Value" selected="@(Model.Filter.Loai == option.Value)">@option.Text</option>
+                        }
+                    </select>
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="fromDate">
+                <span>Từ ngày</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
+                    <input id="fromDate" name="fromDate" type="date" value="@Model.FromDateValue" />
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="toDate">
+                <span>Đến ngày</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
+                    <input id="toDate" name="toDate" type="date" value="@Model.ToDateValue" />
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="vatTu">
+                <span>Vật tư</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-boxes-packing" aria-hidden="true"></i>
+                    <input id="vatTu" name="vatTu" type="text" placeholder="Tên chi tiết vật tư" value="@(Model.Filter.VatTu ?? string.Empty)" />
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="hangHoa">
+                <span>Hàng hóa</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                    <input id="hangHoa" name="hangHoa" type="text" placeholder="Tên / mã hàng hóa" value="@(Model.Filter.HangHoa ?? string.Empty)" />
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="khoId">
+                <span>Kho</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
+                    <select id="khoId" name="khoId">
+                        <option value="">Tất cả kho</option>
+                        @foreach (var kho in Model.KhoOptions)
+                        {
+                            <option value="@kho.Id" selected="@(Model.Filter.KhoId == kho.Id)">@kho.Label</option>
+                        }
+                    </select>
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="maPhieu">
+                <span>Mã phiếu</span>
+                <span class="login-input-shell">
+                    <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
+                    <input id="maPhieu" name="maPhieu" type="text" placeholder="Mã phiếu nhập / xuất" value="@(Model.Filter.MaPhieu ?? string.Empty)" />
+                </span>
+            </label>
+
+            <div class="master-data-filter-actions">
+                <button type="submit" class="primary-button master-data-filter-button">
+                    <span class="button-content">
+                        <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                        <span>Xem báo cáo</span>
+                    </span>
+                </button>
+                <button type="submit"
+                        class="secondary-button master-data-filter-button"
+                        asp-action="ExportNhapXuatKho"
+                        title="Xuất báo cáo Excel">
+                    <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
+                    <span>Xuất Excel</span>
+                </button>
+                <a class="secondary-button master-data-reset-button" asp-action="NhapXuatKho">Xóa bộ lọc</a>
+            </div>
+        </form>
+
+
+        <div class="work-report-summary">
+            <div class="work-report-summary-card completed">
+                <span>Phiếu nhập</span>
+                <strong>@(Model.TotalNhap.ToString() + " dòng")</strong>
+            </div>
+            <div class="work-report-summary-card incomplete">
+                <span>Phiếu xuất</span>
+                <strong>@(Model.TotalXuat.ToString() + " dòng")</strong>
+            </div>
+        </div>
+
+        <div class="table-wrap cham-cong-report-wrap">
+            <table class="data-table master-data-table work-report-table">
+                <thead>
+                    <tr>
+                        <th>TT</th>
+                        <th>Loại phiếu</th>
+                        <th>Ngày</th>
+                        <th>Mã phiếu</th>
+                        <th>Vật tư (chi tiết)</th>
+                        <th>Hàng hóa</th>
+                        <th>Kho</th>
+                        <th>ĐVT</th>
+                        <th>Số lượng</th>
+                        <th>Đơn giá</th>
+                        <th>Thành tiền</th>
+                        <th>Ghi chú</th>
+                        <th>Người thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="13" class="master-data-empty">Không có dữ liệu nhập xuất kho phù hợp.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        for (var index = 0; index < Model.Items.Count; index++)
+                        {
+                            var item = Model.Items[index];
+                            <tr>
+                                <td>@(index + 1)</td>
+                                <td>
+                                    <span class="status-badge @item.LoaiCssClass">@item.LoaiDisplay</span>
+                                </td>
+                                <td>@(item.Ngay?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.MaPhieu) ? "-" : item.MaPhieu)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.TenChiTiet) ? "-" : item.TenChiTiet)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.DonViTinh) ? "-" : item.DonViTinh)</td>
+                                <td>@item.SoLuong.ToString("0.##")</td>
+                                <td>@item.DonGia.ToString("0.##")</td>
+                                <td>@item.ThanhTien.ToString("0.##")</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.NoiDung) ? (item.MucDich ?? "-") : item.NoiDung)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.NguoiThaoTac) ? "-" : item.NguoiThaoTac)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                @if (Model.Items.Count > 0)
+                {
+                    <tfoot>
+                        <tr>
+                            <td colspan="8">Tổng cộng</td>
+                            <td>@(Model.TongSoLuongNhap.ToString("0.##") + " nhập / " + Model.TongSoLuongXuat.ToString("0.##") + " xuất")</td>
+                            <td></td>
+                            <td>@((Model.TongTienNhap + Model.TongTienXuat).ToString("0.##"))</td>
+                            <td colspan="3">Tiền nhập: @Model.TongTienNhap.ToString("0.##") — Tiền xuất: @Model.TongTienXuat.ToString("0.##")</td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+    </article>
+</section>

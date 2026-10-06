@@ -18,6 +18,7 @@ public interface IXuatKhoService
         CancellationToken cancellationToken = default);
 
     Task<XuatKhoListItem?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> SearchVatTuSuggestionsAsync(string? keyword, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<XuatKhoDetailItem>> GetDetailsAsync(int phieuId, CancellationToken cancellationToken = default);
     Task<string> GenerateNextMaPhieuAsync(DateTime ngayXuatKho, CancellationToken cancellationToken = default);
     Task<XuatKhoDetailItem?> FindVatTuByQrCodeAsync(string qrCode, CancellationToken cancellationToken = default);
@@ -84,7 +85,17 @@ public sealed class XuatKhoService(
                         px.MucDichXuat COLLATE {SearchCollation} LIKE @Keyword OR
                         px.NguoiXuatKho COLLATE {SearchCollation} LIKE @Keyword OR
                         px.NguoiNhanHang COLLATE {SearchCollation} LIKE @Keyword OR
-                        px.DiaChiNguoiNhanHang COLLATE {SearchCollation} LIKE @Keyword
+                        px.DiaChiNguoiNhanHang COLLATE {SearchCollation} LIKE @Keyword OR
+                        EXISTS (
+                            SELECT 1
+                            FROM [{DetailTableName}] pxct
+                            LEFT JOIN [{VatTuTableName}] pxctct ON pxctct.ID = pxct.IDChiTietHangHoa
+                            WHERE pxct.IDPhieuXuatKho = px.ID
+                              AND (
+                                  pxctct.TenChiTiet COLLATE {SearchCollation} LIKE @Keyword OR
+                                  pxctct.MaSoLo COLLATE {SearchCollation} LIKE @Keyword
+                              )
+                        )
                     )
                     """);
                 countCommand.Parameters.Add(new SqlParameter("@Keyword", SqlDbType.NVarChar, 250) { Value = $"%{normalizedKeyword}%" });
@@ -233,6 +244,50 @@ public sealed class XuatKhoService(
         {
             _logger.LogError(ex, "Failed to load TblPhieuXuatKho {Id}.", id);
             return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<string>> SearchVatTuSuggestionsAsync(string? keyword, CancellationToken cancellationToken = default)
+    {
+        var normalizedKeyword = NormalizeKeyword(keyword);
+        if (string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            return [];
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await EnsureSchemaAsync(connection, transaction: null, cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP (10)
+                    LTRIM(RTRIM(ct.TenChiTiet)) AS TenVatTu
+                FROM [{DetailTableName}] pxct
+                INNER JOIN [{VatTuTableName}] ct ON ct.ID = pxct.IDChiTietHangHoa
+                WHERE ct.TenChiTiet COLLATE {SearchCollation} LIKE @Keyword
+                GROUP BY LTRIM(RTRIM(ct.TenChiTiet))
+                ORDER BY COUNT(1) DESC, LTRIM(RTRIM(ct.TenChiTiet)) ASC
+                """;
+            command.Parameters.Add(new SqlParameter("@Keyword", SqlDbType.NVarChar, 250) { Value = $"%{normalizedKeyword}%" });
+
+            var suggestions = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var name = reader.IsDBNull(0) ? string.Empty : reader.GetString(0).Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    suggestions.Add(name);
+                }
+            }
+
+            return suggestions;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load VatTu suggestions for XuatKho.");
+            return [];
         }
     }
 

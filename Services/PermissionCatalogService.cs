@@ -12,6 +12,7 @@ public interface IPermissionCatalogService
     Task EnsureYeuCauCheckinDistancePermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureYeuCauCheckinProxyPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureCongViecReportPermissionsAsync(CancellationToken cancellationToken = default);
+    Task EnsureNhapXuatKhoReportPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureDanhMucDichVuPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureDanhMucChamCongNgoaiPermissionsAsync(CancellationToken cancellationToken = default);
@@ -28,6 +29,7 @@ public sealed class PermissionCatalogService(
     public const string CheckinProxyManagePermissionCode = "YeuCau_CheckinProxy_Manage";
     public const string ChamCongSelectEmployeePermissionCode = "ChamCong_SelectEmployee";
     public const string WorkReportViewPermissionCode = "Report_Work_View";
+    public const string WarehouseInOutReportViewPermissionCode = "Report_NhapXuatKho_View";
     public const string ZaloManagementViewPermissionCode = "Zalo_Manage_View";
     public const string DanhMucDichVuViewPermissionCode = "DanhMucDichVu_View";
     public const string DanhMucDichVuCreatePermissionCode = "DanhMucDichVu_Create";
@@ -351,6 +353,71 @@ public sealed class PermissionCatalogService(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to ensure work report permissions.");
+        }
+    }
+
+    public async Task EnsureNhapXuatKhoReportPermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
+                ? _connectionString
+                : _sqlOptions.BuildConnectionString();
+
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                IF NOT EXISTS (SELECT 1 FROM [TblChucNang] WHERE MaChucNang = N'Report')
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'Report', NULL, N'Thống kê - báo cáo', N'Nhóm báo cáo hệ thống', NULL, N'5', N'fa-solid fa-chart-column', 1);
+                END;
+
+                DECLARE @FunctionId int;
+
+                SELECT TOP (1) @FunctionId = ID
+                FROM [TblChucNang]
+                WHERE MaChucNang = N'Report_NhapXuatKho';
+
+                IF @FunctionId IS NULL
+                BEGIN
+                    INSERT INTO [TblChucNang] (MaChucNang, MaChucNangCha, TenChucNang, MieuTa, URL, ThuTuHienThi, CssClass, TrangThaiSuDung)
+                    VALUES (N'Report_NhapXuatKho', N'Report', N'Nhập xuất kho', N'Báo cáo nhập xuất kho theo thời gian', N'/bao-cao/nhap-xuat-kho', N'5.3', N'fa-solid fa-boxes-stacked', 1);
+
+                    SET @FunctionId = CONVERT(int, SCOPE_IDENTITY());
+                END
+                ELSE
+                BEGIN
+                    UPDATE [TblChucNang]
+                    SET MaChucNangCha = N'Report',
+                        TenChucNang = N'Nhập xuất kho',
+                        MieuTa = N'Báo cáo nhập xuất kho theo thời gian',
+                        URL = N'/bao-cao/nhap-xuat-kho',
+                        ThuTuHienThi = N'5.3',
+                        CssClass = N'fa-solid fa-boxes-stacked',
+                        TrangThaiSuDung = 1
+                    WHERE ID = @FunctionId;
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM [TblQuyen] WHERE MaQuyen = @ViewPermissionCode)
+                BEGIN
+                    INSERT INTO [TblQuyen] (IDChucNang, TenQuyen, MaQuyen, MieuTa)
+                    VALUES (@FunctionId, N'Xem báo cáo nhập xuất kho', @ViewPermissionCode, N'Cho phép xem báo cáo nhập xuất kho.');
+                END;
+                """;
+            command.Parameters.Add(new SqlParameter("@ViewPermissionCode", SqlDbType.NVarChar, 250) { Value = WarehouseInOutReportViewPermissionCode });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure warehouse in/out report permissions.");
         }
     }
 

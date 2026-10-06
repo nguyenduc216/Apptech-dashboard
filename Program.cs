@@ -74,6 +74,7 @@ builder.Services.AddScoped<IChamCongReportService, ChamCongReportService>();
 builder.Services.AddScoped<IAttendanceSettingsService, AttendanceSettingsService>();
 builder.Services.AddScoped<ITravelEvaluationService, TravelEvaluationService>();
 builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
+builder.Services.AddScoped<INhapXuatKhoReportService, NhapXuatKhoReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();
 builder.Services.AddScoped<ICongViecService, CongViecService>();
@@ -110,6 +111,7 @@ using (var scope = app.Services.CreateScope())
     await permissionCatalogService.EnsureYeuCauCheckinDistancePermissionsAsync();
     await permissionCatalogService.EnsureYeuCauCheckinProxyPermissionsAsync();
     await permissionCatalogService.EnsureCongViecReportPermissionsAsync();
+    await permissionCatalogService.EnsureNhapXuatKhoReportPermissionsAsync();
     await permissionCatalogService.EnsureZaloManagementPermissionsAsync();
     await permissionCatalogService.EnsureDanhMucDichVuPermissionsAsync();
     await permissionCatalogService.EnsureDanhMucChamCongNgoaiPermissionsAsync();
@@ -271,6 +273,11 @@ app.MapControllerRoute(
     name: "bao-cao-cong-viec",
     pattern: "bao-cao/cong-viec",
     defaults: new { controller = "Report", action = "CongViec" });
+
+app.MapControllerRoute(
+    name: "bao-cao-nhap-xuat-kho",
+    pattern: "bao-cao/nhap-xuat-kho",
+    defaults: new { controller = "Report", action = "NhapXuatKho" });
 
 app.MapControllerRoute(
     name: "qr-gen",
