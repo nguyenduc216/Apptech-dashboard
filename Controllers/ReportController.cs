@@ -13,6 +13,7 @@ public class ReportController(
     IChamCongReportService chamCongReportService,
     ICongViecReportService congViecReportService,
     INhapXuatKhoReportService nhapXuatKhoReportService,
+    INhapXuatTonReportService nhapXuatTonReportService,
     ISimpleExcelService simpleExcelService,
     IUserAccountService userAccountService,
     IUserPermissionService userPermissionService) : Controller
@@ -20,6 +21,7 @@ public class ReportController(
     private readonly IChamCongReportService _chamCongReportService = chamCongReportService;
     private readonly ICongViecReportService _congViecReportService = congViecReportService;
     private readonly INhapXuatKhoReportService _nhapXuatKhoReportService = nhapXuatKhoReportService;
+    private readonly INhapXuatTonReportService _nhapXuatTonReportService = nhapXuatTonReportService;
     private readonly ISimpleExcelService _simpleExcelService = simpleExcelService;
     private readonly IUserAccountService _userAccountService = userAccountService;
     private readonly IUserPermissionService _userPermissionService = userPermissionService;
@@ -77,6 +79,29 @@ public class ReportController(
 
         ViewData["Title"] = "Báo cáo nhập xuất kho";
         ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất kho";
+        return View(model);
+    }
+
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
+    // Báo cáo tổng hợp theo kỳ, dùng chung quyền xem báo cáo kho hiện tại.
+    [HttpGet]
+    public async Task<IActionResult> NhapXuatTon([FromQuery] NhapXuatTonReportQuery query)
+    {
+        if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var model = await _nhapXuatTonReportService.GetReportAsync(
+            query.FromDate,
+            query.ToDate,
+            query.HangHoa,
+            query.KhoId,
+            query.GroupBy,
+            HttpContext.RequestAborted);
+
+        ViewData["Title"] = "Báo cáo nhập xuất tồn";
+        ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất tồn";
         return View(model);
     }
 
