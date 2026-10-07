@@ -30,6 +30,7 @@ public sealed class PermissionCatalogService(
     public const string ChamCongSelectEmployeePermissionCode = "ChamCong_SelectEmployee";
     public const string WorkReportViewPermissionCode = "Report_Work_View";
     public const string WarehouseInOutReportViewPermissionCode = "Report_NhapXuatKho_View";
+    public const string InventoryBalanceReportViewPermissionCode = "Report_NhapXuatTon_View";
     public const string ZaloManagementViewPermissionCode = "Zalo_Manage_View";
     public const string DanhMucDichVuViewPermissionCode = "DanhMucDichVu_View";
     public const string DanhMucDichVuCreatePermissionCode = "DanhMucDichVu_Create";

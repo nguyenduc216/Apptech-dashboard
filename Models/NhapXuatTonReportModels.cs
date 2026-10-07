@@ -41,7 +41,7 @@ public sealed class NhapXuatTonReportViewModel
 {
     public NhapXuatTonReportFilterState Filter { get; set; } = new();
     public IReadOnlyList<NhapXuatTonReportItem> Items { get; set; } = [];
-    public IReadOnlyList<NhapXuatKhoLookupOption> KhoOptions { get; set; } = [];
+    public IReadOnlyList<KhoLookupOption> KhoOptions { get; set; } = [];
     public string? StatusMessage { get; set; }
     public string StatusType { get; set; } = "info";
 

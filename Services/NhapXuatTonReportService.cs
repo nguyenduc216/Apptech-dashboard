@@ -19,13 +19,15 @@ public interface INhapXuatTonReportService
 public sealed class NhapXuatTonReportService(
     IOptions<SqlServerOptions> sqlOptions,
     IConfiguration configuration,
-    INhapXuatKhoReportService nhapXuatKhoReportService,
+    IKhoService khoService,
     ILogger<NhapXuatTonReportService> logger) : INhapXuatTonReportService
 {
     private const string SearchCollation = "Latin1_General_100_CI_AI";
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
-    private readonly INhapXuatKhoReportService _nhapXuatKhoReportService = nhapXuatKhoReportService;
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004 - Lookup kho thuộc owner trung lập, không thuộc report chi tiết.
+    private readonly IKhoService _khoService = khoService;
     private readonly ILogger<NhapXuatTonReportService> _logger = logger;
 
     // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
@@ -52,7 +54,7 @@ public sealed class NhapXuatTonReportService(
                 HangHoa = string.IsNullOrWhiteSpace(hangHoa) ? null : hangHoa.Trim(),
                 KhoId = khoId is null or <= 0 ? null : khoId
             },
-            KhoOptions = await _nhapXuatKhoReportService.GetKhoOptionsAsync(cancellationToken)
+            KhoOptions = await _khoService.GetLookupOptionsAsync(cancellationToken)
         };
 
         if (effectiveFrom > effectiveTo)

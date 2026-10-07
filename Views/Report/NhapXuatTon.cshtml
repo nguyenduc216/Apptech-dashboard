@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Báo cáo nhập xuất tồn";
     ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất tồn";
+    var canViewDetailReport = ViewData["CanViewNhapXuatKhoReport"] as bool? == true;
 }
 
 @* FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON *@
@@ -10,7 +11,10 @@
     <article class="panel master-data-panel cham-cong-report-panel">
         <div class="panel-header master-data-header">
             <div><h3>Báo cáo nhập xuất tồn</h3><p>Tồn đầu + nhập trong kỳ - xuất trong kỳ = tồn cuối.</p></div>
-            <a class="secondary-button master-data-reset-button" asp-action="NhapXuatKho"><i class="fa-solid fa-list" aria-hidden="true"></i><span>Xem nhập xuất chi tiết</span></a>
+            @if (canViewDetailReport)
+            {
+                <a class="secondary-button master-data-reset-button" asp-action="NhapXuatKho"><i class="fa-solid fa-list" aria-hidden="true"></i><span>Xem nhập xuất chi tiết</span></a>
+            }
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
@@ -45,7 +49,16 @@
                         foreach (var item in Model.Items)
                         {
                             <tr>
-                                <td><a asp-action="NhapXuatKho" asp-route-fromDate="@Model.FromDateValue" asp-route-toDate="@Model.ToDateValue" asp-route-hangHoa="@item.TenHangHoa" asp-route-exactHangHoa="true" asp-route-khoId="@item.KhoId" target="_blank" rel="noopener" title="Xem chi tiết nhập xuất kho">@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</a></td>
+                                <td>
+                                    @if (canViewDetailReport)
+                                    {
+                                        <a asp-action="NhapXuatKho" asp-route-fromDate="@Model.FromDateValue" asp-route-toDate="@Model.ToDateValue" asp-route-hangHoa="@item.TenHangHoa" asp-route-exactHangHoa="true" asp-route-khoId="@item.KhoId" target="_blank" rel="noopener" title="Xem chi tiết nhập xuất kho">@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</a>
+                                    }
+                                    else
+                                    {
+                                        <span>@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</span>
+                                    }
+                                </td>
                                 <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
                                 <td class="numeric-cell">@item.TonDau.ToString("0.##")</td>
                                 <td class="numeric-cell">@item.NhapTrongKy.ToString("0.##")</td>

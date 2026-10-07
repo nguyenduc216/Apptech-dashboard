@@ -8,6 +8,8 @@ namespace ApptechDashboard.Services;
 
 public interface IKhoService
 {
+    Task<IReadOnlyList<KhoLookupOption>> GetLookupOptionsAsync(CancellationToken cancellationToken = default);
+
     Task<(IReadOnlyList<KhoListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
         string? keyword,
         bool? statusFilter,
@@ -45,6 +47,37 @@ public sealed class KhoService(
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly ILogger<KhoService> _logger = logger;
+
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004
+    // Owner trung lập cho lookup kho; report chi tiết và tổng hợp không phụ thuộc lẫn nhau.
+    public async Task<IReadOnlyList<KhoLookupOption>> GetLookupOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT ID, TenKho FROM [TblKho] ORDER BY TenKho ASC";
+
+            var items = new List<KhoLookupOption>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                items.Add(new KhoLookupOption
+                {
+                    Id = reader.GetInt32(reader.GetOrdinal("ID")),
+                    Label = GetNullableString(reader, "TenKho") ?? string.Empty
+                });
+            }
+
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load neutral warehouse lookup options.");
+            return [];
+        }
+    }
 
     public async Task<(IReadOnlyList<KhoListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
         string? keyword,

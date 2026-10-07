@@ -19,12 +19,12 @@ public interface INhapXuatKhoReportService
         bool exactHangHoa = false,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<NhapXuatKhoLookupOption>> GetKhoOptionsAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class NhapXuatKhoReportService(
     IOptions<SqlServerOptions> sqlOptions,
     IConfiguration configuration,
+    IKhoService khoService,
     ILogger<NhapXuatKhoReportService> logger) : INhapXuatKhoReportService
 {
     private const string NhapHeaderTableName = "TblPhieuNhapKho";
@@ -36,6 +36,9 @@ public sealed class NhapXuatKhoReportService(
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004 - Report chi tiết cũng dùng lookup kho trung lập.
+    private readonly IKhoService _khoService = khoService;
     private readonly ILogger<NhapXuatKhoReportService> _logger = logger;
 
     public async Task<NhapXuatKhoReportViewModel> GetReportAsync(
@@ -64,7 +67,7 @@ public sealed class NhapXuatKhoReportService(
             }
         };
 
-        model.KhoOptions = await GetKhoOptionsAsync(cancellationToken);
+        model.KhoOptions = await _khoService.GetLookupOptionsAsync(cancellationToken);
         model.Items = await LoadItemsAsync(model.Filter, cancellationToken);
 
         foreach (var item in model.Items)
@@ -84,39 +87,6 @@ public sealed class NhapXuatKhoReportService(
         }
 
         return model;
-    }
-
-
-    public async Task<IReadOnlyList<NhapXuatKhoLookupOption>> GetKhoOptionsAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await using var connection = await OpenConnectionAsync(cancellationToken);
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT ID, TenKho
-                FROM [TblKho]
-                ORDER BY TenKho ASC
-                """;
-
-            var items = new List<NhapXuatKhoLookupOption>();
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                items.Add(new NhapXuatKhoLookupOption
-                {
-                    Id = reader.GetInt32(reader.GetOrdinal("ID")),
-                    Label = GetNullableString(reader, "TenKho") ?? string.Empty
-                });
-            }
-
-            return items;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load kho options for NhapXuatKho report.");
-            return [];
-        }
     }
 
     private async Task<IReadOnlyList<NhapXuatKhoReportItem>> LoadItemsAsync(

@@ -91,17 +91,11 @@ public sealed class NhapXuatKhoReportFilterState
     public string? MaPhieu { get; set; }
 }
 
-public sealed class NhapXuatKhoLookupOption
-{
-    public int Id { get; set; }
-    public string Label { get; set; } = string.Empty;
-}
-
 public sealed class NhapXuatKhoReportViewModel
 {
     public NhapXuatKhoReportFilterState Filter { get; set; } = new();
     public IReadOnlyList<NhapXuatKhoReportItem> Items { get; set; } = [];
-    public IReadOnlyList<NhapXuatKhoLookupOption> KhoOptions { get; set; } = [];
+    public IReadOnlyList<KhoLookupOption> KhoOptions { get; set; } = [];
     public int TotalNhap { get; set; }
     public int TotalXuat { get; set; }
     public decimal TongSoLuongNhap { get; set; }

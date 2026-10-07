@@ -86,12 +86,13 @@ public class ReportController(
     }
 
     // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
-    // Báo cáo tổng hợp theo kỳ, dùng chung quyền xem báo cáo kho hiện tại.
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Báo cáo tổng hợp theo kỳ.
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004
+    // Report tổng hợp dùng permission riêng; quyền report chi tiết chỉ điều khiển navigation.
     [HttpGet]
     public async Task<IActionResult> NhapXuatTon([FromQuery] NhapXuatTonReportQuery query)
     {
-        if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
+        if (!await CanViewNhapXuatTonReportAsync(HttpContext.RequestAborted))
         {
             return Forbid();
         }
@@ -105,16 +106,17 @@ public class ReportController(
 
         ViewData["Title"] = "Báo cáo nhập xuất tồn";
         ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất tồn";
+        ViewData["CanViewNhapXuatKhoReport"] = await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted);
         return View(model);
     }
 
     // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
-    // Excel dùng cùng service/filter và đúng sáu cột của báo cáo web.
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Excel dùng cùng service/filter và đúng sáu cột.
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004 - Export tổng hợp dùng permission riêng.
     [HttpGet]
     public async Task<IActionResult> ExportNhapXuatTon([FromQuery] NhapXuatTonReportQuery query)
     {
-        if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
+        if (!await CanViewNhapXuatTonReportAsync(HttpContext.RequestAborted))
         {
             return Forbid();
         }
@@ -252,6 +254,18 @@ public class ReportController(
 
     private async Task<bool> CanViewNhapXuatKhoReportAsync(CancellationToken cancellationToken)
     {
+        return await CanViewReportAsync(PermissionCatalogService.WarehouseInOutReportViewPermissionCode, cancellationToken);
+    }
+
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004 - Authorization độc lập cho web và Excel NXT.
+    private async Task<bool> CanViewNhapXuatTonReportAsync(CancellationToken cancellationToken)
+    {
+        return await CanViewReportAsync(PermissionCatalogService.InventoryBalanceReportViewPermissionCode, cancellationToken);
+    }
+
+    private async Task<bool> CanViewReportAsync(string permissionCode, CancellationToken cancellationToken)
+    {
         var account = await GetCurrentAccountAsync(cancellationToken);
         if (IsAdminAccount(account))
         {
@@ -264,9 +278,9 @@ public class ReportController(
         }
 
         var permissions = await UserPermissionSession.GetOrLoadAsync(HttpContext, _userPermissionService, cancellationToken);
-        var expectedCode = NormalizePermissionCode(PermissionCatalogService.WarehouseInOutReportViewPermissionCode);
+        var expectedCode = NormalizePermissionCode(permissionCode);
         return permissions.Any(permission =>
-            string.Equals(permission.PermissionCode, PermissionCatalogService.WarehouseInOutReportViewPermissionCode, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(permission.PermissionCode, permissionCode, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(NormalizePermissionCode(permission.PermissionCode), expectedCode, StringComparison.OrdinalIgnoreCase));
     }
 

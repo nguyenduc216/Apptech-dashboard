@@ -2,6 +2,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ApptechDashboard.Models;
 
+// FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+// CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004 - Lookup kho trung lập dùng chung, không thuộc report nào.
+public sealed class KhoLookupOption
+{
+    public int Id { get; set; }
+    public string Label { get; set; } = string.Empty;
+}
+
 public enum KhoPopupMode
 {
     None = 0,

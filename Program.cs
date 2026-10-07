@@ -76,6 +76,7 @@ builder.Services.AddScoped<ITravelEvaluationService, TravelEvaluationService>();
 builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
 builder.Services.AddScoped<INhapXuatKhoReportService, NhapXuatKhoReportService>();
 // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Đăng ký báo cáo nhập xuất tồn độc lập với báo cáo chi tiết.
+// CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-004 - Hai report chỉ dùng chung IKhoService trung lập, không phụ thuộc nhau.
 builder.Services.AddScoped<INhapXuatTonReportService, NhapXuatTonReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();
