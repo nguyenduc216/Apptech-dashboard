@@ -8,6 +8,7 @@ public static class NhapXuatTonGroupBy
     public const string Kho = "kho";
     public const string HangHoaKho = "hang-hoa-kho";
 
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Chuẩn hóa đúng 3 kiểu nhóm được hỗ trợ.
     public static string Normalize(string? value)
     {
         return value?.Trim().ToLowerInvariant() switch
