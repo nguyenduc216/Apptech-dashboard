@@ -75,6 +75,8 @@ builder.Services.AddScoped<IAttendanceSettingsService, AttendanceSettingsService
 builder.Services.AddScoped<ITravelEvaluationService, TravelEvaluationService>();
 builder.Services.AddScoped<ICongViecReportService, CongViecReportService>();
 builder.Services.AddScoped<INhapXuatKhoReportService, NhapXuatKhoReportService>();
+// CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Đăng ký báo cáo nhập xuất tồn độc lập với báo cáo chi tiết.
+builder.Services.AddScoped<INhapXuatTonReportService, NhapXuatTonReportService>();
 builder.Services.AddScoped<IKhoService, KhoService>();
 builder.Services.AddScoped<IHangHoaService, HangHoaService>();
 builder.Services.AddScoped<ICongViecService, CongViecService>();
@@ -278,6 +280,12 @@ app.MapControllerRoute(
     name: "bao-cao-nhap-xuat-kho",
     pattern: "bao-cao/nhap-xuat-kho",
     defaults: new { controller = "Report", action = "NhapXuatKho" });
+
+// CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Route báo cáo tổng hợp tồn đầu/nhập/xuất/tồn cuối.
+app.MapControllerRoute(
+    name: "bao-cao-nhap-xuat-ton",
+    pattern: "bao-cao/nhap-xuat-ton",
+    defaults: new { controller = "Report", action = "NhapXuatTon" });
 
 app.MapControllerRoute(
     name: "qr-gen",
