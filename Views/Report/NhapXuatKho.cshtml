@@ -160,7 +160,23 @@
                                 </td>
                                 <td>@(item.Ngay?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
                                 <td>@(string.IsNullOrWhiteSpace(item.MaPhieu) ? "-" : item.MaPhieu)</td>
-                                <td>@(string.IsNullOrWhiteSpace(item.TenChiTiet) ? "-" : item.TenChiTiet)</td>
+                                <td>
+                                    @* FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON *@
+                                    @* CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-005 - Reuse trang vật tư /vat-tu?editId, mở tab mới. *@
+                                    @if (item.ChiTietHangHoaId is > 0)
+                                    {
+                                        <a asp-controller="VatTu"
+                                           asp-action="Index"
+                                           asp-route-editId="@item.ChiTietHangHoaId.Value"
+                                           target="_blank"
+                                           rel="noopener"
+                                           title="Xem chi tiết vật tư">@(string.IsNullOrWhiteSpace(item.TenChiTiet) ? "-" : item.TenChiTiet)</a>
+                                    }
+                                    else
+                                    {
+                                        <span>@(string.IsNullOrWhiteSpace(item.TenChiTiet) ? "-" : item.TenChiTiet)</span>
+                                    }
+                                </td>
                                 <td>@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</td>
                                 <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
                                 <td>@(string.IsNullOrWhiteSpace(item.DonViTinh) ? "-" : item.DonViTinh)</td>

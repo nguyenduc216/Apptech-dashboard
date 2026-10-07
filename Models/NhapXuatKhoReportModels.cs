@@ -61,6 +61,9 @@ public sealed class NhapXuatKhoReportItem
     public string? NoiDung { get; set; }
     public string? MucDich { get; set; }
     public string? NguoiThaoTac { get; set; }
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-005 - Khóa route tới vật tư hiện hữu; nullable khi JOIN không có vật tư.
+    public int? ChiTietHangHoaId { get; set; }
     public string? TenChiTiet { get; set; }
     public string? TenHangHoa { get; set; }
     public string? MaHangHoa { get; set; }

@@ -220,6 +220,8 @@ public sealed class NhapXuatKhoReportService(
 
     private static string BuildNhapSql(string whereClause)
     {
+        // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+        // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-005 - Trả ID vật tư để điều hướng, không đổi JOIN/grain/số lượng.
         return $"""
             SELECT
                 CAST('nhap' AS NVARCHAR(10)) AS Loai,
@@ -229,6 +231,7 @@ public sealed class NhapXuatKhoReportService(
                 pn.NoiDungNhapKho AS NoiDung,
                 CAST(NULL AS NVARCHAR(100)) AS MucDich,
                 pn.NguoiNhapKho AS NguoiThaoTac,
+                ct.ID AS ChiTietHangHoaId,
                 ct.TenChiTiet,
                 hh.TenHangHoa,
                 hh.MaHangHoa,
@@ -254,6 +257,8 @@ public sealed class NhapXuatKhoReportService(
 
     private static string BuildXuatSql(string whereClause)
     {
+        // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+        // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-005 - Trả ID vật tư để điều hướng, không đổi JOIN/grain/số lượng.
         return $"""
             SELECT
                 CAST('xuat' AS NVARCHAR(10)) AS Loai,
@@ -263,6 +268,7 @@ public sealed class NhapXuatKhoReportService(
                 px.NoiDungXuatKho AS NoiDung,
                 px.MucDichXuat AS MucDich,
                 px.NguoiXuatKho AS NguoiThaoTac,
+                ct.ID AS ChiTietHangHoaId,
                 ct.TenChiTiet,
                 hh.TenHangHoa,
                 hh.MaHangHoa,
@@ -286,6 +292,8 @@ public sealed class NhapXuatKhoReportService(
             """;
     }
 
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-005 - Map khóa vật tư nullable cho link UI an toàn.
     private static NhapXuatKhoReportItem MapItem(SqlDataReader reader)
     {
         return new NhapXuatKhoReportItem
@@ -299,6 +307,7 @@ public sealed class NhapXuatKhoReportService(
             NoiDung = GetNullableString(reader, "NoiDung"),
             MucDich = GetNullableString(reader, "MucDich"),
             NguoiThaoTac = GetNullableString(reader, "NguoiThaoTac"),
+            ChiTietHangHoaId = GetNullableInt32(reader, "ChiTietHangHoaId"),
             TenChiTiet = GetNullableString(reader, "TenChiTiet"),
             TenHangHoa = GetNullableString(reader, "TenHangHoa"),
             MaHangHoa = GetNullableString(reader, "MaHangHoa"),

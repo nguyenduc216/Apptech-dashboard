@@ -36,6 +36,7 @@ Báo cáo tổng hợp Nhập – Xuất – Tồn theo kỳ, mỗi dòng là m�
 - Permission NXT riêng: `Report_NhapXuatTon_View`; web và Excel NXT dùng quyền này.
 - Menu NXT là item DB riêng `Report_NhapXuatTon`; report chi tiết giữ item/quyền `Report_NhapXuatKho_View`.
 - Migration permission/menu: `App_Data/Migrations/20261008_add_nhap_xuat_ton_report_permission.sql` (manual, không auto-run); verification: `sql/20261008_verify_nhap_xuat_ton_report_permission.sql`.
+- Báo cáo chi tiết đưa `ChiTietHangHoaId` từ query ra model; cột Vật tư điều hướng tới trang hiện hữu `/vat-tu?editId=<ID>` trong tab mới, và chỉ render text khi vật tư không tồn tại.
 
 ## Registry CHANGE_ID
 
@@ -43,3 +44,4 @@ Báo cáo tổng hợp Nhập – Xuất – Tồn theo kỳ, mỗi dòng là m�
 - `APPTECH-20261007-NHAP-XUAT-TON-002`: cố định grain/layout 6 cột, thêm Excel, drill-down và verification tập trung.
 - `APPTECH-20261008-NHAP-XUAT-TON-003`: đổi reporting grain sang tên hàng hóa chuẩn hóa + kho vì nhiều master product ID cùng tên phải hiển thị thành một dòng tổng hợp trong cùng kho.
 - `APPTECH-20261008-NHAP-XUAT-TON-004`: tách dependency report-to-report, permission, menu và authorization web/Excel của NXT khỏi báo cáo chi tiết.
+- `APPTECH-20261008-NHAP-XUAT-TON-005`: bổ sung navigation từ cột Vật tư (chi tiết) sang `VatTuController.Index` bằng `ChiTietHangHoaId`, mở tab mới; không đổi business logic hay Excel.
