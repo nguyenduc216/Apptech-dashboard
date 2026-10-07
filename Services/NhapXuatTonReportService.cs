@@ -1,0 +1,266 @@
+using System.Data;
+using ApptechDashboard.Configuration;
+using ApptechDashboard.Models;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
+
+namespace ApptechDashboard.Services;
+
+public interface INhapXuatTonReportService
+{
+    Task<NhapXuatTonReportViewModel> GetReportAsync(
+        DateTime? fromDate,
+        DateTime? toDate,
+        string? hangHoa,
+        int? khoId,
+        string? groupBy,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class NhapXuatTonReportService(
+    IOptions<SqlServerOptions> sqlOptions,
+    IConfiguration configuration,
+    INhapXuatKhoReportService nhapXuatKhoReportService,
+    ILogger<NhapXuatTonReportService> logger) : INhapXuatTonReportService
+{
+    private const string SearchCollation = "Latin1_General_100_CI_AI";
+    private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
+    private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
+    private readonly INhapXuatKhoReportService _nhapXuatKhoReportService = nhapXuatKhoReportService;
+    private readonly ILogger<NhapXuatTonReportService> _logger = logger;
+
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
+    // Báo cáo tổng hợp tồn đầu + nhập - xuất = tồn cuối theo hàng hóa, kho hoặc hàng hóa + kho.
+    public async Task<NhapXuatTonReportViewModel> GetReportAsync(
+        DateTime? fromDate,
+        DateTime? toDate,
+        string? hangHoa,
+        int? khoId,
+        string? groupBy,
+        CancellationToken cancellationToken = default)
+    {
+        var today = DateTime.Today;
+        var effectiveFrom = fromDate?.Date ?? new DateTime(today.Year, today.Month, 1);
+        var effectiveTo = toDate?.Date ?? today;
+
+        var model = new NhapXuatTonReportViewModel
+        {
+            Filter = new NhapXuatTonReportFilterState
+            {
+                FromDate = effectiveFrom,
+                ToDate = effectiveTo,
+                HangHoa = string.IsNullOrWhiteSpace(hangHoa) ? null : hangHoa.Trim(),
+                KhoId = khoId is null or <= 0 ? null : khoId,
+                GroupBy = NhapXuatTonGroupBy.Normalize(groupBy)
+            },
+            KhoOptions = await _nhapXuatKhoReportService.GetKhoOptionsAsync(cancellationToken)
+        };
+
+        if (effectiveFrom > effectiveTo)
+        {
+            model.StatusMessage = "Từ ngày không được lớn hơn đến ngày.";
+            model.StatusType = "error";
+            return model;
+        }
+
+        try
+        {
+            model.Items = await LoadItemsAsync(model.Filter, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to load inventory balance report from {FromDate} to {ToDate}.",
+                effectiveFrom,
+                effectiveTo);
+            model.StatusMessage = "Không thể tải báo cáo nhập xuất tồn.";
+            model.StatusType = "error";
+        }
+
+        return model;
+    }
+
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
+    // Tính lịch sử từ phiếu đã nhập/đã xuất, không dựa vào SoLuongTon hiện tại để có thể xem ngược kỳ.
+    private async Task<IReadOnlyList<NhapXuatTonReportItem>> LoadItemsAsync(
+        NhapXuatTonReportFilterState filter,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = BuildSql(filter.GroupBy);
+        command.Parameters.Add(new SqlParameter("@FromDate", SqlDbType.DateTime) { Value = filter.FromDate });
+        command.Parameters.Add(new SqlParameter("@ToDateExclusive", SqlDbType.DateTime) { Value = filter.ToDate.AddDays(1) });
+        command.Parameters.Add(new SqlParameter("@KhoId", SqlDbType.Int)
+        {
+            Value = filter.KhoId.HasValue ? filter.KhoId.Value : DBNull.Value
+        });
+        command.Parameters.Add(new SqlParameter("@HangHoa", SqlDbType.NVarChar, 250)
+        {
+            Value = string.IsNullOrWhiteSpace(filter.HangHoa) ? DBNull.Value : $"%{filter.HangHoa}%"
+        });
+
+        var items = new List<NhapXuatTonReportItem>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(new NhapXuatTonReportItem
+            {
+                HangHoaId = GetNullableInt32(reader, "HangHoaId"),
+                KhoId = GetNullableInt32(reader, "KhoId"),
+                MaHangHoa = GetNullableString(reader, "MaHangHoa"),
+                TenHangHoa = GetNullableString(reader, "TenHangHoa"),
+                MaKho = GetNullableString(reader, "MaKho"),
+                TenKho = GetNullableString(reader, "TenKho"),
+                TonDau = GetNullableDecimal(reader, "TonDau") ?? 0,
+                NhapTrongKy = GetNullableDecimal(reader, "NhapTrongKy") ?? 0,
+                XuatTrongKy = GetNullableDecimal(reader, "XuatTrongKy") ?? 0
+            });
+        }
+
+        return items;
+    }
+
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
+    // Chọn GROUP BY cố định để tránh dynamic SQL từ dữ liệu người dùng.
+    private static string BuildSql(string groupBy)
+    {
+        var (selectGroup, groupClause, orderClause) = groupBy switch
+        {
+            NhapXuatTonGroupBy.HangHoa => (
+                """
+                m.IDHangHoa AS HangHoaId,
+                CAST(NULL AS int) AS KhoId,
+                hh.MaHangHoa,
+                hh.TenHangHoa,
+                CAST(NULL AS nvarchar(100)) AS MaKho,
+                CAST(NULL AS nvarchar(250)) AS TenKho
+                """,
+                "m.IDHangHoa, hh.MaHangHoa, hh.TenHangHoa",
+                "hh.TenHangHoa ASC, hh.MaHangHoa ASC"
+            ),
+            NhapXuatTonGroupBy.Kho => (
+                """
+                CAST(NULL AS int) AS HangHoaId,
+                m.IDKho AS KhoId,
+                CAST(NULL AS nvarchar(100)) AS MaHangHoa,
+                CAST(NULL AS nvarchar(250)) AS TenHangHoa,
+                kho.MaKho,
+                kho.TenKho
+                """,
+                "m.IDKho, kho.MaKho, kho.TenKho",
+                "kho.TenKho ASC, kho.MaKho ASC"
+            ),
+            _ => (
+                """
+                m.IDHangHoa AS HangHoaId,
+                m.IDKho AS KhoId,
+                hh.MaHangHoa,
+                hh.TenHangHoa,
+                kho.MaKho,
+                kho.TenKho
+                """,
+                "m.IDHangHoa, m.IDKho, hh.MaHangHoa, hh.TenHangHoa, kho.MaKho, kho.TenKho",
+                "hh.TenHangHoa ASC, kho.TenKho ASC"
+            )
+        };
+
+        return $"""
+            WITH Movements AS
+            (
+                SELECT
+                    pnct.IDHangHoa,
+                    pn.IDKho,
+                    pn.NgayNhapKho AS Ngay,
+                    CAST(ISNULL(pnct.SoLuongNhap, 0) AS decimal(18,4)) AS SoLuongNhap,
+                    CAST(0 AS decimal(18,4)) AS SoLuongXuat
+                FROM [TblPhieuNhapKho] pn
+                INNER JOIN [TblPhieuNhapKhoChiTiet] pnct
+                    ON pnct.IDPhieuNhapKho = pn.ID
+                WHERE pn.TrangThaiPhieu = N'{NhapKhoPhieuStatus.Imported}'
+
+                UNION ALL
+
+                SELECT
+                    COALESCE(pxct.IDHangHoa, ct.IDHangHoa) AS IDHangHoa,
+                    ct.IDKho,
+                    px.NgayXuatKho AS Ngay,
+                    CAST(0 AS decimal(18,4)) AS SoLuongNhap,
+                    CAST(ISNULL(pxct.SoLuongXuat, 0) AS decimal(18,4)) AS SoLuongXuat
+                FROM [TblPhieuXuatKho] px
+                INNER JOIN [TblPhieuXuatKhoChiTiet] pxct
+                    ON pxct.IDPhieuXuatKho = px.ID
+                LEFT JOIN [TblChiTietHangHoa] ct
+                    ON ct.ID = pxct.IDChiTietHangHoa
+                WHERE px.TrangThaiPhieu = N'{XuatKhoPhieuStatus.Exported}'
+            )
+            SELECT
+                {selectGroup},
+                CAST(SUM(
+                    CASE
+                        WHEN m.Ngay < @FromDate
+                            THEN m.SoLuongNhap - m.SoLuongXuat
+                        ELSE 0
+                    END
+                ) AS decimal(18,4)) AS TonDau,
+                CAST(SUM(
+                    CASE
+                        WHEN m.Ngay >= @FromDate AND m.Ngay < @ToDateExclusive
+                            THEN m.SoLuongNhap
+                        ELSE 0
+                    END
+                ) AS decimal(18,4)) AS NhapTrongKy,
+                CAST(SUM(
+                    CASE
+                        WHEN m.Ngay >= @FromDate AND m.Ngay < @ToDateExclusive
+                            THEN m.SoLuongXuat
+                        ELSE 0
+                    END
+                ) AS decimal(18,4)) AS XuatTrongKy
+            FROM Movements m
+            LEFT JOIN [TblHangHoa] hh ON hh.ID = m.IDHangHoa
+            LEFT JOIN [TblKho] kho ON kho.ID = m.IDKho
+            WHERE
+                m.Ngay < @ToDateExclusive
+                AND (@KhoId IS NULL OR m.IDKho = @KhoId)
+                AND (
+                    @HangHoa IS NULL
+                    OR hh.TenHangHoa COLLATE {SearchCollation} LIKE @HangHoa
+                    OR hh.MaHangHoa COLLATE {SearchCollation} LIKE @HangHoa
+                )
+            GROUP BY {groupClause}
+            ORDER BY {orderClause};
+            """;
+    }
+
+    private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
+    {
+        var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
+            ? _connectionString
+            : _sqlOptions.BuildConnectionString();
+
+        var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        return connection;
+    }
+
+    private static string? GetNullableString(SqlDataReader reader, string name)
+    {
+        var index = reader.GetOrdinal(name);
+        return reader.IsDBNull(index) ? null : reader.GetString(index);
+    }
+
+    private static int? GetNullableInt32(SqlDataReader reader, string name)
+    {
+        var index = reader.GetOrdinal(name);
+        return reader.IsDBNull(index) ? null : reader.GetInt32(index);
+    }
+
+    private static decimal? GetNullableDecimal(SqlDataReader reader, string name)
+    {
+        var index = reader.GetOrdinal(name);
+        return reader.IsDBNull(index) ? null : reader.GetDecimal(index);
+    }
+}
