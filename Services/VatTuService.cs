@@ -60,6 +60,10 @@ public interface IVatTuService
         int vatTuId,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyDictionary<int, IReadOnlyList<VatTuExportLinkItem>>> GetExportLinksByVatTuIdsAsync(
+        IReadOnlyCollection<int> vatTuIds,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<VatTuListItem>> GetAllForExportAsync(
         string? keyword,
         CancellationToken cancellationToken = default);
@@ -79,6 +83,77 @@ public sealed class VatTuService(
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");
     private readonly ILogger<VatTuService> _logger = logger;
     private readonly ICommonAuditService _commonAuditService = commonAuditService;
+
+    // FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+    // CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-XUAT-001
+    // Batch load các phiếu xuất hoàn tất của vật tư trên page, tránh N+1.
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<VatTuExportLinkItem>>> GetExportLinksByVatTuIdsAsync(
+        IReadOnlyCollection<int> vatTuIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = vatTuIds.Where(id => id > 0).Distinct().ToArray();
+        if (ids.Length == 0)
+        {
+            return new Dictionary<int, IReadOnlyList<VatTuExportLinkItem>>();
+        }
+
+        try
+        {
+            await using var connection = await OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            var parameterNames = new string[ids.Length];
+            for (var index = 0; index < ids.Length; index++)
+            {
+                parameterNames[index] = $"@VatTuId{index}";
+                command.Parameters.Add(new SqlParameter(parameterNames[index], SqlDbType.Int) { Value = ids[index] });
+            }
+
+            command.CommandText = BuildExportLinksSql(parameterNames);
+            var mutable = ids.ToDictionary(id => id, _ => new List<VatTuExportLinkItem>());
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var vatTuId = reader.GetInt32(reader.GetOrdinal("IDChiTietHangHoa"));
+                if (mutable.TryGetValue(vatTuId, out var links))
+                {
+                    links.Add(new VatTuExportLinkItem
+                    {
+                        PhieuXuatId = reader.GetInt32(reader.GetOrdinal("PhieuXuatId")),
+                        MaPhieuXuat = GetNullableString(reader, "MaPhieu") ?? string.Empty,
+                        NgayXuat = GetNullableDateTime(reader, "NgayXuatKho")
+                    });
+                }
+            }
+
+            return mutable.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<VatTuExportLinkItem>)pair.Value);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to batch load completed export vouchers for material page.");
+            return ids.ToDictionary(id => id, _ => (IReadOnlyList<VatTuExportLinkItem>)[]);
+        }
+    }
+
+    private static string BuildExportLinksSql(IReadOnlyList<string> parameterNames)
+    {
+        return $"""
+            /*
+            FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+            CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-XUAT-001
+            PURPOSE: Batch load distinct completed export vouchers for the current material page.
+            */
+            SELECT DISTINCT
+                pxct.IDChiTietHangHoa,
+                px.ID AS PhieuXuatId,
+                px.MaPhieu,
+                px.NgayXuatKho
+            FROM [TblPhieuXuatKhoChiTiet] pxct
+            INNER JOIN [TblPhieuXuatKho] px ON px.ID = pxct.IDPhieuXuatKho
+            WHERE pxct.IDChiTietHangHoa IN ({string.Join(", ", parameterNames)})
+              AND px.TrangThaiPhieu = N'{XuatKhoPhieuStatus.Exported}'
+            ORDER BY pxct.IDChiTietHangHoa, px.NgayXuatKho DESC, px.ID DESC;
+            """;
+    }
 
     public async Task<(IReadOnlyList<VatTuListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
         string? keyword,

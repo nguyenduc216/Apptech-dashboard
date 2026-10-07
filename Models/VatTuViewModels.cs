@@ -64,10 +64,18 @@ public sealed class VatTuListItem
     public string? MaPhieuNhap { get; set; }
     public int? PhieuXuatId { get; set; }
     public string? MaPhieuXuat { get; set; }
+    public IReadOnlyList<VatTuExportLinkItem> PhieuXuatList { get; set; } = [];
     public DateTime? CreatedDate { get; set; }
     public string? CreatedBy { get; set; }
     public DateTime? UpdatedDate { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+public sealed class VatTuExportLinkItem
+{
+    public int PhieuXuatId { get; set; }
+    public string MaPhieuXuat { get; set; } = string.Empty;
+    public DateTime? NgayXuat { get; set; }
 }
 
 public sealed class VatTuExportHistoryItem

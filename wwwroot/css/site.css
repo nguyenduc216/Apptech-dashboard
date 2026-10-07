@@ -5464,6 +5464,13 @@ body.report-fullscreen-open {
     font-weight: 600;
 }
 
+/* FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL */
+/* CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-XUAT-001 - Cho danh sách link phiếu xuất wrap tự nhiên. */
+.vat-tu-export-links {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .priority {
     display: inline-flex;
     align-items: center;

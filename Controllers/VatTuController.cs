@@ -360,6 +360,7 @@ public class VatTuController(
             query.Page,
             DefaultPageSize,
             cancellationToken);
+        await PopulateExportLinksAsync(items, cancellationToken);
 
         var model = new VatTuManagementViewModel
         {
@@ -450,6 +451,7 @@ public class VatTuController(
             form.Page,
             DefaultPageSize,
             cancellationToken);
+        await PopulateExportLinksAsync(items, cancellationToken);
 
         form.Page = currentPage;
         if (string.IsNullOrWhiteSpace(form.ActiveTab))
@@ -490,6 +492,21 @@ public class VatTuController(
         model.KhoOptions = khoOptions;
         model.HangHoaOptions = hangHoaOptions;
         model.DonViTinhOptions = donViTinhOptions;
+    }
+
+    // FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+    // CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-XUAT-001
+    // Một batch query cho toàn bộ vật tư trên page; không query DB trong foreach.
+    private async Task PopulateExportLinksAsync(IReadOnlyList<VatTuListItem> items, CancellationToken cancellationToken)
+    {
+        var linksByVatTu = await _vatTuService.GetExportLinksByVatTuIdsAsync(
+            items.Select(item => item.Id).ToArray(),
+            cancellationToken);
+
+        foreach (var item in items)
+        {
+            item.PhieuXuatList = linksByVatTu.TryGetValue(item.Id, out var links) ? links : [];
+        }
     }
 
     private object BuildRouteValues(string? keyword, int page)

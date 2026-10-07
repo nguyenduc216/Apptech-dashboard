@@ -369,9 +369,25 @@
                                         }
                                     </td>
                                     <td>
-                                        @if (item.PhieuXuatId.HasValue && !string.IsNullOrWhiteSpace(item.MaPhieuXuat))
+                                        @if (item.PhieuXuatList.Count > 0)
                                         {
-                                            <a class="table-action-link" asp-controller="XuatKho" asp-action="Index" asp-route-editId="@item.PhieuXuatId.Value">@item.MaPhieuXuat</a>
+                                            <span class="vat-tu-export-links">
+                                                @for (var exportIndex = 0; exportIndex < item.PhieuXuatList.Count; exportIndex++)
+                                                {
+                                                    var phieu = item.PhieuXuatList[exportIndex];
+                                                    @if (exportIndex > 0)
+                                                    {
+                                                        <text>, </text>
+                                                    }
+                                                    <a class="table-action-link"
+                                                       asp-controller="XuatKho"
+                                                       asp-action="Index"
+                                                       asp-route-editId="@phieu.PhieuXuatId"
+                                                       target="_blank"
+                                                       rel="noopener"
+                                                       title="Xem phiếu xuất @phieu.MaPhieuXuat">@phieu.MaPhieuXuat</a>
+                                                }
+                                            </span>
                                         }
                                         else
                                         {
