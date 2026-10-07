@@ -2,160 +2,55 @@
 @{
     ViewData["Title"] = "Báo cáo nhập xuất tồn";
     ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất tồn";
-
-    var groupByHangHoa = Model.Filter.GroupBy == NhapXuatTonGroupBy.HangHoa;
-    var groupByKho = Model.Filter.GroupBy == NhapXuatTonGroupBy.Kho;
-    var groupByHangHoaKho = Model.Filter.GroupBy == NhapXuatTonGroupBy.HangHoaKho;
 }
 
+@* FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON *@
+@* CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Layout cố định sáu cột và drill-down theo Hàng hóa × Kho. *@
 <section class="master-data-page cong-viec-report-page" data-nhap-xuat-ton-report>
     <article class="panel master-data-panel cham-cong-report-panel">
         <div class="panel-header master-data-header">
-            <div>
-                <h3>Báo cáo nhập xuất tồn</h3>
-                <p>Tồn đầu + nhập trong kỳ - xuất trong kỳ = tồn cuối.</p>
-            </div>
-            <a class="secondary-button master-data-reset-button" asp-action="NhapXuatKho">
-                <i class="fa-solid fa-list" aria-hidden="true"></i>
-                <span>Xem nhập xuất chi tiết</span>
-            </a>
+            <div><h3>Báo cáo nhập xuất tồn</h3><p>Tồn đầu + nhập trong kỳ - xuất trong kỳ = tồn cuối.</p></div>
+            <a class="secondary-button master-data-reset-button" asp-action="NhapXuatKho"><i class="fa-solid fa-list" aria-hidden="true"></i><span>Xem nhập xuất chi tiết</span></a>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
         {
-            <div class="page-alert @Model.StatusType master-data-status-alert">
-                @Model.StatusMessage
-            </div>
+            <div class="page-alert @Model.StatusType master-data-status-alert">@Model.StatusMessage</div>
         }
 
         <form method="get" asp-action="NhapXuatTon" class="master-data-filter-form cham-cong-report-filter">
-            <label class="master-data-filter-field" for="fromDate">
-                <span>Từ ngày</span>
-                <span class="login-input-shell">
-                    <i class="fa-solid fa-calendar-day" aria-hidden="true"></i>
-                    <input id="fromDate" name="fromDate" type="date" value="@Model.FromDateValue" />
-                </span>
-            </label>
-
-            <label class="master-data-filter-field" for="toDate">
-                <span>Đến ngày</span>
-                <span class="login-input-shell">
-                    <i class="fa-solid fa-calendar-check" aria-hidden="true"></i>
-                    <input id="toDate" name="toDate" type="date" value="@Model.ToDateValue" />
-                </span>
-            </label>
-
-            <label class="master-data-filter-field" for="hangHoa">
-                <span>Hàng hóa</span>
-                <span class="login-input-shell">
-                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
-                    <input id="hangHoa"
-                           name="hangHoa"
-                           type="text"
-                           placeholder="Tên / mã hàng hóa"
-                           value="@(Model.Filter.HangHoa ?? string.Empty)" />
-                </span>
-            </label>
-
+            <label class="master-data-filter-field" for="fromDate"><span>Từ ngày</span><span class="login-input-shell"><i class="fa-solid fa-calendar-day" aria-hidden="true"></i><input id="fromDate" name="fromDate" type="date" value="@Model.FromDateValue" /></span></label>
+            <label class="master-data-filter-field" for="toDate"><span>Đến ngày</span><span class="login-input-shell"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i><input id="toDate" name="toDate" type="date" value="@Model.ToDateValue" /></span></label>
+            <label class="master-data-filter-field" for="hangHoa"><span>Hàng hóa</span><span class="login-input-shell"><i class="fa-solid fa-tag" aria-hidden="true"></i><input id="hangHoa" name="hangHoa" type="text" placeholder="Tên / mã hàng hóa" value="@(Model.Filter.HangHoa ?? string.Empty)" /></span></label>
             <label class="master-data-filter-field" for="khoId">
-                <span>Kho</span>
-                <span class="login-input-shell">
-                    <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
-                    <select id="khoId" name="khoId">
-                        <option value="">Tất cả kho</option>
-                        @foreach (var kho in Model.KhoOptions)
-                        {
-                            <option value="@kho.Id" selected="@(Model.Filter.KhoId == kho.Id)">@kho.Label</option>
-                        }
-                    </select>
-                </span>
+                <span>Kho</span><span class="login-input-shell"><i class="fa-solid fa-warehouse" aria-hidden="true"></i><select id="khoId" name="khoId"><option value="">Tất cả kho</option>@foreach (var kho in Model.KhoOptions){<option value="@kho.Id" selected="@(Model.Filter.KhoId == kho.Id)">@kho.Label</option>}</select></span>
             </label>
-
-            <label class="master-data-filter-field" for="groupBy">
-                <span>Nhóm theo</span>
-                <span class="login-input-shell">
-                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-                    <select id="groupBy" name="groupBy">
-                        @foreach (var option in NhapXuatTonGroupBy.Options)
-                        {
-                            <option value="@option.Value" selected="@(Model.Filter.GroupBy == option.Value)">@option.Text</option>
-                        }
-                    </select>
-                </span>
-            </label>
-
             <div class="master-data-filter-actions">
-                <button type="submit" class="primary-button master-data-filter-button">
-                    <span class="button-content">
-                        <i class="fa-solid fa-filter" aria-hidden="true"></i>
-                        <span>Xem báo cáo</span>
-                    </span>
-                </button>
+                <button type="submit" class="primary-button master-data-filter-button"><span class="button-content"><i class="fa-solid fa-filter" aria-hidden="true"></i><span>Xem báo cáo</span></span></button>
                 <a class="secondary-button master-data-reset-button" asp-action="NhapXuatTon">Xóa bộ lọc</a>
+                <button type="submit" class="secondary-button master-data-filter-button" asp-action="ExportNhapXuatTon" title="Xuất báo cáo Excel"><i class="fa-solid fa-file-excel" aria-hidden="true"></i><span>Xuất Excel</span></button>
             </div>
         </form>
 
-        <div class="work-report-summary">
-            <div class="work-report-summary-card completed">
-                <span>Số nhóm dữ liệu</span>
-                <strong>@Model.Items.Count</strong>
-            </div>
-            <div class="work-report-summary-card incomplete">
-                <span>Kỳ báo cáo</span>
-                <strong>@Model.Filter.FromDate.ToString("dd/MM/yyyy") - @Model.Filter.ToDate.ToString("dd/MM/yyyy")</strong>
-            </div>
-        </div>
-
         <div class="table-wrap cham-cong-report-wrap">
             <table class="data-table master-data-table work-report-table">
-                <thead>
-                    <tr>
-                        <th>TT</th>
-                        @if (!groupByKho)
-                        {
-                            <th>Mã hàng</th>
-                            <th>Tên hàng hóa</th>
-                        }
-                        @if (!groupByHangHoa)
-                        {
-                            <th>Mã kho</th>
-                            <th>Kho</th>
-                        }
-                        <th>Tồn đầu</th>
-                        <th>Nhập trong kỳ</th>
-                        <th>Xuất trong kỳ</th>
-                        <th>Tồn cuối</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Tên hàng hóa</th><th>Kho</th><th class="numeric-cell">Tồn đầu</th><th class="numeric-cell">Nhập</th><th class="numeric-cell">Xuất</th><th class="numeric-cell">Tồn cuối</th></tr></thead>
                 <tbody>
                     @if (Model.Items.Count == 0)
                     {
-                        var colspan = groupByHangHoaKho ? 9 : 7;
-                        <tr>
-                            <td colspan="@colspan" class="master-data-empty">Không có dữ liệu nhập xuất tồn phù hợp.</td>
-                        </tr>
+                        <tr><td colspan="6" class="master-data-empty">Không có dữ liệu nhập xuất tồn phù hợp.</td></tr>
                     }
                     else
                     {
-                        for (var index = 0; index < Model.Items.Count; index++)
+                        foreach (var item in Model.Items)
                         {
-                            var item = Model.Items[index];
                             <tr>
-                                <td>@(index + 1)</td>
-                                @if (!groupByKho)
-                                {
-                                    <td>@(string.IsNullOrWhiteSpace(item.MaHangHoa) ? "-" : item.MaHangHoa)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</td>
-                                }
-                                @if (!groupByHangHoa)
-                                {
-                                    <td>@(string.IsNullOrWhiteSpace(item.MaKho) ? "-" : item.MaKho)</td>
-                                    <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
-                                }
-                                <td>@item.TonDau.ToString("0.##")</td>
-                                <td>@item.NhapTrongKy.ToString("0.##")</td>
-                                <td>@item.XuatTrongKy.ToString("0.##")</td>
-                                <td><strong>@item.TonCuoi.ToString("0.##")</strong></td>
+                                <td><a asp-action="NhapXuatKho" asp-route-fromDate="@Model.FromDateValue" asp-route-toDate="@Model.ToDateValue" asp-route-hangHoa="@item.TenHangHoa" asp-route-khoId="@item.KhoId" target="_blank" rel="noopener" title="Xem chi tiết nhập xuất kho">@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</a></td>
+                                <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
+                                <td class="numeric-cell">@item.TonDau.ToString("0.##")</td>
+                                <td class="numeric-cell">@item.NhapTrongKy.ToString("0.##")</td>
+                                <td class="numeric-cell">@item.XuatTrongKy.ToString("0.##")</td>
+                                <td class="numeric-cell"><strong>@item.TonCuoi.ToString("0.##")</strong></td>
                             </tr>
                         }
                     }

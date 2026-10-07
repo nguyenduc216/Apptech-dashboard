@@ -82,7 +82,8 @@ public class ReportController(
         return View(model);
     }
 
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
     // Báo cáo tổng hợp theo kỳ, dùng chung quyền xem báo cáo kho hiện tại.
     [HttpGet]
     public async Task<IActionResult> NhapXuatTon([FromQuery] NhapXuatTonReportQuery query)
@@ -97,12 +98,35 @@ public class ReportController(
             query.ToDate,
             query.HangHoa,
             query.KhoId,
-            query.GroupBy,
             HttpContext.RequestAborted);
 
         ViewData["Title"] = "Báo cáo nhập xuất tồn";
         ViewData["Breadcrumb"] = "Trang chủ / Báo cáo / Nhập xuất tồn";
         return View(model);
+    }
+
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
+    // Excel dùng cùng service/filter và đúng sáu cột của báo cáo web.
+    [HttpGet]
+    public async Task<IActionResult> ExportNhapXuatTon([FromQuery] NhapXuatTonReportQuery query)
+    {
+        if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
+        {
+            return Forbid();
+        }
+
+        var model = await _nhapXuatTonReportService.GetReportAsync(
+            query.FromDate,
+            query.ToDate,
+            query.HangHoa,
+            query.KhoId,
+            HttpContext.RequestAborted);
+
+        return File(
+            _simpleExcelService.BuildNhapXuatTonReport(model),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"bao-cao-nhap-xuat-ton-{model.Filter.FromDate:yyyyMMdd}-{model.Filter.ToDate:yyyyMMdd}.xlsx");
     }
 
     [HttpGet]

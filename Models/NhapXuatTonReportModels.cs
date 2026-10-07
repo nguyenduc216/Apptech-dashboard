@@ -2,31 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ApptechDashboard.Models;
 
-public static class NhapXuatTonGroupBy
-{
-    public const string HangHoa = "hang-hoa";
-    public const string Kho = "kho";
-    public const string HangHoaKho = "hang-hoa-kho";
-
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Chuẩn hóa đúng 3 kiểu nhóm được hỗ trợ.
-    public static string Normalize(string? value)
-    {
-        return value?.Trim().ToLowerInvariant() switch
-        {
-            HangHoa => HangHoa,
-            Kho => Kho,
-            _ => HangHoaKho
-        };
-    }
-
-    public static IReadOnlyList<(string Value, string Text)> Options { get; } =
-    [
-        (HangHoaKho, "Hàng hóa + Kho"),
-        (HangHoa, "Hàng hóa"),
-        (Kho, "Kho")
-    ];
-}
-
+// FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+// CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Contract filter cố định cho báo cáo Hàng hóa × Kho.
 public sealed class NhapXuatTonReportQuery
 {
     [DataType(DataType.Date)]
@@ -39,7 +16,6 @@ public sealed class NhapXuatTonReportQuery
 
     public int? KhoId { get; set; }
 
-    public string? GroupBy { get; set; }
 }
 
 public sealed class NhapXuatTonReportFilterState
@@ -48,7 +24,6 @@ public sealed class NhapXuatTonReportFilterState
     public DateTime ToDate { get; set; }
     public string? HangHoa { get; set; }
     public int? KhoId { get; set; }
-    public string GroupBy { get; set; } = NhapXuatTonGroupBy.HangHoaKho;
 }
 
 public sealed class NhapXuatTonReportItem

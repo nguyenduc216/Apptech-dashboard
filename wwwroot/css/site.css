@@ -5453,6 +5453,12 @@ body.report-fullscreen-open {
     text-align: left;
 }
 
+/* FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON */
+/* CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Căn phải bốn cột số của báo cáo tổng hợp. */
+[data-nhap-xuat-ton-report] .numeric-cell {
+    text-align: right;
+}
+
 .data-table th {
     color: var(--text-muted);
     font-weight: 600;

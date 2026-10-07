@@ -13,7 +13,6 @@ public interface INhapXuatTonReportService
         DateTime? toDate,
         string? hangHoa,
         int? khoId,
-        string? groupBy,
         CancellationToken cancellationToken = default);
 }
 
@@ -29,14 +28,14 @@ public sealed class NhapXuatTonReportService(
     private readonly INhapXuatKhoReportService _nhapXuatKhoReportService = nhapXuatKhoReportService;
     private readonly ILogger<NhapXuatTonReportService> _logger = logger;
 
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
-    // Báo cáo tổng hợp tồn đầu + nhập - xuất = tồn cuối theo hàng hóa, kho hoặc hàng hóa + kho.
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
+    // Báo cáo tổng hợp luôn có business grain IDHangHoa + IDKho.
     public async Task<NhapXuatTonReportViewModel> GetReportAsync(
         DateTime? fromDate,
         DateTime? toDate,
         string? hangHoa,
         int? khoId,
-        string? groupBy,
         CancellationToken cancellationToken = default)
     {
         var today = DateTime.Today;
@@ -50,8 +49,7 @@ public sealed class NhapXuatTonReportService(
                 FromDate = effectiveFrom,
                 ToDate = effectiveTo,
                 HangHoa = string.IsNullOrWhiteSpace(hangHoa) ? null : hangHoa.Trim(),
-                KhoId = khoId is null or <= 0 ? null : khoId,
-                GroupBy = NhapXuatTonGroupBy.Normalize(groupBy)
+                KhoId = khoId is null or <= 0 ? null : khoId
             },
             KhoOptions = await _nhapXuatKhoReportService.GetKhoOptionsAsync(cancellationToken)
         };
@@ -81,8 +79,9 @@ public sealed class NhapXuatTonReportService(
         return model;
     }
 
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
-    // Tính lịch sử từ phiếu đã nhập/đã xuất, không dựa vào SoLuongTon hiện tại để có thể xem ngược kỳ.
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
+    // Tính lịch sử từ phiếu hoàn tất; không dựa vào SoLuongTon và không nhân dòng PNCT qua vật tư.
     private async Task<IReadOnlyList<NhapXuatTonReportItem>> LoadItemsAsync(
         NhapXuatTonReportFilterState filter,
         CancellationToken cancellationToken)
@@ -90,7 +89,7 @@ public sealed class NhapXuatTonReportService(
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
 
-        command.CommandText = BuildSql(filter.GroupBy);
+        command.CommandText = BuildSql();
         command.Parameters.Add(new SqlParameter("@FromDate", SqlDbType.DateTime) { Value = filter.FromDate });
         command.Parameters.Add(new SqlParameter("@ToDateExclusive", SqlDbType.DateTime) { Value = filter.ToDate.AddDays(1) });
         command.Parameters.Add(new SqlParameter("@KhoId", SqlDbType.Int)
@@ -123,51 +122,24 @@ public sealed class NhapXuatTonReportService(
         return items;
     }
 
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001
-    // Chọn GROUP BY cố định để tránh dynamic SQL từ dữ liệu người dùng.
-    private static string BuildSql(string groupBy)
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
+    // Query cố định theo IDHangHoa + IDKho; nhánh nhập tổng hợp trực tiếp từ PNCT để tránh double-count loại 2.
+    private static string BuildSql()
     {
-        var (selectGroup, groupClause, orderClause) = groupBy switch
-        {
-            NhapXuatTonGroupBy.HangHoa => (
-                """
-                m.IDHangHoa AS HangHoaId,
-                CAST(NULL AS int) AS KhoId,
-                hh.MaHangHoa,
-                hh.TenHangHoa,
-                CAST(NULL AS nvarchar(100)) AS MaKho,
-                CAST(NULL AS nvarchar(250)) AS TenKho
-                """,
-                "m.IDHangHoa, hh.MaHangHoa, hh.TenHangHoa",
-                "hh.TenHangHoa ASC, hh.MaHangHoa ASC"
-            ),
-            NhapXuatTonGroupBy.Kho => (
-                """
-                CAST(NULL AS int) AS HangHoaId,
-                m.IDKho AS KhoId,
-                CAST(NULL AS nvarchar(100)) AS MaHangHoa,
-                CAST(NULL AS nvarchar(250)) AS TenHangHoa,
-                kho.MaKho,
-                kho.TenKho
-                """,
-                "m.IDKho, kho.MaKho, kho.TenKho",
-                "kho.TenKho ASC, kho.MaKho ASC"
-            ),
-            _ => (
-                """
-                m.IDHangHoa AS HangHoaId,
-                m.IDKho AS KhoId,
-                hh.MaHangHoa,
-                hh.TenHangHoa,
-                kho.MaKho,
-                kho.TenKho
-                """,
-                "m.IDHangHoa, m.IDKho, hh.MaHangHoa, hh.TenHangHoa, kho.MaKho, kho.TenKho",
-                "hh.TenHangHoa ASC, kho.TenKho ASC"
-            )
-        };
-
         return $"""
+            /*
+            FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+            CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
+            PURPOSE: Báo cáo Nhập - Xuất - Tồn theo Hàng hóa × Kho
+            BUSINESS GRAIN: IDHangHoa + IDKho
+            BUSINESS RULES:
+            - TonDau = NhapTruocKy - XuatTruocKy
+            - TonCuoi = TonDau + NhapTrongKy - XuatTrongKy
+            SAFETY / IMPORTANT:
+            - Không join PNCT với nhiều TblChiTietHangHoa để SUM số nhập.
+            - Chỉ tính phiếu hoàn tất.
+            */
             WITH Movements AS
             (
                 SELECT
@@ -184,7 +156,7 @@ public sealed class NhapXuatTonReportService(
                 UNION ALL
 
                 SELECT
-                    COALESCE(pxct.IDHangHoa, ct.IDHangHoa) AS IDHangHoa,
+                    COALESCE(hhXuat.ID, ct.IDHangHoa) AS IDHangHoa,
                     ct.IDKho,
                     px.NgayXuatKho AS Ngay,
                     CAST(0 AS decimal(18,4)) AS SoLuongNhap,
@@ -194,10 +166,17 @@ public sealed class NhapXuatTonReportService(
                     ON pxct.IDPhieuXuatKho = px.ID
                 LEFT JOIN [TblChiTietHangHoa] ct
                     ON ct.ID = pxct.IDChiTietHangHoa
+                LEFT JOIN [TblHangHoa] hhXuat
+                    ON hhXuat.ID = pxct.IDHangHoa
                 WHERE px.TrangThaiPhieu = N'{XuatKhoPhieuStatus.Exported}'
             )
             SELECT
-                {selectGroup},
+                m.IDHangHoa AS HangHoaId,
+                m.IDKho AS KhoId,
+                hh.MaHangHoa,
+                hh.TenHangHoa,
+                kho.MaKho,
+                kho.TenKho,
                 CAST(SUM(
                     CASE
                         WHEN m.Ngay < @FromDate
@@ -230,8 +209,8 @@ public sealed class NhapXuatTonReportService(
                     OR hh.TenHangHoa COLLATE {SearchCollation} LIKE @HangHoa
                     OR hh.MaHangHoa COLLATE {SearchCollation} LIKE @HangHoa
                 )
-            GROUP BY {groupClause}
-            ORDER BY {orderClause};
+            GROUP BY m.IDHangHoa, m.IDKho, hh.MaHangHoa, hh.TenHangHoa, kho.MaKho, kho.TenKho
+            ORDER BY hh.TenHangHoa ASC, kho.TenKho ASC;
             """;
     }
 

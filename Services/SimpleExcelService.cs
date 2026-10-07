@@ -22,6 +22,7 @@ public interface ISimpleExcelService
     byte[] BuildChamCongReport(ChamCongReportViewModel model);
     byte[] BuildCongViecReport(CongViecReportViewModel model);
     byte[] BuildNhapXuatKhoReport(NhapXuatKhoReportViewModel model);
+    byte[] BuildNhapXuatTonReport(NhapXuatTonReportViewModel model);
 }
 
 public sealed class SimpleExcelService : ISimpleExcelService
@@ -308,6 +309,25 @@ public sealed class SimpleExcelService : ISimpleExcelService
         }).ToArray();
 
         return BuildWorkbook("BaoCaoNhapXuatKho", headers, rows);
+    }
+
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
+    // Giữ chính xác sáu cột và cùng dữ liệu đã lọc với bảng tổng hợp trên web.
+    public byte[] BuildNhapXuatTonReport(NhapXuatTonReportViewModel model)
+    {
+        var headers = new[] { "Tên hàng hóa", "Kho", "Tồn đầu", "Nhập", "Xuất", "Tồn cuối" };
+        var rows = model.Items.Select(item => (IReadOnlyList<string?>)new string?[]
+        {
+            item.TenHangHoa,
+            item.TenKho,
+            item.TonDau.ToString("0.####", CultureInfo.InvariantCulture),
+            item.NhapTrongKy.ToString("0.####", CultureInfo.InvariantCulture),
+            item.XuatTrongKy.ToString("0.####", CultureInfo.InvariantCulture),
+            item.TonCuoi.ToString("0.####", CultureInfo.InvariantCulture)
+        }).ToArray();
+
+        return BuildWorkbook("BaoCaoNhapXuatTon", headers, rows);
     }
 
     private static byte[] BuildTemplate(string sheetName, params string[] headers)
