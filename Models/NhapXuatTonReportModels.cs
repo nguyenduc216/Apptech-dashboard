@@ -1,0 +1,77 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace ApptechDashboard.Models;
+
+public static class NhapXuatTonGroupBy
+{
+    public const string HangHoa = "hang-hoa";
+    public const string Kho = "kho";
+    public const string HangHoaKho = "hang-hoa-kho";
+
+    public static string Normalize(string? value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            HangHoa => HangHoa,
+            Kho => Kho,
+            _ => HangHoaKho
+        };
+    }
+
+    public static IReadOnlyList<(string Value, string Text)> Options { get; } =
+    [
+        (HangHoaKho, "Hàng hóa + Kho"),
+        (HangHoa, "Hàng hóa"),
+        (Kho, "Kho")
+    ];
+}
+
+public sealed class NhapXuatTonReportQuery
+{
+    [DataType(DataType.Date)]
+    public DateTime? FromDate { get; set; }
+
+    [DataType(DataType.Date)]
+    public DateTime? ToDate { get; set; }
+
+    public string? HangHoa { get; set; }
+
+    public int? KhoId { get; set; }
+
+    public string? GroupBy { get; set; }
+}
+
+public sealed class NhapXuatTonReportFilterState
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public string? HangHoa { get; set; }
+    public int? KhoId { get; set; }
+    public string GroupBy { get; set; } = NhapXuatTonGroupBy.HangHoaKho;
+}
+
+public sealed class NhapXuatTonReportItem
+{
+    public int? HangHoaId { get; set; }
+    public int? KhoId { get; set; }
+    public string? MaHangHoa { get; set; }
+    public string? TenHangHoa { get; set; }
+    public string? MaKho { get; set; }
+    public string? TenKho { get; set; }
+    public decimal TonDau { get; set; }
+    public decimal NhapTrongKy { get; set; }
+    public decimal XuatTrongKy { get; set; }
+    public decimal TonCuoi => TonDau + NhapTrongKy - XuatTrongKy;
+}
+
+public sealed class NhapXuatTonReportViewModel
+{
+    public NhapXuatTonReportFilterState Filter { get; set; } = new();
+    public IReadOnlyList<NhapXuatTonReportItem> Items { get; set; } = [];
+    public IReadOnlyList<NhapXuatKhoLookupOption> KhoOptions { get; set; } = [];
+    public string? StatusMessage { get; set; }
+    public string StatusType { get; set; } = "info";
+
+    public string FromDateValue => Filter.FromDate.ToString("yyyy-MM-dd");
+    public string ToDateValue => Filter.ToDate.ToString("yyyy-MM-dd");
+}
