@@ -16,6 +16,7 @@ public interface INhapXuatKhoReportService
         string? hangHoa,
         int? khoId,
         string? maPhieu,
+        bool exactHangHoa = false,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<NhapXuatKhoLookupOption>> GetKhoOptionsAsync(CancellationToken cancellationToken = default);
@@ -45,6 +46,7 @@ public sealed class NhapXuatKhoReportService(
         string? hangHoa,
         int? khoId,
         string? maPhieu,
+        bool exactHangHoa = false,
         CancellationToken cancellationToken = default)
     {
         var model = new NhapXuatKhoReportViewModel
@@ -56,6 +58,7 @@ public sealed class NhapXuatKhoReportService(
                 ToDate = toDate?.Date,
                 VatTu = string.IsNullOrWhiteSpace(vatTu) ? null : vatTu.Trim(),
                 HangHoa = string.IsNullOrWhiteSpace(hangHoa) ? null : hangHoa.Trim(),
+                ExactHangHoa = exactHangHoa,
                 KhoId = khoId is null or <= 0 ? null : khoId,
                 MaPhieu = string.IsNullOrWhiteSpace(maPhieu) ? null : maPhieu.Trim()
             }
@@ -165,6 +168,9 @@ public sealed class NhapXuatKhoReportService(
     }
 
 
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003
+    // Drill-down aggregate dùng exact-name; filter người dùng thông thường vẫn giữ LIKE tên/mã.
     private static string BuildWhereClause(NhapXuatKhoReportFilterState filter, string prefix)
     {
         var headerAlias = prefix == "nhap" ? "pn" : "px";
@@ -193,7 +199,9 @@ public sealed class NhapXuatKhoReportService(
 
         if (!string.IsNullOrWhiteSpace(filter.HangHoa))
         {
-            filters.Add($"(hh.TenHangHoa COLLATE {SearchCollation} LIKE @{prefix}HangHoa OR hh.MaHangHoa COLLATE {SearchCollation} LIKE @{prefix}HangHoa)");
+            filters.Add(filter.ExactHangHoa
+                ? $"LTRIM(RTRIM(hh.TenHangHoa)) COLLATE {SearchCollation} = @{prefix}HangHoa"
+                : $"(hh.TenHangHoa COLLATE {SearchCollation} LIKE @{prefix}HangHoa OR hh.MaHangHoa COLLATE {SearchCollation} LIKE @{prefix}HangHoa)");
         }
 
         if (filter.KhoId.HasValue)
@@ -228,7 +236,10 @@ public sealed class NhapXuatKhoReportService(
 
         if (!string.IsNullOrWhiteSpace(filter.HangHoa))
         {
-            command.Parameters.Add(new SqlParameter($"@{prefix}HangHoa", SqlDbType.NVarChar, 250) { Value = $"%{filter.HangHoa}%" });
+            command.Parameters.Add(new SqlParameter($"@{prefix}HangHoa", SqlDbType.NVarChar, 250)
+            {
+                Value = filter.ExactHangHoa ? filter.HangHoa : $"%{filter.HangHoa}%"
+            });
         }
 
         if (filter.KhoId.HasValue)

@@ -45,7 +45,7 @@
                         foreach (var item in Model.Items)
                         {
                             <tr>
-                                <td><a asp-action="NhapXuatKho" asp-route-fromDate="@Model.FromDateValue" asp-route-toDate="@Model.ToDateValue" asp-route-hangHoa="@item.TenHangHoa" asp-route-khoId="@item.KhoId" target="_blank" rel="noopener" title="Xem chi tiết nhập xuất kho">@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</a></td>
+                                <td><a asp-action="NhapXuatKho" asp-route-fromDate="@Model.FromDateValue" asp-route-toDate="@Model.ToDateValue" asp-route-hangHoa="@item.TenHangHoa" asp-route-exactHangHoa="true" asp-route-khoId="@item.KhoId" target="_blank" rel="noopener" title="Xem chi tiết nhập xuất kho">@(string.IsNullOrWhiteSpace(item.TenHangHoa) ? "-" : item.TenHangHoa)</a></td>
                                 <td>@(string.IsNullOrWhiteSpace(item.TenKho) ? "-" : item.TenKho)</td>
                                 <td class="numeric-cell">@item.TonDau.ToString("0.##")</td>
                                 <td class="numeric-cell">@item.NhapTrongKy.ToString("0.##")</td>

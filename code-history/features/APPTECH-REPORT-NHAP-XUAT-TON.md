@@ -18,7 +18,9 @@ Báo cáo tổng hợp Nhập – Xuất – Tồn theo kỳ, mỗi dòng là m�
 
 - Nhập: `TblPhieuNhapKho` + `TblPhieuNhapKhoChiTiet`, chỉ trạng thái `da-nhap`, số lượng `SoLuongNhap`, kho từ phiếu nhập.
 - Xuất: `TblPhieuXuatKho` + `TblPhieuXuatKhoChiTiet` + `TblChiTietHangHoa`, chỉ trạng thái `xuat-kho`, số lượng `SoLuongXuat`, kho từ vật tư thực tế.
-- Business grain cố định: `IDHangHoa + IDKho`.
+- Business grain hiện tại: `Normalized TenHangHoa + IDKho`, trong đó tên được trim và so sánh theo collation không phân biệt hoa/thường.
+- Nhiều `IDHangHoa` có cùng tên chuẩn hóa trong cùng kho được cộng thành một dòng; khác `IDKho` vẫn tách dòng.
+- Filter tên/mã được áp dụng khi movement vẫn còn `IDHangHoa`, trước aggregation, để tìm theo một mã không kéo movement của ID khác chỉ vì trùng tên.
 - Tồn đầu = nhập hoàn tất trước `FromDate` - xuất hoàn tất trước `FromDate`.
 - Tồn cuối = tồn đầu + nhập trong kỳ - xuất trong kỳ.
 - `ToDate` bao trọn ngày bằng điều kiện `< ToDate + 1 ngày`.
@@ -29,9 +31,11 @@ Báo cáo tổng hợp Nhập – Xuất – Tồn theo kỳ, mỗi dòng là m�
 
 - Web và Excel luôn có đúng 6 cột: Tên hàng hóa, Kho, Tồn đầu, Nhập, Xuất, Tồn cuối.
 - Drill-down mở tab mới, truyền `FromDate`, `ToDate`, tên hàng hóa và `KhoId` vào báo cáo chi tiết hiện hữu.
+- Drill-down dùng optional exact-name trên báo cáo chi tiết; filter tìm kiếm thông thường vẫn giữ LIKE tên/mã.
 - Permission reuse `WarehouseInOutReportViewPermissionCode`; không thêm permission hay nhóm menu mới.
 
 ## Registry CHANGE_ID
 
 - `APPTECH-20261007-NHAP-XUAT-TON-001`: tạo pipeline báo cáo tổng hợp ban đầu.
 - `APPTECH-20261007-NHAP-XUAT-TON-002`: cố định grain/layout 6 cột, thêm Excel, drill-down và verification tập trung.
+- `APPTECH-20261008-NHAP-XUAT-TON-003`: đổi reporting grain sang tên hàng hóa chuẩn hóa + kho vì nhiều master product ID cùng tên phải hiển thị thành một dòng tổng hợp trong cùng kho.

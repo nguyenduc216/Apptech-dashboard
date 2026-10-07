@@ -60,6 +60,8 @@ public class ReportController(
     }
 
     [HttpGet]
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003 - Forward optional exact-name drill-down without changing normal search.
     public async Task<IActionResult> NhapXuatKho([FromQuery] NhapXuatKhoReportQuery query)
     {
         if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
@@ -75,6 +77,7 @@ public class ReportController(
             query.HangHoa,
             query.KhoId,
             query.MaPhieu,
+            query.ExactHangHoa,
             HttpContext.RequestAborted);
 
         ViewData["Title"] = "Báo cáo nhập xuất kho";
@@ -130,6 +133,8 @@ public class ReportController(
     }
 
     [HttpGet]
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003 - Excel detail preserves the optional exact-name contract.
     public async Task<IActionResult> ExportNhapXuatKho([FromQuery] NhapXuatKhoReportQuery query)
     {
         if (!await CanViewNhapXuatKhoReportAsync(HttpContext.RequestAborted))
@@ -145,6 +150,7 @@ public class ReportController(
             query.HangHoa,
             query.KhoId,
             query.MaPhieu,
+            query.ExactHangHoa,
             HttpContext.RequestAborted);
 
         var loai = model.Filter.Loai switch

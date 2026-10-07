@@ -40,6 +40,10 @@ public sealed class NhapXuatKhoReportQuery
 
     public string? HangHoa { get; set; }
 
+    // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003 - Exact-name chỉ dùng cho drill-down row tổng hợp.
+    public bool ExactHangHoa { get; set; }
+
     public int? KhoId { get; set; }
 
     public string? MaPhieu { get; set; }
@@ -82,6 +86,7 @@ public sealed class NhapXuatKhoReportFilterState
     public DateTime? ToDate { get; set; }
     public string? VatTu { get; set; }
     public string? HangHoa { get; set; }
+    public bool ExactHangHoa { get; set; }
     public int? KhoId { get; set; }
     public string? MaPhieu { get; set; }
 }

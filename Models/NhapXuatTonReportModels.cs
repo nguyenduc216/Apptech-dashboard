@@ -28,11 +28,8 @@ public sealed class NhapXuatTonReportFilterState
 
 public sealed class NhapXuatTonReportItem
 {
-    public int? HangHoaId { get; set; }
     public int? KhoId { get; set; }
-    public string? MaHangHoa { get; set; }
     public string? TenHangHoa { get; set; }
-    public string? MaKho { get; set; }
     public string? TenKho { get; set; }
     public decimal TonDau { get; set; }
     public decimal NhapTrongKy { get; set; }

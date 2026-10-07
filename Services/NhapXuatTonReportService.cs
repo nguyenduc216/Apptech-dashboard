@@ -29,8 +29,9 @@ public sealed class NhapXuatTonReportService(
     private readonly ILogger<NhapXuatTonReportService> _logger = logger;
 
     // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
-    // Báo cáo tổng hợp luôn có business grain IDHangHoa + IDKho.
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Báo cáo tổng hợp theo hàng hóa và kho.
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003
+    // Business grain hiện tại là tên hàng hóa chuẩn hóa + IDKho vì nhiều master ID có thể cùng tên nghiệp vụ.
     public async Task<NhapXuatTonReportViewModel> GetReportAsync(
         DateTime? fromDate,
         DateTime? toDate,
@@ -107,11 +108,8 @@ public sealed class NhapXuatTonReportService(
         {
             items.Add(new NhapXuatTonReportItem
             {
-                HangHoaId = GetNullableInt32(reader, "HangHoaId"),
                 KhoId = GetNullableInt32(reader, "KhoId"),
-                MaHangHoa = GetNullableString(reader, "MaHangHoa"),
                 TenHangHoa = GetNullableString(reader, "TenHangHoa"),
-                MaKho = GetNullableString(reader, "MaKho"),
                 TenKho = GetNullableString(reader, "TenKho"),
                 TonDau = GetNullableDecimal(reader, "TonDau") ?? 0,
                 NhapTrongKy = GetNullableDecimal(reader, "NhapTrongKy") ?? 0,
@@ -123,22 +121,24 @@ public sealed class NhapXuatTonReportService(
     }
 
     // FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
-    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
-    // Query cố định theo IDHangHoa + IDKho; nhánh nhập tổng hợp trực tiếp từ PNCT để tránh double-count loại 2.
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002 - Nhánh nhập không join vật tư để tránh double-count loại 2.
+    // CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003
+    // Lọc theo ID/mã khi movement còn identity, rồi mới gộp theo tên chuẩn hóa + IDKho.
     private static string BuildSql()
     {
         return $"""
             /*
             FEATURE_ID: APPTECH-REPORT-NHAP-XUAT-TON
-            CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-002
-            PURPOSE: Báo cáo Nhập - Xuất - Tồn theo Hàng hóa × Kho
-            BUSINESS GRAIN: IDHangHoa + IDKho
+            CHANGE_ID: APPTECH-20261008-NHAP-XUAT-TON-003
+            PURPOSE: Gộp báo cáo Nhập - Xuất - Tồn theo tên hàng hóa + kho.
+            BUSINESS GRAIN: Normalized TenHangHoa + IDKho
             BUSINESS RULES:
-            - TonDau = NhapTruocKy - XuatTruocKy
-            - TonCuoi = TonDau + NhapTrongKy - XuatTrongKy
+            - Nhiều IDHangHoa cùng tên trong cùng kho tạo một dòng tổng hợp.
+            - TonCuoi = TonDau + NhapTrongKy - XuatTrongKy.
             SAFETY / IMPORTANT:
-            - Không join PNCT với nhiều TblChiTietHangHoa để SUM số nhập.
-            - Chỉ tính phiếu hoàn tất.
+            - Không sửa master data.
+            - Không double-count PNCT.
+            - Filter theo mã hàng phải giữ đúng source ID trước aggregation.
             */
             WITH Movements AS
             (
@@ -170,47 +170,55 @@ public sealed class NhapXuatTonReportService(
                     ON hhXuat.ID = pxct.IDHangHoa
                 WHERE px.TrangThaiPhieu = N'{XuatKhoPhieuStatus.Exported}'
             )
+            , FilteredMovements AS
+            (
+                SELECT
+                    LTRIM(RTRIM(hh.TenHangHoa)) COLLATE {SearchCollation} AS NormalizedProductName,
+                    m.IDKho,
+                    m.Ngay,
+                    m.SoLuongNhap,
+                    m.SoLuongXuat,
+                    kho.TenKho
+                FROM Movements m
+                LEFT JOIN [TblHangHoa] hh ON hh.ID = m.IDHangHoa
+                LEFT JOIN [TblKho] kho ON kho.ID = m.IDKho
+                WHERE
+                    m.Ngay < @ToDateExclusive
+                    AND (@KhoId IS NULL OR m.IDKho = @KhoId)
+                    AND (
+                        @HangHoa IS NULL
+                        OR hh.TenHangHoa COLLATE {SearchCollation} LIKE @HangHoa
+                        OR hh.MaHangHoa COLLATE {SearchCollation} LIKE @HangHoa
+                    )
+            )
             SELECT
-                m.IDHangHoa AS HangHoaId,
-                m.IDKho AS KhoId,
-                hh.MaHangHoa,
-                hh.TenHangHoa,
-                kho.MaKho,
-                kho.TenKho,
+                f.IDKho AS KhoId,
+                f.NormalizedProductName AS TenHangHoa,
+                f.TenKho,
                 CAST(SUM(
                     CASE
-                        WHEN m.Ngay < @FromDate
-                            THEN m.SoLuongNhap - m.SoLuongXuat
+                        WHEN f.Ngay < @FromDate
+                            THEN f.SoLuongNhap - f.SoLuongXuat
                         ELSE 0
                     END
                 ) AS decimal(18,4)) AS TonDau,
                 CAST(SUM(
                     CASE
-                        WHEN m.Ngay >= @FromDate AND m.Ngay < @ToDateExclusive
-                            THEN m.SoLuongNhap
+                        WHEN f.Ngay >= @FromDate AND f.Ngay < @ToDateExclusive
+                            THEN f.SoLuongNhap
                         ELSE 0
                     END
                 ) AS decimal(18,4)) AS NhapTrongKy,
                 CAST(SUM(
                     CASE
-                        WHEN m.Ngay >= @FromDate AND m.Ngay < @ToDateExclusive
-                            THEN m.SoLuongXuat
+                        WHEN f.Ngay >= @FromDate AND f.Ngay < @ToDateExclusive
+                            THEN f.SoLuongXuat
                         ELSE 0
                     END
                 ) AS decimal(18,4)) AS XuatTrongKy
-            FROM Movements m
-            LEFT JOIN [TblHangHoa] hh ON hh.ID = m.IDHangHoa
-            LEFT JOIN [TblKho] kho ON kho.ID = m.IDKho
-            WHERE
-                m.Ngay < @ToDateExclusive
-                AND (@KhoId IS NULL OR m.IDKho = @KhoId)
-                AND (
-                    @HangHoa IS NULL
-                    OR hh.TenHangHoa COLLATE {SearchCollation} LIKE @HangHoa
-                    OR hh.MaHangHoa COLLATE {SearchCollation} LIKE @HangHoa
-                )
-            GROUP BY m.IDHangHoa, m.IDKho, hh.MaHangHoa, hh.TenHangHoa, kho.MaKho, kho.TenKho
-            ORDER BY hh.TenHangHoa ASC, kho.TenKho ASC;
+            FROM FilteredMovements f
+            GROUP BY f.NormalizedProductName, f.IDKho, f.TenKho
+            ORDER BY f.NormalizedProductName ASC, f.TenKho ASC;
             """;
     }
 
