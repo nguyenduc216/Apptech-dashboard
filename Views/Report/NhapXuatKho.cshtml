@@ -11,6 +11,10 @@
                 <h3>Báo cáo nhập xuất kho</h3>
                 <p>Danh sách vật tư nhập kho, xuất kho theo dòng thời gian.</p>
             </div>
+            <a class="secondary-button master-data-reset-button" asp-action="NhapXuatTon">
+                <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
+                <span>Nhập xuất tồn</span>
+            </a>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
