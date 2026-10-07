@@ -235,6 +235,7 @@ public sealed class NhapXuatTonReportService(
             """;
     }
 
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Mở kết nối theo cùng convention SQL của project.
     private async Task<SqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connectionString = !string.IsNullOrWhiteSpace(_connectionString)
@@ -246,18 +247,21 @@ public sealed class NhapXuatTonReportService(
         return connection;
     }
 
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Mapper nullable dùng cho result set báo cáo.
     private static string? GetNullableString(SqlDataReader reader, string name)
     {
         var index = reader.GetOrdinal(name);
         return reader.IsDBNull(index) ? null : reader.GetString(index);
     }
 
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Mapper nullable dùng cho result set báo cáo.
     private static int? GetNullableInt32(SqlDataReader reader, string name)
     {
         var index = reader.GetOrdinal(name);
         return reader.IsDBNull(index) ? null : reader.GetInt32(index);
     }
 
+    // CHANGE_ID: APPTECH-20261007-NHAP-XUAT-TON-001 - Mapper nullable dùng cho result set báo cáo.
     private static decimal? GetNullableDecimal(SqlDataReader reader, string name)
     {
         var index = reader.GetOrdinal(name);
