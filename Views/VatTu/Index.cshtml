@@ -48,7 +48,7 @@
     var lockIdentityFields = isInventoryLocked || isRestrictedByDocument;
     var imageInputSuffix = Model.Form.Id ?? 0;
     var viCulture = CultureInfo.GetCultureInfo("vi-VN");
-    var tableColumnCount = 10;
+    var tableColumnCount = 11;
     var groupedTableItems = Model.Items
         .GroupBy(item => new
         {
@@ -102,11 +102,6 @@
 }
 
 <style>
-    .vat-tu-table th:nth-child(10),
-    .vat-tu-table td:nth-child(10) {
-        display: none;
-    }
-
     .login-field:has(.fa-file-export) {
         display: none;
     }

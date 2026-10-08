@@ -23,3 +23,4 @@ Quản lý danh sách và chi tiết vật tư, đồng thời thể hiện các
 ## Change registry
 
 - `APPTECH-20261008-VAT-TU-PHIEU-XUAT-001`: hiển thị toàn bộ phiếu xuất hoàn tất theo từng vật tư bằng batch lookup, link độc lập mở tab mới.
+- `APPTECH-20261008-VAT-TU-PHIEU-XUAT-002`: hiển thị lại cột Phiếu xuất bị CSS ẩn và đồng bộ colspan của bảng thành 11 cột.
