@@ -454,6 +454,10 @@ public class NhapKhoController(
         var details = await _nhapKhoService.GetDetailsAsync(query.EditId.Value, cancellationToken);
         var images = await _nhapXuatImageService.GetImagesAsync(query.EditId.Value, NhapXuatImageLoaiPhieu.Nhap, cancellationToken);
         model.PopupMode = NhapKhoPopupMode.Edit;
+        // FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+        // CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-NHAP-003
+        // Mở phiếu nhập từ vật tư, focus đúng PNCT và reuse tab hiện hữu.
+        model.HighlightDetailId = query.HighlightDetailId is > 0 ? query.HighlightDetailId : null;
         model.Form = new NhapKhoFormModel
         {
             Id = item.Id,
@@ -468,7 +472,10 @@ public class NhapKhoController(
             ExistingImages = images.ToList(),
             Keyword = query.Keyword,
             StatusFilter = query.StatusFilter,
-            Page = currentPage
+            Page = currentPage,
+            ActiveTab = string.Equals(query.ActiveTab, "hang-hoa-nhap", StringComparison.OrdinalIgnoreCase)
+                ? "hang-hoa-nhap"
+                : "thong-tin"
         };
 
         return model;

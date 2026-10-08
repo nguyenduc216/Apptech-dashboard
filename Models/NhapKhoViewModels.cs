@@ -75,6 +75,11 @@ public sealed class NhapKhoListQuery
     public int Page { get; set; } = 1;
     public bool ShowCreatePopup { get; set; }
     public int? EditId { get; set; }
+    // FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+    // CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-NHAP-003
+    // Focus đúng TblPhieuNhapKhoChiTiet.ID khi mở phiếu nhập từ vật tư.
+    public int? HighlightDetailId { get; set; }
+    public string? ActiveTab { get; set; }
 }
 
 public sealed class NhapKhoFilterState
@@ -225,6 +230,7 @@ public sealed class NhapKhoManagementViewModel
     public int CurrentPage { get; set; } = 1;
     public string? StatusMessage { get; set; }
     public string StatusType { get; set; } = "info";
+    public int? HighlightDetailId { get; set; }
 
     public bool IsPopupOpen => PopupMode != NhapKhoPopupMode.None;
 

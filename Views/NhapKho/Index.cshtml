@@ -413,7 +413,10 @@
                          data-tab="hang-hoa-nhap"
                          role="tabpanel"
                          @(activeTab == "hang-hoa-nhap" ? null : "hidden")>
-                        <div class="xuat-kho-detail-panel @(detailHasError ? "has-error" : "")" data-nhap-kho-root data-readonly="@(!isEditable ? "true" : "false")">
+                        <div class="xuat-kho-detail-panel @(detailHasError ? "has-error" : "")"
+                             data-nhap-kho-root
+                             data-readonly="@(!isEditable ? "true" : "false")"
+                             data-highlight-detail-id="@(Model.HighlightDetailId?.ToString() ?? string.Empty)">
                             @if (isEditable)
                             {
                                 <button type="button" class="secondary-button" data-nhap-kho-add-detail>
@@ -473,7 +476,10 @@
                                             var soChungTuHasError = soChungTuErrors.Length > 0;
                                             var donViTinhHasError = donViTinhErrors.Length > 0;
                                             var loaiHinhHasError = loaiHinhErrors.Length > 0;
-                                            <tr data-nhap-kho-detail-row>
+                                            @* FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL; CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-NHAP-003 *@
+                                            <tr class="@(Model.HighlightDetailId.HasValue && detail.Id == Model.HighlightDetailId ? "is-highlighted-material" : null)"
+                                                data-nhap-kho-detail-row
+                                                data-nhap-kho-detail-id="@detail.Id">
                                                 <td class="detail-field-cell @(hangHoaHasError ? "has-error" : "")">
                                                     <input type="hidden" name="Form.Details[@index].Id" value="@detail.Id" data-detail-id />
                                                     <span class="login-input-shell select-shell">
@@ -1170,6 +1176,26 @@
             }
 
             const getRows = () => Array.from(list.querySelectorAll("[data-nhap-kho-detail-row]"));
+            // FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+            // CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-NHAP-003
+            // Scroll chỉ khi PNCT đích tồn tại; không dùng tên hàng hóa hoặc index dòng.
+            const focusSourceImportDetail = () => {
+                const highlightDetailId = Number.parseInt(root.dataset.highlightDetailId || "", 10);
+                if (!Number.isInteger(highlightDetailId) || highlightDetailId <= 0) {
+                    return;
+                }
+
+                const highlightedRow = getRows().find((row) =>
+                    Number.parseInt(row.dataset.nhapKhoDetailId || "", 10) === highlightDetailId);
+                if (!(highlightedRow instanceof HTMLTableRowElement)) {
+                    return;
+                }
+
+                window.requestAnimationFrame(() => {
+                    highlightedRow.scrollIntoView({ behavior: "smooth", block: "center" });
+                });
+            };
+            focusSourceImportDetail();
             const reindexRows = () => {
                 getRows().forEach((row, index) => {
                     row.querySelectorAll("[name]").forEach((input) => {

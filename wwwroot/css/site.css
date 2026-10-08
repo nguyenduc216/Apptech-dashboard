@@ -7585,6 +7585,18 @@ body.report-fullscreen-open {
     grid-template-columns: minmax(260px, 1fr) minmax(180px, 0.45fr) minmax(180px, 0.45fr) auto;
 }
 
+/* FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL
+   CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-NHAP-003 */
+.xuat-kho-detail-table tbody tr.is-highlighted-material > td {
+    background: #fff7d6;
+    box-shadow: inset 0 2px 0 #e0a800, inset 0 -2px 0 #e0a800;
+    transition: background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.xuat-kho-detail-table tbody tr.is-highlighted-material > td:first-child {
+    box-shadow: inset 4px 0 0 #e0a800, inset 0 2px 0 #e0a800, inset 0 -2px 0 #e0a800;
+}
+
 .selection-col {
     width: 52px;
     text-align: center;

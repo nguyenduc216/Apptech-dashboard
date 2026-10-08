@@ -24,3 +24,4 @@ Quản lý danh sách và chi tiết vật tư, đồng thời thể hiện các
 
 - `APPTECH-20261008-VAT-TU-PHIEU-XUAT-001`: hiển thị toàn bộ phiếu xuất hoàn tất theo từng vật tư bằng batch lookup, link độc lập mở tab mới.
 - `APPTECH-20261008-VAT-TU-PHIEU-XUAT-002`: hiển thị lại cột Phiếu xuất bị CSS ẩn và đồng bộ colspan của bảng thành 11 cột.
+- `APPTECH-20261008-VAT-TU-PHIEU-NHAP-003`: link Phiếu nhập mở tab mới, dùng `PhieuNhapChiTietId` để tự mở tab Hàng hóa nhập, highlight và scroll tới đúng dòng PNCT.

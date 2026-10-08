@@ -386,7 +386,15 @@
                                     <td>
                                         @if (item.PhieuNhapId.HasValue && !string.IsNullOrWhiteSpace(item.MaPhieuNhap))
                                         {
-                                            <a class="table-action-link" asp-controller="NhapKho" asp-action="Index" asp-route-editId="@item.PhieuNhapId.Value">@item.MaPhieuNhap</a>
+                                            @* FEATURE_ID: APPTECH-WAREHOUSE-MATERIAL; CHANGE_ID: APPTECH-20261008-VAT-TU-PHIEU-NHAP-003 *@
+                                            <a class="table-action-link"
+                                               asp-controller="NhapKho"
+                                               asp-action="Index"
+                                               asp-route-editId="@item.PhieuNhapId.Value"
+                                               asp-route-highlightDetailId="@item.PhieuNhapChiTietId"
+                                               asp-route-activeTab="hang-hoa-nhap"
+                                               target="_blank"
+                                               rel="noopener">@item.MaPhieuNhap</a>
                                         }
                                         else
                                         {
