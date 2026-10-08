@@ -11,9 +11,25 @@ public enum VatTuPopupMode
     Edit = 2
 }
 
+public static class VatTuUsageStatusFilters
+{
+    public const string All = "all";
+    public const string Active = "active";
+    public const string Inactive = "inactive";
+}
+
+public static class VatTuStockFilters
+{
+    public const string InStock = "in-stock";
+    public const string OutOfStock = "out-of-stock";
+    public const string All = "all";
+}
+
 public sealed class VatTuListQuery
 {
     public string? Keyword { get; set; }
+    public string StatusFilter { get; set; } = VatTuUsageStatusFilters.All;
+    public string StockFilter { get; set; } = VatTuStockFilters.InStock;
     public int Page { get; set; } = 1;
     public bool ShowCreatePopup { get; set; }
     public int? EditId { get; set; }
@@ -22,6 +38,8 @@ public sealed class VatTuListQuery
 public sealed class VatTuFilterState
 {
     public string? Keyword { get; set; }
+    public string StatusFilter { get; set; } = VatTuUsageStatusFilters.All;
+    public string StockFilter { get; set; } = VatTuStockFilters.InStock;
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
@@ -123,7 +141,7 @@ public sealed class VatTuFormModel
     [StringLength(250, ErrorMessage = "Tên chi tiết tối đa 250 ký tự.")]
     public string TenChiTiet { get; set; } = string.Empty;
 
-    [Range(typeof(decimal), "0.01", "9999999999999999.99", ErrorMessage = "Số lượng tồn phải lớn hơn 0.")]
+    [Range(typeof(decimal), "0", "9999999999999999.99", ErrorMessage = "Số lượng tồn không được nhỏ hơn 0.")]
     public decimal SoLuongTon { get; set; } = 1;
     public decimal DonGiaBanLe { get; set; }
 
@@ -159,6 +177,8 @@ public sealed class VatTuFormModel
     public string? PrimaryImageSelection { get; set; }
 
     public string? Keyword { get; set; }
+    public string StatusFilter { get; set; } = VatTuUsageStatusFilters.All;
+    public string StockFilter { get; set; } = VatTuStockFilters.InStock;
     public int Page { get; set; } = 1;
     public string ActiveTab { get; set; } = "thong-tin";
 
@@ -170,6 +190,8 @@ public sealed class VatTuDeleteModel
 {
     public int Id { get; set; }
     public string? Keyword { get; set; }
+    public string StatusFilter { get; set; } = VatTuUsageStatusFilters.All;
+    public string StockFilter { get; set; } = VatTuStockFilters.InStock;
     public int Page { get; set; } = 1;
 }
 
@@ -181,6 +203,8 @@ public sealed class VatTuCopyModel
     public int CopyQuantity { get; set; } = 1;
 
     public string? Keyword { get; set; }
+    public string StatusFilter { get; set; } = VatTuUsageStatusFilters.All;
+    public string StockFilter { get; set; } = VatTuStockFilters.InStock;
     public int Page { get; set; } = 1;
 }
 

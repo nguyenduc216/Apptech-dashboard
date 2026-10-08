@@ -10,6 +10,8 @@ public interface IVatTuService
 {
     Task<(IReadOnlyList<VatTuListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
         string? keyword,
+        string? statusFilter,
+        string? stockFilter,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
@@ -66,6 +68,8 @@ public interface IVatTuService
 
     Task<IReadOnlyList<VatTuListItem>> GetAllForExportAsync(
         string? keyword,
+        string? statusFilter,
+        string? stockFilter,
         CancellationToken cancellationToken = default);
 }
 
@@ -157,6 +161,8 @@ public sealed class VatTuService(
 
     public async Task<(IReadOnlyList<VatTuListItem> Items, int TotalCount, int CurrentPage, int TotalPages, int PageSize)> GetPagedAsync(
         string? keyword,
+        string? statusFilter,
+        string? stockFilter,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -169,8 +175,8 @@ public sealed class VatTuService(
             await using var connection = await OpenConnectionAsync(cancellationToken);
             var normalizedKeyword = NormalizeKeyword(keyword);
             var keywordTerms = SplitKeywordTerms(normalizedKeyword);
-            var whereClause = BuildWhereClause(keywordTerms);
             var hasTrangThaiSuDungColumn = await HasTrangThaiSuDungColumnAsync(connection, transaction: null, cancellationToken);
+            var whereClause = BuildWhereClause(keywordTerms, statusFilter, stockFilter, hasTrangThaiSuDungColumn);
             var trangThaiSuDungSelect = hasTrangThaiSuDungColumn
                 ? "CAST(ISNULL(ct.TrangThaiSuDung, 0) AS bit) AS TrangThaiSuDung,"
                 : "CAST(1 AS bit) AS TrangThaiSuDung,";
@@ -295,6 +301,8 @@ public sealed class VatTuService(
 
     public async Task<IReadOnlyList<VatTuListItem>> GetAllForExportAsync(
         string? keyword,
+        string? statusFilter,
+        string? stockFilter,
         CancellationToken cancellationToken = default)
     {
         try
@@ -302,8 +310,8 @@ public sealed class VatTuService(
             await using var connection = await OpenConnectionAsync(cancellationToken);
             var normalizedKeyword = NormalizeKeyword(keyword);
             var keywordTerms = SplitKeywordTerms(normalizedKeyword);
-            var whereClause = BuildWhereClause(keywordTerms);
             var hasTrangThaiSuDungColumn = await HasTrangThaiSuDungColumnAsync(connection, transaction: null, cancellationToken);
+            var whereClause = BuildWhereClause(keywordTerms, statusFilter, stockFilter, hasTrangThaiSuDungColumn);
             var trangThaiSuDungSelect = hasTrangThaiSuDungColumn
                 ? "CAST(ISNULL(ct.TrangThaiSuDung, 0) AS bit) AS TrangThaiSuDung,"
                 : "CAST(1 AS bit) AS TrangThaiSuDung,";
@@ -1701,9 +1709,38 @@ public sealed class VatTuService(
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
     }
 
-    private static string BuildWhereClause(IReadOnlyList<string> keywordTerms)
+    private static string BuildWhereClause(
+        IReadOnlyList<string> keywordTerms,
+        string? statusFilter,
+        string? stockFilter,
+        bool hasTrangThaiSuDungColumn)
     {
-        var filters = new List<string> { "ISNULL(ct.SoLuongTon, 0) > 0" };
+        var filters = new List<string>();
+
+        switch (stockFilter?.Trim().ToLowerInvariant())
+        {
+            case VatTuStockFilters.All:
+                break;
+            case VatTuStockFilters.OutOfStock:
+                filters.Add("ISNULL(ct.SoLuongTon, 0) <= 0");
+                break;
+            default:
+                filters.Add("ISNULL(ct.SoLuongTon, 0) > 0");
+                break;
+        }
+
+        switch (statusFilter?.Trim().ToLowerInvariant())
+        {
+            case VatTuUsageStatusFilters.Active when hasTrangThaiSuDungColumn:
+                filters.Add("ISNULL(ct.TrangThaiSuDung, 0) = 1");
+                break;
+            case VatTuUsageStatusFilters.Inactive when hasTrangThaiSuDungColumn:
+                filters.Add("ISNULL(ct.TrangThaiSuDung, 0) = 0");
+                break;
+            case VatTuUsageStatusFilters.Inactive:
+                filters.Add("1 = 0");
+                break;
+        }
 
         for (var index = 0; index < keywordTerms.Count; index++)
         {
@@ -1729,7 +1766,7 @@ public sealed class VatTuService(
                 .Replace("{SearchCollation}", SearchCollation));
         }
 
-        return string.Join(" AND ", filters);
+        return filters.Count == 0 ? "1 = 1" : string.Join(" AND ", filters);
     }
 
     private static void AddFilterParameters(SqlCommand command, IReadOnlyList<string> keywordTerms)

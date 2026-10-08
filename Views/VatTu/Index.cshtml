@@ -146,6 +146,8 @@
                 <a class="master-data-add-button" asp-permission-action="insert"
                    asp-action="Index"
                    asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-stockFilter="@Model.Filter.StockFilter"
                    asp-route-page="@Model.CurrentPage"
                    asp-route-showCreatePopup="true">
                     <i class="fa-solid fa-plus" aria-hidden="true"></i>
@@ -177,6 +179,30 @@
                 </span>
             </label>
 
+            <label class="master-data-filter-field" for="statusFilter">
+                <span>Trạng thái</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-toggle-on" aria-hidden="true"></i>
+                    <select id="statusFilter" name="statusFilter">
+                        <option value="all" selected="@(Model.Filter.StatusFilter == VatTuUsageStatusFilters.All ? "selected" : null)">Tất cả</option>
+                        <option value="active" selected="@(Model.Filter.StatusFilter == VatTuUsageStatusFilters.Active ? "selected" : null)">Đang sử dụng</option>
+                        <option value="inactive" selected="@(Model.Filter.StatusFilter == VatTuUsageStatusFilters.Inactive ? "selected" : null)">Ngưng sử dụng</option>
+                    </select>
+                </span>
+            </label>
+
+            <label class="master-data-filter-field" for="stockFilter">
+                <span>Số lượng</span>
+                <span class="login-input-shell select-shell">
+                    <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                    <select id="stockFilter" name="stockFilter">
+                        <option value="in-stock" selected="@(Model.Filter.StockFilter == VatTuStockFilters.InStock ? "selected" : null)">Còn vật tư</option>
+                        <option value="out-of-stock" selected="@(Model.Filter.StockFilter == VatTuStockFilters.OutOfStock ? "selected" : null)">Hết vật tư</option>
+                        <option value="all" selected="@(Model.Filter.StockFilter == VatTuStockFilters.All ? "selected" : null)">Tất cả</option>
+                    </select>
+                </span>
+            </label>
+
             <div class="master-data-filter-actions">
                 <button type="submit" class="primary-button master-data-filter-button">
                     <span class="button-content">
@@ -194,6 +220,8 @@
                 <a class="secondary-button master-data-export-button"
                    asp-action="ExportExcel"
                    asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-stockFilter="@Model.Filter.StockFilter"
                    title="Xuất danh sách vật tư ra Excel">
                     <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
                     <span>Xuất Excel</span>
@@ -291,6 +319,8 @@
                                         <a class="hang-hoa-image-link"
                                            asp-action="Index"
                                            asp-route-keyword="@Model.Filter.Keyword"
+                                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                                           asp-route-stockFilter="@Model.Filter.StockFilter"
                                            asp-route-page="@Model.CurrentPage"
                                            asp-route-editId="@item.Id"
                                            aria-label="Mở vật tư @item.TenChiTiet để chỉnh sửa">
@@ -394,6 +424,8 @@
                                             <a class="table-action-button edit" asp-permission-action="update"
                                                asp-action="Index"
                                                asp-route-keyword="@Model.Filter.Keyword"
+                                               asp-route-statusFilter="@Model.Filter.StatusFilter"
+                                               asp-route-stockFilter="@Model.Filter.StockFilter"
                                                asp-route-page="@Model.CurrentPage"
                                                asp-route-editId="@item.Id">
                                                 <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
@@ -404,6 +436,8 @@
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="Id" value="@item.Id" />
                                                 <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+                                                <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
+                                                <input type="hidden" name="StockFilter" value="@Model.Filter.StockFilter" />
                                                 <input type="hidden" name="Page" value="@Model.CurrentPage" />
                                                 <button type="submit"
                                                         class="table-action-button delete" asp-permission-action="delete"
@@ -481,6 +515,8 @@
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="Id" value="@item.Id" />
                                             <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+                                            <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
+                                            <input type="hidden" name="StockFilter" value="@Model.Filter.StockFilter" />
                                             <input type="hidden" name="Page" value="@Model.CurrentPage" />
                                             <button type="submit"
                                                     class="vat-tu-block-delete-button"
@@ -496,6 +532,8 @@
                                     <a class="vat-tu-block-surface"
                                        asp-action="Index"
                                        asp-route-keyword="@Model.Filter.Keyword"
+                                       asp-route-statusFilter="@Model.Filter.StatusFilter"
+                                       asp-route-stockFilter="@Model.Filter.StockFilter"
                                        asp-route-page="@Model.CurrentPage"
                                        asp-route-editId="@item.Id"
                                        aria-label="Mở vật tư @item.TenChiTiet để chỉnh sửa"
@@ -543,6 +581,8 @@
                 <a class="pagination-button @(Model.CurrentPage <= 1 ? "disabled" : "")"
                    asp-action="Index"
                    asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-stockFilter="@Model.Filter.StockFilter"
                    asp-route-page="@(Model.CurrentPage - 1)">
                     <i class="fa-solid fa-angle-left" aria-hidden="true"></i>
                     <span>Trước</span>
@@ -554,6 +594,8 @@
                         <a class="pagination-page @(pageNumber == Model.CurrentPage ? "active" : "")"
                            asp-action="Index"
                            asp-route-keyword="@Model.Filter.Keyword"
+                           asp-route-statusFilter="@Model.Filter.StatusFilter"
+                           asp-route-stockFilter="@Model.Filter.StockFilter"
                            asp-route-page="@pageNumber">
                             @pageNumber
                         </a>
@@ -563,6 +605,8 @@
                 <a class="pagination-button @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
                    asp-action="Index"
                    asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-stockFilter="@Model.Filter.StockFilter"
                    asp-route-page="@(Model.CurrentPage + 1)">
                     <span>Sau</span>
                     <i class="fa-solid fa-angle-right" aria-hidden="true"></i>
@@ -594,6 +638,8 @@
             @Html.AntiForgeryToken()
             <input type="hidden" name="SelectedIds" data-vat-tu-copy-selected-ids />
             <input type="hidden" name="Keyword" value="@Model.Filter.Keyword" />
+            <input type="hidden" name="StatusFilter" value="@Model.Filter.StatusFilter" />
+            <input type="hidden" name="StockFilter" value="@Model.Filter.StockFilter" />
             <input type="hidden" name="Page" value="@Model.CurrentPage" />
 
             <label class="login-field">
@@ -658,6 +704,8 @@
                    aria-label="Đóng popup"
                    asp-action="Index"
                    asp-route-keyword="@Model.Filter.Keyword"
+                   asp-route-statusFilter="@Model.Filter.StatusFilter"
+                   asp-route-stockFilter="@Model.Filter.StockFilter"
                    asp-route-page="@Model.CurrentPage">
                     <span aria-hidden="true">&times;</span>
                 </a>
@@ -673,6 +721,8 @@
                 <input asp-for="Form.PhieuXuatId" type="hidden" />
                 <input asp-for="Form.MaPhieuXuat" type="hidden" />
                 <input asp-for="Form.Keyword" type="hidden" />
+                <input asp-for="Form.StatusFilter" type="hidden" />
+                <input asp-for="Form.StockFilter" type="hidden" />
                 <input asp-for="Form.Page" type="hidden" />
                 @if (lockIdentityFields)
                 {
@@ -973,7 +1023,7 @@
                                 <span>Số lượng tồn</span>
                                 <span class="login-input-shell">
                                     <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
-                                    <input asp-for="Form.SoLuongTon" type="number" step="0.01" min="0.01" inputmode="decimal" readonly="@(lockIdentityFields ? "readonly" : null)" />
+                                    <input asp-for="Form.SoLuongTon" type="number" step="0.01" min="0" inputmode="decimal" readonly="@(lockIdentityFields ? "readonly" : null)" />
                                 </span>
                                 <span asp-validation-for="Form.SoLuongTon" class="login-field-error"></span>
                             </label>
@@ -1268,6 +1318,8 @@
                     <a class="secondary-button crud-cancel-button"
                        asp-action="Index"
                        asp-route-keyword="@Model.Filter.Keyword"
+                       asp-route-statusFilter="@Model.Filter.StatusFilter"
+                       asp-route-stockFilter="@Model.Filter.StockFilter"
                        asp-route-page="@Model.CurrentPage">
                         Hủy
                     </a>

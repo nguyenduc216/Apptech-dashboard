@@ -7582,7 +7582,7 @@ body.report-fullscreen-open {
 }
 
 .vat-tu-filter-form {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(260px, 1fr) minmax(180px, 0.45fr) minmax(180px, 0.45fr) auto;
 }
 
 .selection-col {

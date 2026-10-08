@@ -44,16 +44,23 @@ public class VatTuController(
         {
             TempData["StatusMessage"] = "Không tìm thấy vật tư cần chỉnh sửa.";
             TempData["StatusType"] = "error";
-            return RedirectToAction(nameof(Index), BuildRouteValues(query.Keyword, model.CurrentPage));
+            return RedirectToAction(nameof(Index), BuildRouteValues(query.Keyword, model.CurrentPage, query.StatusFilter, query.StockFilter));
         }
 
         return View(model);
     }
 
     [HttpGet]
-    public async Task<IActionResult> ExportExcel([FromQuery] string? keyword)
+    public async Task<IActionResult> ExportExcel(
+        [FromQuery] string? keyword,
+        [FromQuery] string? statusFilter,
+        [FromQuery] string? stockFilter)
     {
-        var items = await _vatTuService.GetAllForExportAsync(keyword, HttpContext.RequestAborted);
+        var items = await _vatTuService.GetAllForExportAsync(
+            keyword,
+            statusFilter,
+            stockFilter,
+            HttpContext.RequestAborted);
         var viCulture = CultureInfo.GetCultureInfo("vi-VN");
 
         using var workbook = new XLWorkbook();
@@ -242,7 +249,7 @@ public class VatTuController(
 
         TempData["StatusMessage"] = "Lưu vật tư thành công.";
         TempData["StatusType"] = "success";
-        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, 1));
+        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, 1, model.StatusFilter, model.StockFilter));
     }
 
     [HttpPost]
@@ -299,7 +306,7 @@ public class VatTuController(
 
         TempData["StatusMessage"] = "Cập nhật vật tư thành công.";
         TempData["StatusType"] = "success";
-        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page));
+        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page, model.StatusFilter, model.StockFilter));
     }
 
     [HttpPost]
@@ -317,7 +324,7 @@ public class VatTuController(
             ? "Đã xóa vật tư."
             : result.ErrorMessage ?? "Không thể xóa vật tư.";
         TempData["StatusType"] = result.Succeeded ? "success" : "error";
-        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page));
+        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page, model.StatusFilter, model.StockFilter));
     }
 
     [HttpPost]
@@ -329,14 +336,14 @@ public class VatTuController(
         {
             TempData["StatusMessage"] = "Vui lòng chọn ít nhất một vật tư để copy.";
             TempData["StatusType"] = "error";
-            return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page));
+            return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page, model.StatusFilter, model.StockFilter));
         }
 
         if (model.CopyQuantity <= 0)
         {
             TempData["StatusMessage"] = "Số lượng copy phải lớn hơn 0.";
             TempData["StatusType"] = "error";
-            return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page));
+            return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page, model.StatusFilter, model.StockFilter));
         }
 
         var result = await _vatTuService.CopyAsync(
@@ -350,13 +357,15 @@ public class VatTuController(
             : result.ErrorMessage ?? "Không thể copy vật tư.";
         TempData["StatusType"] = result.Succeeded ? "success" : "error";
 
-        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page));
+        return RedirectToAction(nameof(Index), BuildRouteValues(model.Keyword, model.Page, model.StatusFilter, model.StockFilter));
     }
 
     private async Task<VatTuManagementViewModel> BuildPageModelAsync(VatTuListQuery query, CancellationToken cancellationToken)
     {
         var (items, totalCount, currentPage, totalPages, pageSize) = await _vatTuService.GetPagedAsync(
             query.Keyword,
+            query.StatusFilter,
+            query.StockFilter,
             query.Page,
             DefaultPageSize,
             cancellationToken);
@@ -367,6 +376,8 @@ public class VatTuController(
             Filter = new VatTuFilterState
             {
                 Keyword = query.Keyword,
+                StatusFilter = query.StatusFilter,
+                StockFilter = query.StockFilter,
                 Page = currentPage,
                 PageSize = pageSize
             },
@@ -374,6 +385,8 @@ public class VatTuController(
             {
                 TrangThaiSuDung = true,
                 Keyword = query.Keyword,
+                StatusFilter = query.StatusFilter,
+                StockFilter = query.StockFilter,
                 Page = currentPage
             },
             Items = items,
@@ -435,6 +448,8 @@ public class VatTuController(
             PrimaryImageSelection = !string.IsNullOrWhiteSpace(item.ImageUrl) ? $"existing:{item.ImageUrl}" : null,
             ExportHistory = exportHistory.ToList(),
             Keyword = query.Keyword,
+            StatusFilter = query.StatusFilter,
+            StockFilter = query.StockFilter,
             Page = currentPage
         };
 
@@ -448,6 +463,8 @@ public class VatTuController(
     {
         var (items, totalCount, currentPage, totalPages, pageSize) = await _vatTuService.GetPagedAsync(
             form.Keyword,
+            form.StatusFilter,
+            form.StockFilter,
             form.Page,
             DefaultPageSize,
             cancellationToken);
@@ -469,6 +486,8 @@ public class VatTuController(
             Filter = new VatTuFilterState
             {
                 Keyword = form.Keyword,
+                StatusFilter = form.StatusFilter,
+                StockFilter = form.StockFilter,
                 Page = currentPage,
                 PageSize = pageSize
             },
@@ -509,11 +528,13 @@ public class VatTuController(
         }
     }
 
-    private object BuildRouteValues(string? keyword, int page)
+    private object BuildRouteValues(string? keyword, int page, string? statusFilter, string? stockFilter)
     {
         return new
         {
             keyword,
+            statusFilter,
+            stockFilter,
             page = Math.Max(page, 1)
         };
     }
