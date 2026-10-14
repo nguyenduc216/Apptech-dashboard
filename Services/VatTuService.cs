@@ -1759,7 +1759,13 @@ public sealed class VatTuService(
                     dvt.TenDonVi COLLATE {SearchCollation} LIKE {parameterName} OR
                     dvt.TenVietTat COLLATE {SearchCollation} LIKE {parameterName} OR
                     pn.MaPhieu COLLATE {SearchCollation} LIKE {parameterName} OR
-                    pxLatest.MaPhieu COLLATE {SearchCollation} LIKE {parameterName}
+                    EXISTS (
+                        SELECT 1
+                        FROM [TblPhieuXuatKhoChiTiet] searchPxct
+                        INNER JOIN [TblPhieuXuatKho] searchPx ON searchPx.ID = searchPxct.IDPhieuXuatKho
+                        WHERE searchPxct.IDChiTietHangHoa = ct.ID
+                            AND searchPx.MaPhieu COLLATE {SearchCollation} LIKE {parameterName}
+                    )
                 )
                 """
                 .Replace("{parameterName}", parameterName)
