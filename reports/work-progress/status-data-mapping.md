@@ -4,6 +4,17 @@ FEATURE_ID: `APPTECH-WORK-PROGRESS-KANBAN`
 
 CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-002`
 
+## Verify một báo cáo duy nhất — change 004
+
+Mở `sql/20261020_work_progress_verify.sql` bản mới và chạy toàn bộ file. Không cần chọn/chạy riêng từng SELECT. Script chỉ đọc dữ liệu ứng dụng, trả **một bảng Results duy nhất** gồm `STT`, `KiemTra`, `CauLenhSQL`, `ThucTe`, `KyVong`, `KetQua`, `GhiChu`. Mỗi dòng có câu SQL SELECT có thể chạy riêng để đối chiếu. Tab **Messages** cũng in từng câu SQL và kết quả, kết thúc bằng `KẾT LUẬN CUỐI CÙNG: PASS` hoặc `FAIL`.
+
+- `PASS`: kiểm tra đạt đúng kỳ vọng.
+- `FAIL`: sai kỳ vọng, thiếu bảng/cột hoặc câu kiểm tra gặp lỗi; lỗi được ghi rõ trong `GhiChu` thay vì làm mất phần kết luận.
+- `INFO`: dữ liệu tham khảo, không quyết định PASS/FAIL. Ví dụ các công việc lịch sử đã hoàn thành nhưng chưa rõ ngày hoàn thành được phép để trống.
+- Dòng cuối `KẾT LUẬN CUỐI CÙNG` chỉ PASS khi tất cả kiểm tra bắt buộc đều đạt và không có lỗi truy vấn. Kết luận này là kết quả kiểm tra SQL, không thay thế nghiệm thu UI/phân quyền thực tế.
+
+Mặc định `@CheckOriginalSnapshot=1` đối soát đúng tổng 53, mới 39, hoàn thành 14, orphan 13, có phiếu hợp lệ 40, sổ ghi nhận 13. Nếu dữ liệu đã thay đổi hợp lệ sau vận hành, đối chiếu thay đổi rồi đặt `@CheckOriginalSnapshot=0`: các dòng số lượng này thành INFO, còn kiểm tra schema/mapping/ngày/orphan chưa duyệt vẫn bắt buộc PASS.
+
 ## Tiếp tục bước 2 sau khi đã chọn giữ lịch sử orphan — change 003
 
 Người dùng đã xác nhận chọn cách 2 cho 13 công việc thiếu 8 phiếu cha. Bản mới của `App_Data/Migrations/20261020_work_progress_kanban.sql` cho phép giữ nguyên **đúng danh sách đã duyệt**, không xóa hoặc chuyển các công việc này sang phiếu khác:
@@ -28,7 +39,7 @@ Với đúng bộ dữ liệu người dùng đã gửi:
 | Thiếu phiếu cha — giữ lịch sử, không hiện Kanban thường | 11 | 2 | 13 |
 | Toàn bộ dữ liệu được bảo toàn | 39 | 14 | 53 |
 
-Kanban đã dùng INNER JOIN với phiếu yêu cầu, nên 13 dòng thiếu phiếu không được đưa vào board hoặc API kéo thả. Không tạo phiếu cha giả và không tự điền ngày hoàn thành cho hai công việc lịch sử đã hoàn thành. Script verify có bảng kết quả phân biệt `VALID_REQUEST` / `RETAINED_ORPHAN`, danh sách sổ đối chiếu và danh sách orphan chưa được ghi nhận (kết quả cuối phải rỗng).
+Kanban đã dùng INNER JOIN với phiếu yêu cầu, nên 13 dòng thiếu phiếu không được đưa vào board hoặc API kéo thả. Không tạo phiếu cha giả và không tự điền ngày hoàn thành cho hai công việc lịch sử đã hoàn thành. Báo cáo verify mới có dòng đếm riêng số công việc thiếu phiếu và có phiếu hợp lệ; dòng “Orphan mới hoặc khác hồ sơ đã duyệt” phải có thực tế bằng 0 và PASS.
 
 Ngoại lệ này chỉ dành cho danh sách đã duyệt, không cho phép chung mọi dữ liệu orphan. Nếu migration đã được cài và chạy lại, orphan mới/khác sổ ghi nhận vẫn bị chặn. Không thực thi thay đổi trên database thực tế từ phiên Codex này.
 
@@ -72,7 +83,7 @@ Danh mục chuẩn vẫn có đủ 5 trạng thái: `NEW`, `IN_PROGRESS`, `REVIE
    ```
 
    Chế độ này yêu cầu đúng 39 “Tạo mới” và 14 “Hoàn thành”, không có trạng thái khác. Nếu dữ liệu đã thay đổi hợp lệ, đối soát lại dữ liệu hiện tại rồi dùng `@RequireOriginalSnapshot=0`; vẫn phải mapping đầy đủ mọi text, không có cơ chế bỏ qua giá trị chưa xác định.
-5. Chạy `sql/20261020_work_progress_verify.sql`. Kiểm tra `EXACT_MAPPING_OK` cho toàn bộ công việc và tổng số theo Code. Với dữ liệu trong ảnh, kết quả phải là `NEW = 39`, `COMPLETED = 14`, tổng 53.
+5. Chạy `sql/20261020_work_progress_verify.sql`. Kiểm tra dòng “Công việc chưa mapping chính xác” bằng 0 và PASS. Với dữ liệu đã xác nhận, số lượng phải là 39 mới / 14 hoàn thành / tổng 53, trong đó 13 orphan được duyệt và 40 có phiếu hợp lệ. Đọc dòng cuối “KẾT LUẬN CUỐI CÙNG”.
 
 Migration schema gốc đã seed 5 mục chuẩn. Vì vậy trên database đã cài đầy đủ, migration dữ liệu bổ sung có thể không INSERT dòng nào; nó vẫn kiểm tra tính đầy đủ và tính đúng đắn của mapping. Nếu thiếu mục chuẩn chưa được tham chiếu, script thêm đúng mục còn thiếu. Không hardcode ID hoặc tạo trùng danh mục.
 

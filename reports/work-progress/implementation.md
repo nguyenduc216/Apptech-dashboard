@@ -5,6 +5,14 @@ CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-001`
 Branch: `feature/work-progress-kanban-v1`, based on clean `main` / `b113c8cd14f2cf9620619c76529f245faed56ca3`.
 Commit: see Git commit containing this report. Integration status: `MERGE_NEEDS_REVIEW`.
 
+## Verify một báo cáo và kết luận PASS/FAIL — APPTECH-20261020-WORK-PROGRESS-004
+
+`sql/20261020_work_progress_verify.sql` được viết lại để chỉ xuất một result grid, có câu SELECT, thực tế, kỳ vọng, PASS/FAIL/INFO cho từng kiểm tra và dòng cuối tổng kết. Tab Messages cũng in câu lệnh và kết quả cuối. Missing schema/query errors được ghi thành FAIL; INFO không che lỗi truy vấn. Kiểm tra snapshot 53/39/14/13/40 mặc định bật, có thể đổi thành INFO sau khi đã đối chiếu thay đổi dữ liệu hợp lệ bằng `@CheckOriginalSnapshot=0`. Các kiểm tra schema, catalog, mapping chính xác, trigger/constraints, ngày, orphan đã duyệt, quyền/menu vẫn bắt buộc.
+
+SQL vẫn chỉ đọc dữ liệu ứng dụng. Kết luận PASS không đại diện cho kiểm thử UI hoặc phân quyền runtime. Kiểm thử SQL bổ sung đọc kết quả thực tế để xác nhận chỉ một grid, đúng kết luận PASS trên snapshot, FAIL khi thiếu schema/orphan mới/snapshot lệch và PASS cho dữ liệu hiện tại hợp lệ ở chế độ không ép snapshot. Hướng dẫn đọc kết quả được cập nhật trong `status-data-mapping.md`.
+
+Kiểm thử change 004: focused SQL 3/3 PASS; toàn bộ 211/211 PASS, không skip. Không thực thi verify trên database thực tế từ phiên này.
+
 ## Giữ lịch sử 13 công việc thiếu phiếu — APPTECH-20261020-WORK-PROGRESS-003
 
 Người dùng đã chọn bảo toàn 13 công việc thuộc 8 phiếu không còn tồn tại. Migration schema được điều chỉnh để chỉ chấp nhận đúng các bộ ID công việc/phiếu thiếu/loại công việc/trạng thái đã cung cấp, ghi nhận vào `TblWorkProgressLegacyOrphan`, giữ toàn bộ dòng và liên kết hiện có. Orphan ngoài danh sách hoặc đã thay đổi thông tin vẫn làm migration dừng/rollback, kể cả khi chạy lại sau cài đặt. Không tạo phiếu giả, không ghi ngày hoàn thành hay lịch sử chuyển trạng thái giả.

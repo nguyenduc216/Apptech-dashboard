@@ -136,9 +136,13 @@ public sealed class WorkProgressSqlTests
             var data=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_status_data.sql"))
                 .Replace("@ApplyChanges bit=0","@ApplyChanges bit=1").Replace("@RequireOriginalSnapshot bit=0","@RequireOriginalSnapshot bit=1");
             await Execute(db,data); // snapshot still counts all 53, including retained history
-            await Execute(db,File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_verify.sql")));
+            var verification=await VerifyReport(db,root);
+            Assert.Equal("PASS",verification.Last().Result);
             await Execute(db,"INSERT dbo.TblYeuCauCongViec(IDYeuCau,IDCongViec,TrangThaiCongViec) VALUES(9999,1,N'Tạo mới')");
             await Assert.ThrowsAsync<SqlException>(()=>Execute(db,script)); // even installed/rerun path must reject new orphan
+            verification=await VerifyReport(db,root);
+            Assert.Equal("FAIL",verification.Last().Result);
+            Assert.Contains(verification,r=>r.Name=="Orphan mới hoặc khác hồ sơ đã duyệt" && r.Result=="FAIL" && r.Actual=="1");
         }
         finally { SqlConnection.ClearAllPools(); await Execute(master,$"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}]"); }
     }
@@ -168,6 +172,9 @@ public sealed class WorkProgressSqlTests
                 """);
             await Execute(db,File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_preflight.sql")));
             var data=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_status_data.sql"));
+            var missingSchemaReport=await VerifyReport(db,root);
+            Assert.Equal("FAIL",missingSchemaReport.Last().Result);
+            Assert.Contains(missingSchemaReport,r=>r.Actual=="ERROR" && r.Result=="FAIL");
             await Assert.ThrowsAsync<SqlException>(()=>Execute(db,data)); // schema prerequisite
             var schema=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_kanban.sql"))
                 .Replace("@SchemaReviewed bit=0","@SchemaReviewed bit=1");
@@ -184,7 +191,10 @@ public sealed class WorkProgressSqlTests
             var apply=data.Replace("@ApplyChanges bit=0","@ApplyChanges bit=1");
             var strict=apply.Replace("@RequireOriginalSnapshot bit=0","@RequireOriginalSnapshot bit=1");
             await Execute(db,strict);
-            await Execute(db,File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_verify.sql")));
+            var currentDataReport=await VerifyReport(db,root,false);
+            Assert.Equal("PASS",currentDataReport.Last().Result);
+            Assert.Contains(currentDataReport,r=>r.Name=="Công việc thiếu phiếu cha giữ lịch sử" && r.Result=="INFO");
+            Assert.Equal("FAIL",(await VerifyReport(db,root)).Last().Result); // original orphan snapshot does not match this fixture
             Assert.Equal(5,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec"));
             Assert.Equal(39,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec w JOIN dbo.TblTrangThaiCongViec s ON s.StorageValue=w.TrangThaiCongViec WHERE s.Code=N'NEW'"));
             Assert.Equal(14,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec w JOIN dbo.TblTrangThaiCongViec s ON s.StorageValue=w.TrangThaiCongViec WHERE s.Code=N'COMPLETED'"));
@@ -367,6 +377,23 @@ public sealed class WorkProgressSqlTests
             Assert.Equal(added.StartDate,addedCard.Start); Assert.Equal(added.ExpectedCompletionDate,addedCard.Expected); Assert.Null(addedCard.Actual);
         }
         finally { WorkStatusContext.End(); }
+    }
+    private static async Task<List<(string Name,string Result,string Actual)>> VerifyReport(SqlConnection db,string root,bool snapshot=true)
+    {
+        var sql=File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_verify.sql"));
+        if(!snapshot) sql=sql.Replace("@CheckOriginalSnapshot bit=1","@CheckOriginalSnapshot bit=0");
+        await using var cmd=new SqlCommand(sql,db); cmd.CommandTimeout=60;
+        await using var reader=await cmd.ExecuteReaderAsync();
+        var rows=new List<(string Name,string Result,string Actual)>();
+        while(await reader.ReadAsync())
+        {
+            Assert.False(string.IsNullOrWhiteSpace(reader.GetString(reader.GetOrdinal("CauLenhSQL"))));
+            rows.Add((reader.GetString(reader.GetOrdinal("KiemTra")),reader.GetString(reader.GetOrdinal("KetQua")),reader.GetString(reader.GetOrdinal("ThucTe"))));
+        }
+        Assert.False(await reader.NextResultAsync()); // operator receives one result grid only
+        Assert.True(rows.Count>1);
+        Assert.Equal("KẾT LUẬN CUỐI CÙNG",rows.Last().Name);
+        return rows;
     }
     private static async Task Execute(SqlConnection db,string sql) { await using var cmd=new SqlCommand(sql,db); cmd.CommandTimeout=60; await cmd.ExecuteNonQueryAsync(); }
     private static async Task<int> Scalar(SqlConnection db,string sql) { await using var cmd=new SqlCommand(sql,db); return Convert.ToInt32(await cmd.ExecuteScalarAsync()); }
