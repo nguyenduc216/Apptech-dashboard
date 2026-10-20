@@ -239,7 +239,7 @@ public sealed class CongViecReportService(
                 NgayYeuCau = GetNullableDateTime(reader, "NgayYeuCau"),
                 TenCongViec = GetString(reader, "TenCongViec") ?? "",
                 TrangThaiCongViec = status,
-                IsCompleted = string.Equals(status, CompletedStatus, StringComparison.OrdinalIgnoreCase)
+                IsCompleted = YeuCauCongViecTrangThaiCatalog.IsCompleted(status)
             });
         }
 
@@ -248,29 +248,9 @@ public sealed class CongViecReportService(
 
     private static async Task EnsureWorkMetadataColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
     {
-        await using var schemaCommand = connection.CreateCommand();
-        schemaCommand.CommandText = $"""
-            IF COL_LENGTH('dbo.{WorkTableName}', 'TrangThaiCongViec') IS NULL
-            BEGIN
-                ALTER TABLE [dbo].[{WorkTableName}] ADD [TrangThaiCongViec] NVARCHAR(50) NULL;
-            END;
-            """;
-        await schemaCommand.ExecuteNonQueryAsync(cancellationToken);
-
-        await using var dataCommand = connection.CreateCommand();
-        dataCommand.CommandText = $"""
-            UPDATE [dbo].[{WorkTableName}]
-            SET [TrangThaiCongViec] = CASE
-                WHEN [CheckInTime] IS NOT NULL AND [CheckoutTime] IS NOT NULL AND [CheckoutTime] > [CheckInTime] THEN @CompletedStatus
-                WHEN [CheckInTime] IS NOT NULL THEN @InProgressStatus
-                ELSE @NewStatus
-            END
-            WHERE [TrangThaiCongViec] IS NULL OR LTRIM(RTRIM([TrangThaiCongViec])) = N'';
-            """;
-        dataCommand.Parameters.Add(new SqlParameter("@NewStatus", SqlDbType.NVarChar, 50) { Value = NewStatus });
-        dataCommand.Parameters.Add(new SqlParameter("@InProgressStatus", SqlDbType.NVarChar, 50) { Value = "Đang thực hiện" });
-        dataCommand.Parameters.Add(new SqlParameter("@CompletedStatus", SqlDbType.NVarChar, 50) { Value = CompletedStatus });
-        await dataCommand.ExecuteNonQueryAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT TOP(0) TrangThaiCongViec FROM dbo.TblYeuCauCongViec";
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static int GetInt32(SqlDataReader reader, string columnName)

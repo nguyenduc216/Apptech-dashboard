@@ -1,0 +1,32 @@
+@model IReadOnlyList<WorkStatus>
+@{ ViewData["Title"]="Trạng thái công việc"; ViewData["Breadcrumb"]="Danh mục / Trạng thái công việc"; }
+<link rel="stylesheet" href="~/css/work-progress.css" asp-append-version="true" />
+<section class="wp-page" aria-label="Danh mục trạng thái công việc">
+<p>Đặt tên, màu và thứ tự hiển thị. Mã và loại nghiệp vụ được giữ cố định sau khi tạo.</p>
+@if(TempData["WorkStatusError"] is string error) { <p role="alert" class="wp-error">@error</p> }
+@if(TempData["WorkStatusSuccess"] is string success) { <p role="status">@success</p> }
+@foreach(var s in Model.Concat((bool)ViewBag.CanCreate ? new[]{new WorkStatus()}:Array.Empty<WorkStatus>()))
+{
+ var edit=s.Id==0 || (bool)ViewBag.CanUpdate;
+ <section class="wp-status-editor">
+ <form method="post" asp-action="Save" class="wp-status-form">
+ <input type="hidden" name="Id" value="@s.Id" /><input type="hidden" name="Version" value="@s.Version" />
+ <label>Mã trạng thái<input name="Code" value="@s.Code" required maxlength="50" pattern="[A-Z][A-Z0-9_]*" readonly="@(s.Id!=0)" /></label>
+ <label>Tên trạng thái<input name="Name" value="@s.Name" required maxlength="100" readonly="@(!edit)" data-status-name /></label>
+ <label>Màu sắc<input type="color" value="@s.Color" data-color-picker disabled="@(!edit)" /><input name="Color" value="@s.Color" pattern="#[0-9a-fA-F]{6}" required maxlength="7" readonly="@(!edit)" data-color-hex /></label>
+ <label>Thứ tự<input type="number" name="SortOrder" value="@s.SortOrder" readonly="@(!edit)" /></label>
+ <label>Loại nghiệp vụ
+ @if(s.Id!=0) { <input type="hidden" name="Kind" value="@s.Kind" /><span>@(s.Kind=="Completed"?"Hoàn thành":s.Kind=="Cancelled"?"Hủy":"Bình thường")</span> }
+ else { <select name="Kind"><option value="Normal">Bình thường</option><option value="Completed">Hoàn thành</option><option value="Cancelled">Hủy</option></select> }
+ </label>
+ <input type="hidden" name="Active" value="@s.Active.ToString().ToLowerInvariant()" />
+ <span class="wp-badge" data-status-preview style="background:@s.Color;color:@s.TextColor">@(s.Id==0?"Trạng thái mới":s.Name)</span>
+ <span>@(s.Active?"Đang kích hoạt":"Đã tắt")</span>
+ @if(edit) { <button type="submit">@(s.Id==0?"Thêm trạng thái":"Lưu thay đổi")</button> }
+ </form>
+ @if(s.Id!=0 && (bool)ViewBag.CanToggle) { <form method="post" asp-action="Toggle"><input type="hidden" name="id" value="@s.Id" /><input type="hidden" name="version" value="@s.Version" /><button type="submit">@(s.Active?"Vô hiệu hóa":"Kích hoạt")</button></form> }
+ @if(s.Id!=0) { <small>ID: @s.Id · Tạo: @s.CreatedAt?.ToString("dd/MM/yyyy HH:mm") · Cập nhật: @s.UpdatedAt?.ToString("dd/MM/yyyy HH:mm")</small> }
+ </section>
+}
+</section>
+<script src="~/js/work-status.js" asp-append-version="true"></script>

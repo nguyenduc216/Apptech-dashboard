@@ -69,6 +69,7 @@ builder.Services.AddScoped<INhanVienService, NhanVienService>();
 builder.Services.AddScoped<IVaiTroService, VaiTroService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IYeuCauService, YeuCauService>();
+builder.Services.AddScoped<WorkProgressService>();
 builder.Services.AddScoped<IChamCongService, ChamCongService>();
 builder.Services.AddScoped<IChamCongReportService, ChamCongReportService>();
 builder.Services.AddScoped<IAttendanceSettingsService, AttendanceSettingsService>();
@@ -136,6 +137,21 @@ app.UseRouting();
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
+// FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+app.Use(async (context, next) =>
+{
+    var controller = context.GetRouteValue("controller")?.ToString();
+    if (context.User.Identity?.IsAuthenticated != true ||
+        !new[] { "YeuCau", "Home", "Report", "TienDoCongViec", "TrangThaiCongViec" }.Contains(controller, StringComparer.OrdinalIgnoreCase))
+    { await next(context); return; }
+    WorkStatusContext.Begin();
+    try
+    {
+        WorkStatusContext.Current!.Statuses = await context.RequestServices.GetRequiredService<WorkProgressService>().Statuses(context.RequestAborted);
+        await next(context);
+    }
+    finally { WorkStatusContext.End(); }
+});
 
 app.MapControllerRoute(
     name: "dashboard",

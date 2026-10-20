@@ -88,6 +88,11 @@ public class YeuCauController(
             return RedirectToAction(nameof(Index), BuildRouteValues(keyword, statusFilter, page, workStatusFilter: workStatusFilter));
         }
 
+        if (!await IsCurrentUserAdminAsync(HttpContext.RequestAborted))
+        {
+            var employee = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
+            if (!employee.HasValue || !await _yeuCauService.IsEmployeeAssignedToRequestAsync(id,employee.Value,HttpContext.RequestAborted)) return Forbid();
+        }
         var works = await _yeuCauService.GetAssignedWorksAsync(id, HttpContext.RequestAborted);
         ApplyWorkImageDeletePermissions(works);
 
@@ -182,6 +187,14 @@ public class YeuCauController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Update([Bind(Prefix = "Form")] YeuCauFormModel model)
     {
+        // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+        if (!await CanUpdateRequestAsync(HttpContext.RequestAborted)) return Forbid();
+        if (!await IsCurrentUserAdminAsync(HttpContext.RequestAborted))
+        {
+            var employee = await GetCurrentEmployeeIdAsync(HttpContext.RequestAborted);
+            if (!model.Id.HasValue || !employee.HasValue || !await _yeuCauService.IsEmployeeAssignedToRequestAsync(model.Id.Value, employee.Value, HttpContext.RequestAborted)) return Forbid();
+        }
+
         NormalizeFormState(model);
         await NormalizeDistanceConstraintAsync(model, HttpContext.RequestAborted);
         await NormalizeUnauthorizedDistanceConstraintChangeAsync(model, HttpContext.RequestAborted);

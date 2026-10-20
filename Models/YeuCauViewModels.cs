@@ -149,13 +149,15 @@ public sealed class YeuCauTrangThaiOption
 
 public static class YeuCauCongViecTrangThaiCatalog
 {
+    // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+    // Request-scoped metadata owns labels/colors/semantic kinds; constants remain immutable legacy keys.
     public const string TaoMoi = "Tạo mới";
     public const string DangThucHien = "Đang thực hiện";
     public const string ChoDanhGia = "Chờ đánh giá";
     public const string HoanThanh = "Hoàn thành";
     public const string Huy = "Hủy";
 
-    public static IReadOnlyList<YeuCauTrangThaiOption> Options { get; } =
+    private static IReadOnlyList<YeuCauTrangThaiOption> SeedOptions { get; } =
     [
         new() { Value = TaoMoi, Label = TaoMoi },
         new() { Value = DangThucHien, Label = DangThucHien },
@@ -164,6 +166,12 @@ public static class YeuCauCongViecTrangThaiCatalog
         new() { Value = Huy, Label = Huy }
     ];
 
+    public static IReadOnlyList<YeuCauTrangThaiOption> Options => ApptechDashboard.Services.WorkStatusContext.Current is { } context
+        ? context.Statuses.Where(s => s.Active).Select(s => new YeuCauTrangThaiOption { Value=s.StorageValue, Label=s.Name }).ToList() : SeedOptions;
+    public static WorkStatus? Find(string? value) => ApptechDashboard.Services.WorkStatusContext.Current?.Statuses.FirstOrDefault(s => s.StorageValue == value);
+    public static string Label(string? value) => Find(value)?.Name ?? Normalize(value);
+    public static string Color(string? value) => Find(value)?.Color ?? "#64748b";
+
     public static string Normalize(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -171,6 +179,7 @@ public static class YeuCauCongViecTrangThaiCatalog
             return TaoMoi;
         }
 
+        if (Find(value) is { } configured) return configured.StorageValue;
         var normalized = RemoveMarks(RepairMojibake(value));
         return normalized switch
         {
@@ -179,14 +188,15 @@ public static class YeuCauCongViecTrangThaiCatalog
             "chodanhgia" => ChoDanhGia,
             "hoanthanh" => HoanThanh,
             "huy" => Huy,
-            _ => TaoMoi
+            _ => value.Trim()
         };
     }
 
-    public static bool IsCompleted(string? value) => Normalize(value) == HoanThanh;
+    public static bool IsCompleted(string? value) => Find(value) is { } configured ? configured.Kind == "Completed" : Normalize(value) == HoanThanh;
 
     public static string GetCssClass(string? value)
     {
+        if (Find(value) is { } configured) return configured.Kind switch { "Completed" => "completed", "Cancelled" => "cancelled", _ => "in-progress" };
         return Normalize(value) switch
         {
             TaoMoi => "pending",
@@ -453,7 +463,12 @@ public sealed class YeuCauCongViecFormItem
     public int SoLuongAnhCheckIn { get; set; }
     public int SoLuongAnhCheckOut { get; set; }
 
-    public string TrangThaiCongViecDisplay => YeuCauCongViecTrangThaiCatalog.Normalize(TrangThaiCongViec);
+    public DateTime? StartDate { get; set; }
+    public DateTime? ExpectedCompletionDate { get; set; }
+    public DateTime? ActualCompletionDate { get; set; }
+    [ValidateNever]
+    public string ProgressVersion { get; set; } = "";
+    public string TrangThaiCongViecDisplay => YeuCauCongViecTrangThaiCatalog.Label(TrangThaiCongViec);
 
     public string TrangThaiCongViecCssClass => YeuCauCongViecTrangThaiCatalog.GetCssClass(TrangThaiCongViec);
 
