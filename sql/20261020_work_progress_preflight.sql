@@ -9,6 +9,10 @@ SELECT TrangThaiCongViec,COUNT_BIG(*) WorkCount FROM dbo.TblYeuCauCongViec GROUP
 SELECT name,OBJECT_DEFINITION(object_id) Definition FROM sys.triggers WHERE parent_id=OBJECT_ID('dbo.TblYeuCauCongViec');
 SELECT name,delete_referential_action_desc FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID('dbo.TblYeuCauCongViec') OR referenced_object_id=OBJECT_ID('dbo.TblYeuCauCongViec');
 SELECT COUNT_BIG(*) OrphanRequests FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau WHERE r.ID IS NULL;
+-- CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-003 — inspect exact tuples before any approved retention.
+SELECT w.ID AS YeuCauCongViecId,w.IDYeuCau,w.IDCongViec,w.TrangThaiCongViec
+FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau
+WHERE r.ID IS NULL ORDER BY w.ID;
 SELECT c.name PossibleEquivalentDate FROM sys.columns c WHERE c.object_id=OBJECT_ID('dbo.TblYeuCauCongViec') AND
  (c.name LIKE '%Date%' OR c.name LIKE '%Ngay%' OR c.name LIKE '%Time%');
 SELECT MaChucNang,MaChucNangCha,TenChucNang,URL FROM dbo.TblChucNang ORDER BY ThuTuHienThi;

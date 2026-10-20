@@ -11,6 +11,7 @@ IF EXISTS(SELECT 1 FROM dbo.TblVaiTroVaQuyen v JOIN dbo.TblQuyen q ON q.ID=v.IDQ
  THROW 51000,N'New permissions have role grants. Export and remove mappings explicitly first.',1;
 BEGIN TRANSACTION;
 DROP TRIGGER dbo.TR_WorkProgress;
+IF OBJECT_ID(N'dbo.TblWorkProgressLegacyOrphan',N'U') IS NOT NULL DROP TABLE dbo.TblWorkProgressLegacyOrphan;
 DROP TABLE dbo.TblYeuCauCongViecTrangThaiHistory;
 ALTER TABLE dbo.TblYeuCauCongViec DROP CONSTRAINT FK_WorkProgress_Status,CK_WorkProgress_Dates;
 DROP INDEX IX_WorkProgress_Board ON dbo.TblYeuCauCongViec;

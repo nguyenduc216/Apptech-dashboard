@@ -5,10 +5,23 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 DECLARE @SchemaReviewed bit=0; -- Operator sets to 1 ONLY after reviewing preflight and equivalent date fields.
+-- CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-003
+-- User explicitly chose to retain the exact 13 orphan works below as legacy history.
+DECLARE @PreserveReviewedOrphans bit=1;
 IF @SchemaReviewed<>1 THROW 51000,N'Run preflight, confirm schema/date semantics and menu parents, then set SchemaReviewed=1.',1;
 IF OBJECT_ID('dbo.TblTrangThaiCongViec','U') IS NOT NULL
 BEGIN
     IF OBJECT_ID('dbo.TR_WorkProgress','TR') IS NULL THROW 51000,N'Partial migration detected: restore or review manually.',1;
+    IF EXISTS(SELECT 1 FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau WHERE r.ID IS NULL)
+    BEGIN
+        IF @PreserveReviewedOrphans<>1 OR OBJECT_ID(N'dbo.TblWorkProgressLegacyOrphan',N'U') IS NULL
+            THROW 51000,N'Orphans exist without an approved retention register. Review before continuing.',1;
+        EXEC(N'IF EXISTS(SELECT 1 FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau
+          WHERE r.ID IS NULL AND NOT EXISTS(SELECT 1 FROM dbo.TblWorkProgressLegacyOrphan approved
+          WHERE approved.WorkId=w.ID AND approved.MissingRequestId=w.IDYeuCau AND approved.WorkCatalogId=w.IDCongViec
+          AND CONVERT(varbinary(100),approved.OriginalStatus)=CONVERT(varbinary(100),w.TrangThaiCongViec)))
+          THROW 51000,N''Unreviewed or changed orphan works detected after installation.'',1;');
+    END;
     PRINT 'Work progress migration already installed.';
     RETURN;
 END;
@@ -21,11 +34,40 @@ IF COL_LENGTH('dbo.TblYeuCauCongViec','TrangThaiCongViec')<>100
     THROW 51000,N'Expected existing status NVARCHAR(50); schema mismatch.',1;
 IF EXISTS(SELECT 1 FROM dbo.TblYeuCauCongViec WHERE TrangThaiCongViec IS NULL OR LTRIM(RTRIM(TrangThaiCongViec))=N'')
     THROW 51000,N'Blank legacy states need explicit operator-reviewed mapping. Migration stopped.',1;
-IF EXISTS(SELECT 1 FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau WHERE r.ID IS NULL)
-    THROW 51000,N'Orphan request works must be resolved before migration.',1;
 IF EXISTS(SELECT 1 FROM sys.triggers WHERE parent_id=OBJECT_ID('dbo.TblYeuCauCongViec') AND is_disabled=0)
     THROW 51000,N'Existing work triggers require manual compatibility review.',1;
+DECLARE @ReviewedOrphans TABLE(WorkId int PRIMARY KEY,MissingRequestId int,WorkCatalogId int,OriginalStatus nvarchar(50));
+INSERT @ReviewedOrphans VALUES
+ (5036,4030,2030,N'Tạo mới'),(5037,4031,2030,N'Tạo mới'),(5038,4032,2030,N'Tạo mới'),
+ (5048,4042,2026,N'Hoàn thành'),(5049,4042,2021,N'Hoàn thành'),
+ (5050,4042,2019,N'Tạo mới'),(5051,4042,2025,N'Tạo mới'),(5052,4042,2027,N'Tạo mới'),
+ (5055,4044,2028,N'Tạo mới'),(5056,4045,2028,N'Tạo mới'),
+ (6026,5024,2022,N'Tạo mới'),(6027,5024,2024,N'Tạo mới'),(6028,5025,2034,N'Tạo mới');
+BEGIN TRY
 BEGIN TRANSACTION;
+DECLARE @LockedWorkCount bigint,@LockedRequestCount bigint;
+SELECT @LockedWorkCount=COUNT_BIG(*) FROM dbo.TblYeuCauCongViec WITH(TABLOCKX,HOLDLOCK);
+SELECT @LockedRequestCount=COUNT_BIG(*) FROM dbo.TblYeuCau WITH(TABLOCK,HOLDLOCK);
+IF EXISTS(
+ SELECT 1 FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau
+ WHERE r.ID IS NULL AND (@PreserveReviewedOrphans<>1 OR NOT EXISTS(
+  SELECT 1 FROM @ReviewedOrphans approved WHERE approved.WorkId=w.ID
+   AND approved.MissingRequestId=w.IDYeuCau AND approved.WorkCatalogId=w.IDCongViec
+   AND CONVERT(varbinary(100),approved.OriginalStatus)=CONVERT(varbinary(100),w.TrangThaiCongViec))))
+ THROW 51000,N'Unreviewed or changed orphan works detected. Only the exact 13 approved legacy work/request/catalog/status tuples may be retained.',1;
+CREATE TABLE dbo.TblWorkProgressLegacyOrphan(
+ WorkId int NOT NULL PRIMARY KEY,
+ MissingRequestId int NOT NULL,
+ WorkCatalogId int NOT NULL,
+ OriginalStatus nvarchar(50) NOT NULL,
+ ReviewedAt datetime2 NOT NULL DEFAULT SYSDATETIME(),
+ Reason nvarchar(250) NOT NULL,
+ CONSTRAINT FK_WorkProgress_LegacyOrphan FOREIGN KEY(WorkId) REFERENCES dbo.TblYeuCauCongViec(ID)
+);
+INSERT dbo.TblWorkProgressLegacyOrphan(WorkId,MissingRequestId,WorkCatalogId,OriginalStatus,Reason)
+SELECT w.ID,w.IDYeuCau,w.IDCongViec,w.TrangThaiCongViec,N'User approved retaining legacy history for a missing request; excluded from normal Kanban.'
+FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau WHERE r.ID IS NULL;
+-- All work/employee/checklist/image rows stay in place. Never manufacture a parent or completion date.
 CREATE TABLE dbo.TblTrangThaiCongViec(
  ID int IDENTITY PRIMARY KEY, Code nvarchar(50) NOT NULL UNIQUE, Name nvarchar(100) NOT NULL,
  StorageValue nvarchar(50) NOT NULL UNIQUE, Color varchar(7) NOT NULL,
@@ -100,3 +142,9 @@ SELECT cn.ID,p.Label,p.Code FROM (VALUES
 JOIN dbo.TblChucNang cn ON cn.MaChucNang=p.FunctionCode
 WHERE NOT EXISTS(SELECT 1 FROM dbo.TblQuyen q WHERE q.MaQuyen=p.Code);
 COMMIT;
+SELECT WorkId,MissingRequestId,WorkCatalogId,OriginalStatus,ReviewedAt,Reason FROM dbo.TblWorkProgressLegacyOrphan ORDER BY WorkId;
+END TRY
+BEGIN CATCH
+ IF XACT_STATE()<>0 ROLLBACK;
+ THROW;
+END CATCH;

@@ -17,3 +17,16 @@ SELECT w.TrangThaiCongViec AS OriginalText,DATALENGTH(w.TrangThaiCongViec) AS Or
 FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblTrangThaiCongViec s
  ON CONVERT(varbinary(100),s.StorageValue)=CONVERT(varbinary(100),w.TrangThaiCongViec)
 GROUP BY CONVERT(varbinary(100),w.TrangThaiCongViec),w.TrangThaiCongViec,DATALENGTH(w.TrangThaiCongViec),s.ID,s.Code,s.Name,s.Kind;
+
+/* CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-003 — retained history vs normal Kanban eligibility. */
+SELECT CASE WHEN r.ID IS NULL THEN N'RETAINED_ORPHAN' ELSE N'VALID_REQUEST' END AS RequestGroup,
+       w.TrangThaiCongViec,COUNT_BIG(*) AS WorkCount
+FROM dbo.TblYeuCauCongViec w LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau
+GROUP BY CASE WHEN r.ID IS NULL THEN N'RETAINED_ORPHAN' ELSE N'VALID_REQUEST' END,w.TrangThaiCongViec;
+IF OBJECT_ID(N'dbo.TblWorkProgressLegacyOrphan',N'U') IS NOT NULL
+ EXEC(N'SELECT approved.*,CASE WHEN w.ID IS NULL THEN N''MISSING_WORK'' WHEN r.ID IS NOT NULL THEN N''PARENT_RESTORED'' ELSE N''RETAINED_HISTORY'' END AS CurrentState
+ FROM dbo.TblWorkProgressLegacyOrphan approved LEFT JOIN dbo.TblYeuCauCongViec w ON w.ID=approved.WorkId
+ LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau ORDER BY approved.WorkId;
+ SELECT w.ID,w.IDYeuCau,w.IDCongViec,w.TrangThaiCongViec FROM dbo.TblYeuCauCongViec w
+ LEFT JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau LEFT JOIN dbo.TblWorkProgressLegacyOrphan approved ON approved.WorkId=w.ID
+ WHERE r.ID IS NULL AND approved.WorkId IS NULL;');

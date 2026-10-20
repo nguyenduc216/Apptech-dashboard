@@ -5,6 +5,16 @@ CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-001`
 Branch: `feature/work-progress-kanban-v1`, based on clean `main` / `b113c8cd14f2cf9620619c76529f245faed56ca3`.
 Commit: see Git commit containing this report. Integration status: `MERGE_NEEDS_REVIEW`.
 
+## Giữ lịch sử 13 công việc thiếu phiếu — APPTECH-20261020-WORK-PROGRESS-003
+
+Người dùng đã chọn bảo toàn 13 công việc thuộc 8 phiếu không còn tồn tại. Migration schema được điều chỉnh để chỉ chấp nhận đúng các bộ ID công việc/phiếu thiếu/loại công việc/trạng thái đã cung cấp, ghi nhận vào `TblWorkProgressLegacyOrphan`, giữ toàn bộ dòng và liên kết hiện có. Orphan ngoài danh sách hoặc đã thay đổi thông tin vẫn làm migration dừng/rollback, kể cả khi chạy lại sau cài đặt. Không tạo phiếu giả, không ghi ngày hoàn thành hay lịch sử chuyển trạng thái giả.
+
+Kanban hiện đã INNER JOIN phiếu hợp lệ nên không cần thay đổi truy vấn/UI: với snapshot được cung cấp, board có 40 công việc (28 mới / 12 hoàn thành); 13 orphan (11 mới / 2 hoàn thành) được giữ lịch sử. Đối soát dữ liệu vẫn tính cả 53 công việc. `sql/20261020_work_progress_verify.sql` phân biệt hai nhóm và phát hiện orphan chưa ghi nhận. Rollback schema chỉ bỏ sổ đối chiếu cùng schema tính năng khi được duyệt, không xóa các dòng công việc gốc.
+
+Cách chạy tiếp bước 2 với bản script mới được ghi ở đầu [status-data-mapping.md](status-data-mapping.md). Việc cho phép danh sách orphan không thay thế kiểm tra schema/date/menu còn lại và không cấp quyền triển khai production.
+
+Kiểm thử change 003: **211/211 PASS**, gồm bộ dữ liệu 53/13/40, bảo toàn các cột gốc và liên kết nhân viên/checklist, không tạo phiếu/ngày/history giả, chặn API move orphan, chặn orphan mới/thay đổi và chạy lại không ghi trùng. Không chạy migration trên database thực tế; không chạy lại UI cho thay đổi SQL này.
+
 ## Bổ sung mapping dữ liệu — APPTECH-20261020-WORK-PROGRESS-002
 
 Người dùng đã đồng ý giữ liên kết text `TblYeuCauCongViec.TrangThaiCongViec -> TblTrangThaiCongViec.StorageValue`. Ảnh cung cấp ghi nhận 39 “Tạo mới” và 14 “Hoàn thành”. Không bổ sung cột ID trạng thái và không UPDATE các bản ghi công việc để mapping, vì text đã khớp khóa danh mục.
@@ -50,7 +60,7 @@ The configured database connection could not be reached for read-only schema ins
 ## Verification
 
 - Release build: PASS, zero warnings/errors.
-- Full xUnit suite after change 002, including explicit local SQL integration: **210 passed, 0 failed, 0 skipped** (change 001 baseline: 209 passed). Set `APPTECH_KANBAN_TEST_SQL` to an explicitly authorized local server before running; without it the SQL tests are visibly skipped.
+- Full xUnit suite after change 003, including explicit local SQL integration: **211 passed, 0 failed, 0 skipped** (change 002: 210; change 001 baseline: 209). Set `APPTECH_KANBAN_TEST_SQL` to an explicitly authorized local server before running; without it the SQL tests are visibly skipped.
 - SQL checks exercise migration refusal gate/idempotency, known aliases and unknown legacy data, catalog insert/update/duplicates/stale versions, disabled states, historical cards, staff/name/color refresh, scope, date validation, real request child synchronization, retained checklist/attendance values, completed/reopened/recompleted dates/history, custom completed types and completion percentage, transactional failure and simultaneous moves, rollback refusal/approved rollback.
 - Playwright: PASS at 1440×900, 768×1024 and 390×844 using actual MVC views/controllers and isolated SQL, with a test-only administrator identity. Real drag/drop, select completion, simulated HTTP 409 rollback, catalog create/preview/deactivate, avatars, overdue/late labels and document width were checked; zero JavaScript page errors. Screenshots and machine-readable results are beside this report.
 - Real IIS deployment/login and full request-editor browser flow against an actual staging clone: NOT RUN. The actual request child persistence method was exercised against SQL; complete production schema and authorization/session behavior still require the postdeploy checks below.

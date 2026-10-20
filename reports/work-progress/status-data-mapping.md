@@ -4,6 +4,34 @@ FEATURE_ID: `APPTECH-WORK-PROGRESS-KANBAN`
 
 CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-002`
 
+## Tiếp tục bước 2 sau khi đã chọn giữ lịch sử orphan — change 003
+
+Người dùng đã xác nhận chọn cách 2 cho 13 công việc thiếu 8 phiếu cha. Bản mới của `App_Data/Migrations/20261020_work_progress_kanban.sql` cho phép giữ nguyên **đúng danh sách đã duyệt**, không xóa hoặc chuyển các công việc này sang phiếu khác:
+
+```text
+5036, 5037, 5038, 5048, 5049, 5050, 5051,
+5052, 5055, 5056, 6026, 6027, 6028
+```
+
+Để tiếp tục trên database đang dừng ở lỗi orphan:
+
+1. Mở **bản mới nhất** của `20261020_work_progress_kanban.sql` từ checkout/PR, thay nội dung query cũ trong SSMS. Không chỉ bỏ dòng kiểm tra orphan.
+2. Sau khi đã đối chiếu preflight như bước 2 trước đó, đặt `@SchemaReviewed=1`. Giữ `@PreserveReviewedOrphans=1` (đã mặc định bật theo quyết định của người dùng), rồi chạy toàn bộ riêng script schema.
+3. Script kiểm tra cả ID công việc, ID phiếu thiếu, ID loại công việc và text trạng thái so với danh sách đã gửi. Nếu khớp, các công việc/nhân viên/checklist/ảnh ở nguyên bảng và liên kết hiện có; chỉ ghi thêm sổ đối chiếu `TblWorkProgressLegacyOrphan`. `ReviewedAt` là thời điểm ghi nhận quyết định lưu trữ, không phải ngày hoàn thành công việc. Nếu có orphan mới hoặc thông tin trong danh sách đã thay đổi, script dừng và rollback.
+4. Khi bước 2 thành công, tiếp tục migration dữ liệu và verify như hướng dẫn phía dưới. `@RequireOriginalSnapshot=1` vẫn đối soát toàn bộ **53** công việc (39 mới / 14 hoàn thành), gồm cả 13 dòng lịch sử.
+
+Với đúng bộ dữ liệu người dùng đã gửi:
+
+| Nhóm | Tạo mới | Hoàn thành | Tổng |
+|---|---:|---:|---:|
+| Có phiếu cha hợp lệ — xuất hiện trên Kanban | 28 | 12 | 40 |
+| Thiếu phiếu cha — giữ lịch sử, không hiện Kanban thường | 11 | 2 | 13 |
+| Toàn bộ dữ liệu được bảo toàn | 39 | 14 | 53 |
+
+Kanban đã dùng INNER JOIN với phiếu yêu cầu, nên 13 dòng thiếu phiếu không được đưa vào board hoặc API kéo thả. Không tạo phiếu cha giả và không tự điền ngày hoàn thành cho hai công việc lịch sử đã hoàn thành. Script verify có bảng kết quả phân biệt `VALID_REQUEST` / `RETAINED_ORPHAN`, danh sách sổ đối chiếu và danh sách orphan chưa được ghi nhận (kết quả cuối phải rỗng).
+
+Ngoại lệ này chỉ dành cho danh sách đã duyệt, không cho phép chung mọi dữ liệu orphan. Nếu migration đã được cài và chạy lại, orphan mới/khác sổ ghi nhận vẫn bị chặn. Không thực thi thay đổi trên database thực tế từ phiên Codex này.
+
 Giữ hợp đồng liên kết đã triển khai:
 
 ```text

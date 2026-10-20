@@ -70,6 +70,79 @@ public sealed class LocalSqlFactAttribute : FactAttribute
 
 public sealed class WorkProgressSqlTests
 {
+    [LocalSqlFact]
+    public async Task ReviewedOrphansAreRetainedWithoutParentFabricationAndExcludedFromKanban()
+    {
+        var root=FindRoot();
+        var cs=new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable("APPTECH_KANBAN_TEST_SQL"));
+        Assert.Contains(cs.DataSource,new[]{".","localhost","(local)",@".\SQLEXPRESS"});
+        var name="ApptechKanban_Test_Orphans_"+Guid.NewGuid().ToString("N");
+        cs.InitialCatalog="master";
+        await using var master=new SqlConnection(cs.ConnectionString); await master.OpenAsync();
+        await Execute(master,$"CREATE DATABASE [{name}]");
+        try
+        {
+            cs.InitialCatalog=name;
+            await using var db=new SqlConnection(cs.ConnectionString); await db.OpenAsync();
+            await Execute(db,File.ReadAllText(Path.Combine(root,"Tests/ApptechDashboard.Tests/Fixtures/WorkProgress.sql")));
+            await Execute(db,"""
+                DELETE dbo.TblYeuCauCongViecNhanVien; DELETE dbo.TblYeuCauCongViec;
+                SET IDENTITY_INSERT dbo.TblYeuCauCongViec ON;
+                ;WITH tally AS(SELECT 1 n UNION ALL SELECT n+1 FROM tally WHERE n<40)
+                INSERT dbo.TblYeuCauCongViec(ID,IDYeuCau,IDCongViec,TrangThaiCongViec)
+                SELECT 100+n,1,1,CASE WHEN n<=28 THEN N'Tạo mới' ELSE N'Hoàn thành' END FROM tally;
+                INSERT dbo.TblYeuCauCongViec(ID,IDYeuCau,IDCongViec,TrangThaiCongViec) VALUES
+                 (5036,4030,2030,N'Tạo mới'),(5037,4031,2030,N'Tạo mới'),(5038,4032,2030,N'Tạo mới'),
+                 (5048,4042,2026,N'Hoàn thành'),(5049,4042,2021,N'Hoàn thành'),
+                 (5050,4042,2019,N'Tạo mới'),(5051,4042,2025,N'Tạo mới'),(5052,4042,2027,N'Tạo mới'),
+                 (5055,4044,2028,N'Tạo mới'),(5056,4045,2028,N'Tạo mới'),
+                 (6026,5024,2022,N'Tạo mới'),(6027,5024,2024,N'Tạo mới'),(6028,5025,2034,N'Tạo mới');
+                SET IDENTITY_INSERT dbo.TblYeuCauCongViec OFF;
+                INSERT dbo.TblYeuCauCongViecNhanVien(IDYeuCauCongViec,IDNhanVien) VALUES(5036,1);
+                INSERT dbo.TblYeuCauCongViecCheckList(IDCongViec,IDCheckList,FinishDate,FinishBy) VALUES(5048,88,'20260101',N'legacy-user');
+                SELECT ID,IDYeuCau,IDCongViec,TrangThaiCongViec,GhiChu,CheckInTime,CheckoutTime,Updated_By,Updated_Date,Created_By,Created_Date INTO #BeforeOrphanMigration FROM dbo.TblYeuCauCongViec;
+                """);
+            var script=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_kanban.sql"))
+                .Replace("@SchemaReviewed bit=0","@SchemaReviewed bit=1");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,script.Replace("@PreserveReviewedOrphans bit=1","@PreserveReviewedOrphans bit=0")));
+            await Execute(db,"UPDATE dbo.TblYeuCauCongViec SET IDCongViec=9999 WHERE ID=5036");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,script)); // changed approved tuple
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM sys.tables WHERE name='TblWorkProgressLegacyOrphan'"));
+            await Execute(db,"UPDATE dbo.TblYeuCauCongViec SET IDCongViec=2030 WHERE ID=5036; INSERT dbo.TblYeuCauCongViec(IDYeuCau,IDCongViec,TrangThaiCongViec) VALUES(9999,1,N'Tạo mới');");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,script)); // additional unknown orphan
+            await Execute(db,"DELETE dbo.TblYeuCauCongViec WHERE IDYeuCau=9999");
+            await Execute(db,script); await Execute(db,script);
+            Assert.Equal(53,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec"));
+            Assert.Equal(13,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblWorkProgressLegacyOrphan"));
+            Assert.Equal(2,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCau")); // no fabricated request parents
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM (SELECT * FROM #BeforeOrphanMigration EXCEPT SELECT ID,IDYeuCau,IDCongViec,TrangThaiCongViec,GhiChu,CheckInTime,CheckoutTime,Updated_By,Updated_Date,Created_By,Created_Date FROM dbo.TblYeuCauCongViec) changed"));
+            Assert.Equal(1,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViecNhanVien WHERE IDYeuCauCongViec=5036 AND IDNhanVien=1"));
+            Assert.Equal(1,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViecCheckList WHERE IDCongViec=5048 AND FinishDate='20260101' AND FinishBy=N'legacy-user'"));
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViecTrangThaiHistory"));
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec WHERE ActualCompletionDate IS NOT NULL"));
+            var id=Guid.NewGuid(); var accounts=new Mock<IUserAccountService>();
+            accounts.Setup(a=>a.GetAccountByIdAsync(id,It.IsAny<CancellationToken>())).ReturnsAsync(new UserAccount { Id=id,IsAdministrator=true });
+            var progress=new WorkProgressService(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["ConnectionStrings:DefaultConnection"]=cs.ConnectionString }).Build(),new Mock<IUserPermissionService>().Object,accounts.Object);
+            var user=WorkProgressTests.Principal(id); var board=await progress.Board(new WorkBoardQuery(),user,default);
+            Assert.Equal(40,board.Total); Assert.Equal(40,board.Cards.Count);
+            Assert.DoesNotContain(board.Cards,c=>c.Id>=5036);
+            Assert.Equal(28,board.Counts[board.Statuses.Single(s=>s.Code=="NEW").Id]);
+            Assert.Equal(12,board.Counts[board.Statuses.Single(s=>s.Code=="COMPLETED").Id]);
+            await using(var cmd=new SqlCommand("SELECT ProgressVersion FROM dbo.TblYeuCauCongViec WHERE ID=5036",db))
+            {
+                var version=Convert.ToBase64String((byte[])(await cmd.ExecuteScalarAsync())!);
+                await Assert.ThrowsAsync<SqlException>(()=>progress.Move(new WorkMove { Id=5036,StatusId=board.Statuses.Single(s=>s.Code=="COMPLETED").Id,Version=version },user,default));
+            }
+            var data=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_status_data.sql"))
+                .Replace("@ApplyChanges bit=0","@ApplyChanges bit=1").Replace("@RequireOriginalSnapshot bit=0","@RequireOriginalSnapshot bit=1");
+            await Execute(db,data); // snapshot still counts all 53, including retained history
+            await Execute(db,File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_verify.sql")));
+            await Execute(db,"INSERT dbo.TblYeuCauCongViec(IDYeuCau,IDCongViec,TrangThaiCongViec) VALUES(9999,1,N'Tạo mới')");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,script)); // even installed/rerun path must reject new orphan
+        }
+        finally { SqlConnection.ClearAllPools(); await Execute(master,$"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}]"); }
+    }
+
     // CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-002 — reproduce the user's exact 39/14 text snapshot.
     [LocalSqlFact]
     public async Task StatusDataMigrationPreservesSnapshotDatesVersionsAndCatalogCustomization()
