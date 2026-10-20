@@ -70,6 +70,90 @@ public sealed class LocalSqlFactAttribute : FactAttribute
 
 public sealed class WorkProgressSqlTests
 {
+    // CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-002 — reproduce the user's exact 39/14 text snapshot.
+    [LocalSqlFact]
+    public async Task StatusDataMigrationPreservesSnapshotDatesVersionsAndCatalogCustomization()
+    {
+        var root=FindRoot();
+        var connection=new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable("APPTECH_KANBAN_TEST_SQL"));
+        Assert.Contains(connection.DataSource,new[]{".","localhost","(local)",@".\SQLEXPRESS"});
+        var name="ApptechKanban_Test_Mapping_"+Guid.NewGuid().ToString("N");
+        connection.InitialCatalog="master";
+        await using var master=new SqlConnection(connection.ConnectionString); await master.OpenAsync();
+        await Execute(master,$"CREATE DATABASE [{name}]");
+        try
+        {
+            connection.InitialCatalog=name;
+            await using var db=new SqlConnection(connection.ConnectionString); await db.OpenAsync();
+            await Execute(db,File.ReadAllText(Path.Combine(root,"Tests/ApptechDashboard.Tests/Fixtures/WorkProgress.sql")));
+            await Execute(db,"""
+                DELETE dbo.TblYeuCauCongViecNhanVien;
+                DELETE dbo.TblYeuCauCongViec;
+                ;WITH tally AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM tally WHERE n<53)
+                INSERT dbo.TblYeuCauCongViec(IDYeuCau,IDCongViec,TrangThaiCongViec)
+                SELECT 1,1,CASE WHEN n<=39 THEN N'Tạo mới' ELSE N'Hoàn thành' END FROM tally;
+                """);
+            await Execute(db,File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_preflight.sql")));
+            var data=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_status_data.sql"));
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,data)); // schema prerequisite
+            var schema=File.ReadAllText(Path.Combine(root,"App_Data/Migrations/20261020_work_progress_kanban.sql"))
+                .Replace("@SchemaReviewed bit=0","@SchemaReviewed bit=1");
+            await Execute(db,schema);
+            await Execute(db,"""
+                DELETE dbo.TblTrangThaiCongViec WHERE Code IN(N'IN_PROGRESS',N'REVIEW',N'CANCELLED');
+                UPDATE dbo.TblTrangThaiCongViec SET Name=N'Đã nghiệm thu',Color='#aabbcc',SortOrder=77,Active=0 WHERE Code=N'COMPLETED';
+                UPDATE dbo.TblYeuCauCongViec SET ActualCompletionDate='20250101' WHERE ID=(SELECT MIN(ID) FROM dbo.TblYeuCauCongViec WHERE TrangThaiCongViec=N'Hoàn thành');
+                SELECT * INTO #WorkBeforeMapping FROM dbo.TblYeuCauCongViec;
+                SELECT * INTO #CatalogBeforeMapping FROM dbo.TblTrangThaiCongViec;
+                """);
+            await Execute(db,data); // preview only, must not insert missing seeds
+            Assert.Equal(2,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec"));
+            var apply=data.Replace("@ApplyChanges bit=0","@ApplyChanges bit=1");
+            var strict=apply.Replace("@RequireOriginalSnapshot bit=0","@RequireOriginalSnapshot bit=1");
+            await Execute(db,strict);
+            await Execute(db,File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_verify.sql")));
+            Assert.Equal(5,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec"));
+            Assert.Equal(39,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec w JOIN dbo.TblTrangThaiCongViec s ON s.StorageValue=w.TrangThaiCongViec WHERE s.Code=N'NEW'"));
+            Assert.Equal(14,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec w JOIN dbo.TblTrangThaiCongViec s ON s.StorageValue=w.TrangThaiCongViec WHERE s.Code=N'COMPLETED'"));
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM (SELECT * FROM #WorkBeforeMapping EXCEPT SELECT * FROM dbo.TblYeuCauCongViec) differences"));
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM (SELECT * FROM #CatalogBeforeMapping EXCEPT SELECT * FROM dbo.TblTrangThaiCongViec) differences"));
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViecTrangThaiHistory"));
+            Assert.Equal(1,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec WHERE ActualCompletionDate='20250101'"));
+            await Execute(db,"SELECT * INTO #CatalogAfterMapping FROM dbo.TblTrangThaiCongViec");
+            await Execute(db,strict); // rerun leaves existing catalog rowversions unchanged
+            Assert.Equal(0,await Scalar(db,"SELECT COUNT(*) FROM (SELECT * FROM #CatalogAfterMapping EXCEPT SELECT * FROM dbo.TblTrangThaiCongViec) differences"));
+            var rollback=File.ReadAllText(Path.Combine(root,"sql/20261020_work_progress_status_data_rollback.sql"));
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,rollback));
+            var allowRemoval=rollback.Replace("@AllowCatalogRemoval bit=0","@AllowCatalogRemoval bit=1");
+            const string declaration="DECLARE @InsertedRows TABLE (ID int PRIMARY KEY,Code nvarchar(50),StorageValue nvarchar(50));";
+            var referencedRemoval=allowRemoval.Replace(declaration,declaration+" INSERT @InsertedRows SELECT ID,Code,StorageValue FROM dbo.TblTrangThaiCongViec WHERE Code=N'NEW';");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,referencedRemoval));
+            var removeInserted=allowRemoval.Replace(declaration,declaration+" INSERT @InsertedRows SELECT ID,Code,StorageValue FROM dbo.TblTrangThaiCongViec WHERE Code IN(N'IN_PROGRESS',N'REVIEW',N'CANCELLED');");
+            await Execute(db,removeInserted);
+            Assert.Equal(2,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec"));
+            // Simulate legacy data outside a trusted FK, only inside this disposable test database.
+            await Execute(db,"""
+                ALTER TABLE dbo.TblYeuCauCongViec NOCHECK CONSTRAINT FK_WorkProgress_Status;
+                INSERT dbo.TblYeuCauCongViec(IDYeuCau,IDCongViec,TrangThaiCongViec) VALUES(1,1,N'Chưa xác định');
+                ALTER TABLE dbo.TblYeuCauCongViec CHECK CONSTRAINT FK_WorkProgress_Status;
+                """);
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,apply));
+            Assert.Equal(2,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec")); // seed INSERTs rolled back too
+            Assert.Equal(1,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec WHERE TrangThaiCongViec=N'Chưa xác định'"));
+            await Execute(db,"DELETE dbo.TblYeuCauCongViec WHERE TrangThaiCongViec=N'Chưa xác định'; ALTER TABLE dbo.TblYeuCauCongViec WITH CHECK CHECK CONSTRAINT FK_WorkProgress_Status;");
+            await Execute(db,"UPDATE dbo.TblTrangThaiCongViec SET Kind='Normal' WHERE Code=N'COMPLETED'");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,apply));
+            Assert.Equal(2,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec"));
+            await Execute(db,"UPDATE dbo.TblTrangThaiCongViec SET Kind='Completed' WHERE Code=N'COMPLETED'");
+            await Execute(db,"DELETE dbo.TblYeuCauCongViec WHERE ID=(SELECT MIN(ID) FROM dbo.TblYeuCauCongViec WHERE TrangThaiCongViec=N'Tạo mới')");
+            await Assert.ThrowsAsync<SqlException>(()=>Execute(db,strict)); // snapshot drift is explicit, not silently remapped
+            await Execute(db,apply); // reviewed current counts are supported without permanently enforcing 39/14
+            Assert.Equal(52,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblYeuCauCongViec"));
+            Assert.Equal(5,await Scalar(db,"SELECT COUNT(*) FROM dbo.TblTrangThaiCongViec"));
+        }
+        finally { SqlConnection.ClearAllPools(); await Execute(master,$"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}]"); }
+    }
+
     // Creates only a synthetic, isolated test DB; never connects using application configuration.
     [LocalSqlFact]
     public async Task MigrationCatalogMovesScopeHistoryDatesConcurrencyAndRollback()

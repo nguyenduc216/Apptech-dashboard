@@ -13,3 +13,4 @@ Constraints: existing configured SQL database could not be reached. Migration re
 Change index:
 
 - 2026-10-20 — `APPTECH-20261020-WORK-PROGRESS-001`: implementation, guarded SQL scripts, 209-test suite and local SQL/Playwright evidence; production validation pending. See `../20261020_APPTECH-20261020-WORK-PROGRESS-001_kanban-v1.md`.
+- 2026-10-20 — `APPTECH-20261020-WORK-PROGRESS-002`: user approved retaining text/StorageValue mapping and supplied a snapshot of 39 new / 14 completed work rows. Added preview-first, append-only catalog seed/mapping verification, optional exact snapshot gate and guarded removal of newly inserted, unreferenced catalog rows. Original work text/dates/rowversions/history are untouched; no numeric status ID column. See `../20261020_APPTECH-20261020-WORK-PROGRESS-002_status-data-mapping.md` and `../../reports/work-progress/status-data-mapping.md`.

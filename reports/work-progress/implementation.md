@@ -5,6 +5,16 @@ CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-001`
 Branch: `feature/work-progress-kanban-v1`, based on clean `main` / `b113c8cd14f2cf9620619c76529f245faed56ca3`.
 Commit: see Git commit containing this report. Integration status: `MERGE_NEEDS_REVIEW`.
 
+## Bổ sung mapping dữ liệu — APPTECH-20261020-WORK-PROGRESS-002
+
+Người dùng đã đồng ý giữ liên kết text `TblYeuCauCongViec.TrangThaiCongViec -> TblTrangThaiCongViec.StorageValue`. Ảnh cung cấp ghi nhận 39 “Tạo mới” và 14 “Hoàn thành”. Không bổ sung cột ID trạng thái và không UPDATE các bản ghi công việc để mapping, vì text đã khớp khóa danh mục.
+
+Đã bổ sung `App_Data/Migrations/20261020_work_progress_status_data.sql`: mặc định xem trước, chỉ thêm các mục chuẩn còn thiếu khi `@ApplyChanges=1`, giữ tùy chỉnh danh mục hiện có, kiểm tra mọi text đều mapping chính xác và rollback nếu xung đột. Có thể bật `@RequireOriginalSnapshot=1` để yêu cầu đúng bộ 39/14 trong ảnh. Script này chạy sau migration schema gốc; không ghi ngày hoặc sinh lịch sử hoàn thành giả. Preflight/verify được mở rộng và có rollback danh mục riêng.
+
+Hướng dẫn chạy từng bước, các cờ áp dụng và kết quả mong đợi: [status-data-mapping.md](status-data-mapping.md). Các số 39/14 là bằng chứng người dùng cung cấp tại một thời điểm; chưa phải truy vấn trực tiếp database được cấu hình. Thay đổi lần này không thay đổi UI hoặc hợp đồng ứng dụng.
+
+Kiểm thử bản bổ sung: **210/210 PASS**, gồm SQL cục bộ với đúng bộ 39/14, các trường hợp thiếu seed, cấu hình tùy chỉnh, chạy lại, bảo toàn ngày/rowversion/history, rollback, text chưa mapping và số lượng thay đổi. UI không chạy lại cho thay đổi chỉ gồm script dữ liệu này; ảnh/Playwright bên dưới thuộc change 001.
+
 ## Delivered behavior
 
 - `/TrangThaiCongViec`: SQL-backed status catalog; create, rename, HEX picker/preview with contrasting text, reorder, activate/deactivate, audit timestamps, duplicate-code rejection and optimistic concurrency. Codes, storage keys and semantic types are immutable after creation; create another status when a different semantic type is required. No hard-delete endpoint.
@@ -32,13 +42,15 @@ The history foreign key prevents deleting a work row once it has status history.
 2. `App_Data/Migrations/20261020_work_progress_kanban.sql` — transactional migration, seeds, preserved legacy entries, date/rowversion columns, status/history constraints, indexes, history/completion trigger, menus and six permissions. No role mappings are granted. It intentionally refuses to run until the operator sets `@SchemaReviewed=1` after review.
 3. `sql/20261020_work_progress_verify.sql` — read-only integrity, history, trigger and role-grant checks.
 4. `sql/20261020_work_progress_rollback.sql` — destructive, explicitly gated rollback; refuses custom statuses in use or remaining role grants. Prefer retaining the additive schema and deploying a compatible prior application. Export new data before any destructive rollback.
+5. `App_Data/Migrations/20261020_work_progress_status_data.sql` — preview-first data seed/mapping verification after schema installation; preserves work text, dates, rowversions and history. Optional exact snapshot gate for 39 new / 14 completed rows.
+6. `sql/20261020_work_progress_status_data_rollback.sql` — explicit rollback only for rows recorded as inserted by that data migration; refuses references from work/history.
 
 The configured database connection could not be reached for read-only schema inspection. **Production schema, menu-parent matching and historical date equivalence are unverified.** No migration or data change was executed against that configured database. The scripts were executed only on isolated, generated local SQL databases with a synthetic schema derived from current source contracts. This validates the implementation, not the production database contract. Do not deploy the binary before the reviewed migration: authenticated request/progress/home/report screens load catalog metadata.
 
 ## Verification
 
 - Release build: PASS, zero warnings/errors.
-- Full xUnit suite, including explicit local SQL integration: **209 passed, 0 failed, 0 skipped**. Set `APPTECH_KANBAN_TEST_SQL` to an explicitly authorized local server before running; without it the SQL test is visibly skipped.
+- Full xUnit suite after change 002, including explicit local SQL integration: **210 passed, 0 failed, 0 skipped** (change 001 baseline: 209 passed). Set `APPTECH_KANBAN_TEST_SQL` to an explicitly authorized local server before running; without it the SQL tests are visibly skipped.
 - SQL checks exercise migration refusal gate/idempotency, known aliases and unknown legacy data, catalog insert/update/duplicates/stale versions, disabled states, historical cards, staff/name/color refresh, scope, date validation, real request child synchronization, retained checklist/attendance values, completed/reopened/recompleted dates/history, custom completed types and completion percentage, transactional failure and simultaneous moves, rollback refusal/approved rollback.
 - Playwright: PASS at 1440×900, 768×1024 and 390×844 using actual MVC views/controllers and isolated SQL, with a test-only administrator identity. Real drag/drop, select completion, simulated HTTP 409 rollback, catalog create/preview/deactivate, avatars, overdue/late labels and document width were checked; zero JavaScript page errors. Screenshots and machine-readable results are beside this report.
 - Real IIS deployment/login and full request-editor browser flow against an actual staging clone: NOT RUN. The actual request child persistence method was exercised against SQL; complete production schema and authorization/session behavior still require the postdeploy checks below.
@@ -85,8 +97,10 @@ Core: `Controllers/YeuCauController.cs`, `Controllers/TienDoCongViecController.c
 
 UI: `Views/YeuCau/Detail.cshtml`, `Views/TienDoCongViec/Index.cshtml`, `Views/TrangThaiCongViec/Index.cshtml`, `wwwroot/css/work-progress.css`, `wwwroot/js/work-progress.js`, `wwwroot/js/work-status.js`, `wwwroot/service-worker.js`.
 
-SQL/publish: the four SQL files above, `Properties/PublishProfiles/WorkProgressStaging.pubxml`.
+SQL/publish: the six SQL files above, `Properties/PublishProfiles/WorkProgressStaging.pubxml`.
 
 Tests/evidence: `Tests/ApptechDashboard.Tests/WorkProgressTests.cs`, `Tests/ApptechDashboard.Tests/Fixtures/WorkProgress.sql`, `Tests/WorkProgress.UiSmoke/Program.cs`, `Tests/WorkProgress.UiSmoke/WorkProgress.UiSmoke.csproj`, `Tests/WorkProgress.UiSmoke/smoke.cjs`, this report, `ui-results.json` and four PNG screenshots.
 
 History: `code-history/20261020_APPTECH-20261020-WORK-PROGRESS-001_kanban-v1.md`, `code-history/features/APPTECH-WORK-PROGRESS-KANBAN.md`.
+
+Change 002 also adds `reports/work-progress/status-data-mapping.md` and `code-history/20261020_APPTECH-20261020-WORK-PROGRESS-002_status-data-mapping.md`, extends the SQL integration tests and updates the existing preflight/verify/feature history.
