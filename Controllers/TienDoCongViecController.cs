@@ -25,6 +25,7 @@ public sealed class TienDoCongViecController(WorkProgressService progress, ILogg
         if (!ModelState.IsValid) return BadRequest(new { message="Dữ liệu cập nhật không hợp lệ." });
         try { await progress.Move(move,User,ct); return Json(new { message="Đã cập nhật trạng thái." }); }
         catch (FormatException) { return BadRequest(new { message="Phiên bản dữ liệu không hợp lệ." }); }
+        catch (WorkProgressConflictException) { return Conflict(new { message="Công việc đã thay đổi, trạng thái bị tắt hoặc bạn không có quyền truy cập. Hãy làm mới." }); }
         catch (SqlException ex) when (ex.Number >= 51000) { return Conflict(new { message=ex.Message }); }
         catch (Exception ex) when (ex is not OperationCanceledException)
         { logger.LogError(ex,"Work progress move failed for {Id}",move.Id); return StatusCode(500,new { message="Không thể lưu trạng thái. Hãy làm mới và thử lại." }); }
@@ -36,12 +37,13 @@ public sealed class TienDoCongViecController(WorkProgressService progress, ILogg
 public sealed class TrangThaiCongViecController(WorkProgressService progress, ILogger<TrangThaiCongViecController> logger) : Controller
 {
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken ct)
+    public async Task<IActionResult> Index(bool create = false, CancellationToken ct = default)
     {
         if (!await progress.Allowed(User,"TrangThaiCongViec_View",ct)) return Forbid();
         ViewBag.CanCreate=await progress.Allowed(User,"TrangThaiCongViec_Create",ct);
         ViewBag.CanUpdate=await progress.Allowed(User,"TrangThaiCongViec_Update",ct);
         ViewBag.CanToggle=await progress.Allowed(User,"TrangThaiCongViec_Toggle",ct);
+        ViewBag.ShowCreate=create && (bool)ViewBag.CanCreate;
         return View(await progress.Statuses(ct));
     }
     [HttpPost, ValidateAntiForgeryToken]
@@ -51,13 +53,13 @@ public sealed class TrangThaiCongViecController(WorkProgressService progress, IL
         var old=(await progress.Statuses(ct)).FirstOrDefault(s=>s.Id==form.Id);
         if (form.Id!=0 && old is null) return NotFound();
         if(old is not null && old.Active!=form.Active && !await progress.Allowed(User,"TrangThaiCongViec_Toggle",ct)) return Forbid();
-        if (!ModelState.IsValid) { TempData["WorkStatusError"]="Kiểm tra tên, mã (A-Z, 0-9, _), loại và màu HEX."; return RedirectToAction(nameof(Index)); }
+        if (!ModelState.IsValid) { TempData["WorkStatusError"]="Kiểm tra tên, mã (A-Z, 0-9, _), loại và màu HEX."; return RedirectToAction(nameof(Index), new { create = form.Id == 0 }); }
         try { await progress.SaveStatus(form,ct); TempData["WorkStatusSuccess"]="Đã lưu trạng thái."; }
         catch(SqlException ex) when(ex.Number is 2601 or 2627) { TempData["WorkStatusError"]="Mã trạng thái đã tồn tại."; }
         catch(SqlException ex) when(ex.Number>=51000) { TempData["WorkStatusError"]=ex.Message; }
         catch(FormatException) { TempData["WorkStatusError"]="Dữ liệu đã thay đổi. Hãy thử lại."; }
         catch(Exception ex) when(ex is not OperationCanceledException) { logger.LogError(ex,"Saving work status failed"); TempData["WorkStatusError"]="Không thể lưu trạng thái."; }
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new { create = form.Id == 0 && TempData.ContainsKey("WorkStatusError") });
     }
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Toggle(int id, string version, CancellationToken ct)

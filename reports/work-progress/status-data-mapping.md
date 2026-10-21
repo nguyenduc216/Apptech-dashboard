@@ -4,6 +4,12 @@ FEATURE_ID: `APPTECH-WORK-PROGRESS-KANBAN`
 
 CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-002`
 
+## Trang tiến độ bị vòng lặp đăng nhập — change 005
+
+Nếu đã verify SQL PASS nhưng trình duyệt báo `ERR_TOO_MANY_REDIRECTS` tại `/dang-nhap?ReturnUrl=%2FTienDoCongViec`, dùng package publish mới của change 005. Bản này sửa cấu hình AccessDenied/Login và đồng bộ cách nhận admin từ bản ghi tài khoản đang active. Không cần chạy lại các migration SQL để áp dụng bản sửa này.
+
+Triển khai các file ứng dụng mới lên môi trường IIS cần kiểm tra, giữ `appsettings*.json`, uploads và khóa Data Protection của server, rồi recycle app pool theo quy trình hiện có. Mở lại `/TienDoCongViec` bằng tài khoản admin. Tài khoản nhân viên thực sự thiếu quyền sẽ thấy trang 403 `/khong-co-quyen`; AJAX nhận 403 JSON trực tiếp. Cấp `TienDoCongViec_View`/`Update` qua vai trò hiện có chỉ cho người cần dùng, không tự cấp rộng để xử lý lỗi vòng lặp.
+
 ## Verify một báo cáo duy nhất — change 004
 
 Mở `sql/20261020_work_progress_verify.sql` bản mới và chạy toàn bộ file. Không cần chọn/chạy riêng từng SELECT. Script chỉ đọc dữ liệu ứng dụng, trả **một bảng Results duy nhất** gồm `STT`, `KiemTra`, `CauLenhSQL`, `ThucTe`, `KyVong`, `KetQua`, `GhiChu`. Mỗi dòng có câu SQL SELECT có thể chạy riêng để đối chiếu. Tab **Messages** cũng in từng câu SQL và kết quả, kết thúc bằng `KẾT LUẬN CUỐI CÙNG: PASS` hoặc `FAIL`.

@@ -44,7 +44,11 @@ const fs=require('fs');
  await form.locator('button').click();await expect(page.getByRole('status')).toContainText('Đã lưu');
  const saved=page.locator('.wp-status-editor').filter({has:page.locator('input[value^="UI_WAIT_"]')});await saved.getByRole('button',{name:'Vô hiệu hóa'}).click();await expect(saved).toContainText('Đã tắt');
  await page.screenshot({path:out+'/status-catalog-desktop.png',fullPage:true});
- fs.writeFileSync(out+'/ui-results.json',JSON.stringify({passed:true,viewports:['1440x900','768x1024','390x844'],checks:['SQL-backed MVC rendering','drag and drop persists','409 rollback','dropdown completion','overdue and late badges','avatar +N','catalog create and preview and deactivate','no document overflow'],pageErrors:errors},null,2));
+ const denied=await page.goto('http://127.0.0.1:5188/khong-co-quyen?ReturnUrl=/TienDoCongViec');
+ if(denied.status()!==403)throw new Error('Access denied endpoint must terminate with HTTP 403');
+ await expect(page.getByRole('heading',{name:'Không có quyền truy cập'})).toBeVisible();
+ await page.screenshot({path:out+'/access-denied.png',fullPage:true});
+ fs.writeFileSync(out+'/ui-results.json',JSON.stringify({passed:true,identity:'persisted legacy admin, QuanTriVien=false',viewports:['1440x900','768x1024','390x844'],checks:['SQL-backed MVC rendering','legacy admin access and full request scope','drag and drop persists','409 rollback','dropdown completion','overdue and late badges','avatar +N','catalog create and preview and deactivate','no document overflow','access denied view terminates with HTTP 403'],pageErrors:errors},null,2));
  if(errors.length)throw new Error(errors.join('\n'));
  console.log('UI smoke passed with real local SQL and MVC views');
  } finally { await browser.close(); }

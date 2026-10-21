@@ -20,8 +20,9 @@ await using(var db=new SqlConnection(cs)) { await db.OpenAsync(); await Sql(db,F
 var options=new WebApplicationOptions { ContentRootPath=root,WebRootPath=Path.Combine(root,"wwwroot"), ApplicationName=typeof(TienDoCongViecController).Assembly.GetName().Name };
 var builder=WebApplication.CreateBuilder(options); builder.Configuration["ConnectionStrings:DefaultConnection"]=cs;
 builder.Services.AddControllersWithViews().AddApplicationPart(typeof(TienDoCongViecController).Assembly);
-builder.Services.AddAuthentication("Cookie").AddCookie("Cookie");builder.Services.AddAuthorization();builder.Services.AddDistributedMemoryCache();builder.Services.AddSession();
-var id=Guid.NewGuid(); var accounts=new Mock<IUserAccountService>(); accounts.Setup(x=>x.GetAccountByIdAsync(It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync(new UserAccount { Id=id, EmployeeId=1, IsAdministrator=true });
+builder.Services.AddAuthentication("Cookie").AddCookie("Cookie",ApptechDashboard.Configuration.CookieAuthorization.ConfigureAccessDenied);builder.Services.AddAuthorization();builder.Services.AddDistributedMemoryCache();builder.Services.AddSession();
+// Regression: legacy persisted admin username with QuanTriVien=false must retain both access and full scope.
+var id=Guid.NewGuid(); var accounts=new Mock<IUserAccountService>(); accounts.Setup(x=>x.GetAccountByIdAsync(It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync(new UserAccount { Id=id,Username="admin",EmployeeId=1,IsAdministrator=false });
 var permissions=new Mock<IUserPermissionService>(); permissions.Setup(x=>x.GetPermissionsAsync(It.IsAny<Guid>(),It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<UserPermission>());
 var menus=new Mock<ISidebarMenuService>(); menus.Setup(x=>x.GetMenuAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<NavigationMenuItem>());
 builder.Services.AddSingleton(accounts.Object);builder.Services.AddSingleton(permissions.Object);builder.Services.AddSingleton(menus.Object);builder.Services.AddScoped<WorkProgressService>();

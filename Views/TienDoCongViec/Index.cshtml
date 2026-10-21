@@ -19,28 +19,28 @@
 @foreach(var s in Model.Statuses.Where(s=>s.Active || Model.Counts.GetValueOrDefault(s.Id)>0))
 {
  <section class="wp-column" data-status-id="@s.Id" data-active="@s.Active.ToString().ToLowerInvariant()" style="--status-color:@s.Color" aria-label="@s.Name">
- <h2><span class="wp-dot"></span>@s.Name @if(!s.Active){<small>(đã tắt)</small>} <span data-column-count>@Model.Counts.GetValueOrDefault(s.Id)</span></h2>
- <div class="wp-cards">
+  <h2><button type="button" class="wp-column-toggle" data-column-toggle aria-expanded="true" aria-controls="wp-cards-@s.Id" title="Thu gọn/mở rộng cột">−</button><span class="wp-dot"></span>@s.Name @if(!s.Active){<small>(đã tắt)</small>} <span data-column-count>@Model.Counts.GetValueOrDefault(s.Id)</span></h2>
+  <div class="wp-cards" id="wp-cards-@s.Id">
  @foreach(var c in Model.Cards.Where(c=>c.StatusId==s.Id))
  {
- <article class="wp-card" data-card data-id="@c.Id" data-version="@c.Version" draggable="@Model.CanUpdate.ToString().ToLowerInvariant()">
- <h3>@c.Name</h3><a asp-controller="YeuCau" asp-action="Edit" asp-route-id="@c.RequestId" asp-route-activeTab="cong-viec">@c.RequestCode</a>
+ <article class="wp-card is-collapsed" data-card data-id="@c.Id" data-version="@c.Version" draggable="@Model.CanUpdate.ToString().ToLowerInvariant()">
+ <h3><button type="button" class="wp-card-toggle" data-card-toggle aria-expanded="false" aria-controls="wp-card-details-@c.Id" title="Thu gọn/mở rộng công việc">+</button>@c.Name</h3><a asp-controller="YeuCau" asp-action="Edit" asp-route-id="@c.RequestId" asp-route-activeTab="cong-viec">@c.RequestCode</a>
  <p>Khách hàng: @c.Customer</p>
  <dl><dt>Bắt đầu</dt><dd>@(c.Start?.ToString("dd/MM/yyyy")??"—")</dd><dt>Dự kiến</dt><dd>@(c.Expected?.ToString("dd/MM/yyyy")??"—")</dd>
  @if(s.Kind=="Completed"){<dt>Hoàn thành</dt><dd>@(c.Actual?.ToString("dd/MM/yyyy HH:mm")??"—")</dd>}</dl>
+ <div id="wp-card-details-@c.Id" class="wp-card-details">
  @if(c.Overdue){<span class="wp-warning">Quá hạn</span>} @if(c.Late){<span class="wp-warning">Hoàn thành trễ</span>}
- <details><summary aria-label="Xem người thực hiện"><span class="wp-avatars">@foreach(var name in c.Employees.Take(3)){<span title="@name">@string.Concat(name.Split(' ',StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(p=>p[0]))</span>}@if(c.Employees.Count>3){<span>+@(c.Employees.Count-3)</span>}</span> Người thực hiện (@c.Employees.Count)</summary><p>@(c.Employees.Count==0?"Chưa phân công":string.Join(", ",c.Employees))</p></details>
+  <details open><summary aria-label="Thu gọn hoặc mở rộng người thực hiện"><span class="wp-avatars">@foreach(var name in c.Employees.Take(3)){<span title="@name">@string.Concat(name.Split(' ',StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(p=>p[0]))</span>}@if(c.Employees.Count>3){<span>+@(c.Employees.Count-3)</span>}</span> Người thực hiện (@c.Employees.Count)</summary><p>@(c.Employees.Count==0?"Chưa phân công":string.Join(", ",c.Employees))</p></details>
  @if(Model.CanUpdate){<label>Chuyển trạng thái<select data-card-status aria-label="Trạng thái của @c.Name">@foreach(var option in Model.Statuses.Where(o=>o.Active || o.Id==c.StatusId)){<option value="@option.Id" selected="@(option.Id==c.StatusId)">@option.Name</option>}</select></label>}
+ </div>
  </article>
  }
  @if(Model.Counts.GetValueOrDefault(s.Id)==0){<p class="wp-empty">Chưa có công việc</p>}
+  @if(Model.Counts.GetValueOrDefault(s.Id)>Model.Query.Page*WorkProgressService.PageSize){<button type="button" class="wp-load-more" data-load-more data-status-id="@s.Id" data-page="@Model.Query.Page">Tải thêm</button>}
  </div></section>
 }
 </div>
 @if(Model.Total==0){<p class="wp-empty">Không có công việc phù hợp với bộ lọc.</p>}
-<nav class="wp-pagination" aria-label="Phân trang">
-@if(Model.Query.Page>1){<a asp-all-route-data="@(new Dictionary<string,string>{{"Keyword",Model.Query.Keyword??""},{"CustomerId",Model.Query.CustomerId?.ToString()??""},{"EmployeeId",Model.Query.EmployeeId?.ToString()??""},{"From",Model.Query.From?.ToString("yyyy-MM-dd")??""},{"To",Model.Query.To?.ToString("yyyy-MM-dd")??""},{"Overdue",Model.Query.Overdue.ToString()},{"Page",(Model.Query.Page-1).ToString()}})">Trang trước</a>}
-@if(Model.Counts.Values.Any(n=>n>Model.Query.Page*WorkProgressService.PageSize)){<a asp-all-route-data="@(new Dictionary<string,string>{{"Keyword",Model.Query.Keyword??""},{"CustomerId",Model.Query.CustomerId?.ToString()??""},{"EmployeeId",Model.Query.EmployeeId?.ToString()??""},{"From",Model.Query.From?.ToString("yyyy-MM-dd")??""},{"To",Model.Query.To?.ToString("yyyy-MM-dd")??""},{"Overdue",Model.Query.Overdue.ToString()},{"Page",(Model.Query.Page+1).ToString()}})">Trang sau</a>}
-</nav>
+
 </section>
 <script src="~/js/work-progress.js" asp-append-version="true"></script>

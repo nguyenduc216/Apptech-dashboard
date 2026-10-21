@@ -5,6 +5,14 @@ CHANGE_ID: `APPTECH-20261020-WORK-PROGRESS-001`
 Branch: `feature/work-progress-kanban-v1`, based on clean `main` / `b113c8cd14f2cf9620619c76529f245faed56ca3`.
 Commit: see Git commit containing this report. Integration status: `MERGE_NEEDS_REVIEW`.
 
+## Sửa vòng lặp đăng nhập/quyền admin — APPTECH-20261020-WORK-PROGRESS-005
+
+Ảnh triển khai cho thấy `ERR_TOO_MANY_REDIRECTS` tại `/dang-nhap?ReturnUrl=%2FTienDoCongViec`. Code có vòng lặp tái hiện được: module trả `Forbid()` khi không đủ quyền; cookie `AccessDeniedPath` trỏ về Login; Login của người đã đăng nhập lại chuyển về ReturnUrl. Module mới cũng chỉ nhận `QuanTriVien=true` làm admin, trong khi màn hình yêu cầu cũ còn nhận tài khoản `admin` hoặc nhóm quản trị lưu trong database. Người dùng xác nhận đang dùng admin; giá trị `QuanTriVien` thực tế của tài khoản trên server chưa được truy vấn trực tiếp trong phiên này.
+
+Đã chuyển AccessDenied sang `/khong-co-quyen`, trang độc lập trả HTTP 403, không theo ReturnUrl hoặc phụ thuộc sidebar/quyền để render. AJAX/JSON bị từ chối nhận 403 JSON trực tiếp, không redirect. Anonymous vẫn đi Login bình thường. `WorkProgressService` dùng cùng một helper cho Allowed và Scope: yêu cầu tài khoản hiện hành đang active, sau đó nhận admin theo flag, username admin hoặc nhóm quản trị đã lưu như quy ước module yêu cầu. Nhân viên vẫn cần quyền cụ thể và bị giới hạn phiếu; claim tên/nhóm do client giả lập không tự nâng quyền khi bản ghi tài khoản không phải admin. Không sửa role mappings hoặc database.
+
+Bản sửa cần cập nhật DLL và các view từ package publish lên IIS, giữ nguyên cấu hình và Data Protection keys của server. Không cần chạy lại migration/verify để áp dụng bản sửa HTTP này. Sau triển khai, mở `/TienDoCongViec` bằng admin; kiểm tra thêm một tài khoản nhân viên thiếu quyền nhận 403 rõ ràng. Không xóa kiểm tra quyền hoặc cấp quyền toàn bộ nhân viên để tránh vòng lặp.
+
 ## Verify một báo cáo và kết luận PASS/FAIL — APPTECH-20261020-WORK-PROGRESS-004
 
 `sql/20261020_work_progress_verify.sql` được viết lại để chỉ xuất một result grid, có câu SELECT, thực tế, kỳ vọng, PASS/FAIL/INFO cho từng kiểm tra và dòng cuối tổng kết. Tab Messages cũng in câu lệnh và kết quả cuối. Missing schema/query errors được ghi thành FAIL; INFO không che lỗi truy vấn. Kiểm tra snapshot 53/39/14/13/40 mặc định bật, có thể đổi thành INFO sau khi đã đối chiếu thay đổi dữ liệu hợp lệ bằng `@CheckOriginalSnapshot=0`. Các kiểm tra schema, catalog, mapping chính xác, trigger/constraints, ngày, orphan đã duyệt, quyền/menu vẫn bắt buộc.

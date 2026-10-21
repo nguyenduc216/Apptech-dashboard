@@ -45,6 +45,8 @@ public sealed class WorkBoardQuery
     public DateTime? From { get; set; }
     public DateTime? To { get; set; }
     public bool Overdue { get; set; }
+    // Used by the per-column "load more" request. Null means all columns.
+    public int? StatusId { get; set; }
     [Range(1,1000000)] public int Page { get; set; } = 1;
 }
 public sealed class WorkCard

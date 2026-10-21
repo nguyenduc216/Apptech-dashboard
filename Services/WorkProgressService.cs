@@ -1,5 +1,7 @@
 using System.Data;
 using System.Security.Claims;
+using System.Globalization;
+using System.Text;
 using ApptechDashboard.Models;
 using Microsoft.Data.SqlClient;
 
@@ -8,23 +10,42 @@ namespace ApptechDashboard.Services;
 // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN
 // CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
 // Grain: one card per TblYeuCauCongViec. Every read/write applies request assignment scope.
-public sealed class WorkProgressService(IConfiguration configuration, IUserPermissionService permissions, IUserAccountService accounts)
+public sealed class WorkProgressService(IConfiguration configuration, IUserPermissionService permissions, IUserAccountService accounts, ICommonAuditService audit)
 {
-    public const int PageSize = 30;
+    public const int PageSize = 20;
     private SqlConnection Connection() => new(configuration.GetConnectionString("DefaultConnection"));
 
     public async Task<bool> Allowed(ClaimsPrincipal user, string code, CancellationToken ct)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id)) return false;
         var account = await accounts.GetAccountByIdAsync(id, ct);
-        if (account?.IsAdministrator == true) return true;
+        if (account?.IsActive != true) return false;
+        if (IsAdministrator(account)) return true;
         return (await permissions.GetPermissionsAsync(id, ct)).Any(p => p.PermissionCode == code);
     }
     public async Task<(bool Admin, int Employee)> Scope(ClaimsPrincipal user, CancellationToken ct)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id)) return (false, 0);
         var account = await accounts.GetAccountByIdAsync(id, ct);
-        return (account?.IsAdministrator == true, account?.EmployeeId ?? 0);
+        return account?.IsActive == true ? (IsAdministrator(account),account.EmployeeId ?? 0) : (false,0);
+    }
+    // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-005
+    // Match legacy request admin conventions using the current persisted account, not display-name claims.
+    private static bool IsAdministrator(UserAccount account)
+    {
+        if (account.IsAdministrator || NormalizeAdminText(account.Username)=="admin") return true;
+        var group=NormalizeAdminText(account.GroupName);
+        return group.Contains("admin",StringComparison.Ordinal) || group.Contains("quantri",StringComparison.Ordinal);
+    }
+    private static string NormalizeAdminText(string value)
+    {
+        var result=new StringBuilder();
+        foreach(var c in value.Normalize(NormalizationForm.FormD))
+        {
+            if(CharUnicodeInfo.GetUnicodeCategory(c)==UnicodeCategory.NonSpacingMark) continue;
+            if(char.IsLetterOrDigit(c)) result.Append(c is 'đ' or 'Đ' ? 'd' : char.ToLowerInvariant(c));
+        }
+        return result.ToString();
     }
     private const string ScopeSql = """
         (@Admin=1 OR EXISTS (SELECT 1 FROM dbo.TblYeuCauCongViec sw
@@ -73,7 +94,10 @@ public sealed class WorkProgressService(IConfiguration configuration, IUserPermi
         // One materialized filtered set powers counts, per-column paging and batched staff lookup.
         cmd.CommandText = $$"""
             SELECT w.ID,w.IDYeuCau,w.TrangThaiCongViec,cv.TenCongViec,r.MaYeuCau,kh.TenKhachHang,
-                   w.StartDate,w.ExpectedCompletionDate,w.ActualCompletionDate,w.ProgressVersion,s.ID AS StatusId,s.Kind,
+                   COALESCE(w.StartDate,w.CheckInTime) AS StartDate,
+                   w.ExpectedCompletionDate,
+                   CASE WHEN s.Kind='Completed' THEN COALESCE(w.CheckoutTime,w.ActualCompletionDate) ELSE NULL END AS ActualCompletionDate,
+                   w.ProgressVersion,s.ID AS StatusId,s.Kind,
                    ROW_NUMBER() OVER(PARTITION BY s.ID ORDER BY CASE WHEN w.ExpectedCompletionDate IS NULL THEN 1 ELSE 0 END,w.ExpectedCompletionDate,w.ID) AS rn
             INTO #filtered
             FROM dbo.TblYeuCauCongViec w JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau
@@ -84,7 +108,8 @@ public sealed class WorkProgressService(IConfiguration configuration, IUserPermi
               AND (@Keyword IS NULL OR cv.TenCongViec LIKE @Keyword OR r.MaYeuCau LIKE @Keyword)
               AND (@Customer IS NULL OR r.IDKhachHang=@Customer)
               AND (@Employee IS NULL OR EXISTS(SELECT 1 FROM dbo.TblYeuCauCongViecNhanVien a WHERE a.IDYeuCauCongViec=w.ID AND a.IDNhanVien=@Employee))
-              AND (@From IS NULL OR w.StartDate>=@From) AND (@To IS NULL OR w.StartDate<DATEADD(day,1,@To))
+              AND (@Status IS NULL OR s.ID=@Status)
+              AND (@From IS NULL OR COALESCE(w.StartDate,w.CheckInTime)>=@From) AND (@To IS NULL OR COALESCE(w.StartDate,w.CheckInTime)<DATEADD(day,1,@To))
               AND (@Overdue=0 OR (s.Kind='Normal' AND w.ExpectedCompletionDate<CONVERT(date,SYSDATETIME())));
             SELECT StatusId,COUNT(*) FROM #filtered GROUP BY StatusId;
             SELECT ID,IDYeuCau,StatusId,TenCongViec,MaYeuCau,TenKhachHang,StartDate,ExpectedCompletionDate,ActualCompletionDate,ProgressVersion,Kind
@@ -100,6 +125,7 @@ public sealed class WorkProgressService(IConfiguration configuration, IUserPermi
         Add(cmd,"@Admin",SqlDbType.Bit,scope.Admin); Add(cmd,"@ScopeEmployee",SqlDbType.Int,scope.Employee);
         Add(cmd,"@Keyword",SqlDbType.NVarChar,string.IsNullOrWhiteSpace(q.Keyword)?null:"%"+q.Keyword.Trim()+"%",250);
         Add(cmd,"@Customer",SqlDbType.Int,q.CustomerId); Add(cmd,"@Employee",SqlDbType.Int,q.EmployeeId);
+        Add(cmd,"@Status",SqlDbType.Int,q.StatusId);
         Add(cmd,"@From",SqlDbType.Date,q.From?.Date); Add(cmd,"@To",SqlDbType.Date,q.To?.Date); Add(cmd,"@Overdue",SqlDbType.Bit,q.Overdue);
         Add(cmd,"@First",SqlDbType.Int,(q.Page-1)*PageSize+1); Add(cmd,"@Last",SqlDbType.Int,q.Page*PageSize);
         var cards=new List<WorkCard>();
@@ -124,6 +150,22 @@ public sealed class WorkProgressService(IConfiguration configuration, IUserPermi
         var scope=await Scope(user,ct);
         await using var db=Connection(); await db.OpenAsync(ct);
         await using var tx=(SqlTransaction)await db.BeginTransactionAsync(ct);
+        string oldStatus, newStatus, requestCode;
+        await using (var before=db.CreateCommand())
+        {
+            before.Transaction=tx;
+            before.CommandText="""
+                SELECT w.TrangThaiCongViec, s.StorageValue, CONVERT(nvarchar(250), r.ID)
+                FROM dbo.TblYeuCauCongViec w WITH (UPDLOCK, HOLDLOCK)
+                JOIN dbo.TblYeuCau r ON r.ID=w.IDYeuCau
+                JOIN dbo.TblTrangThaiCongViec s ON s.ID=@Status
+                WHERE w.ID=@Id AND w.ProgressVersion=@Version AND s.Active=1;
+                """;
+            Add(before,"@Id",SqlDbType.Int,move.Id); Add(before,"@Status",SqlDbType.Int,move.StatusId); Add(before,"@Version",SqlDbType.Binary,Convert.FromBase64String(move.Version),8);
+            await using var reader=await before.ExecuteReaderAsync(ct);
+            if(!await reader.ReadAsync(ct)) throw new WorkProgressConflictException();
+            oldStatus=reader.IsDBNull(0)?"":reader.GetString(0); newStatus=reader.GetString(1); requestCode=reader.GetString(2);
+        }
         await using var cmd=db.CreateCommand(); cmd.Transaction=tx;
         // Compare rowversion atomically. Trigger validates active status and records history/dates.
         cmd.CommandText=$$"""
@@ -136,6 +178,16 @@ public sealed class WorkProgressService(IConfiguration configuration, IUserPermi
         Add(cmd,"@Id",SqlDbType.Int,move.Id); Add(cmd,"@Status",SqlDbType.Int,move.StatusId); Add(cmd,"@Version",SqlDbType.Binary,Convert.FromBase64String(move.Version),8);
         Add(cmd,"@Admin",SqlDbType.Bit,scope.Admin); Add(cmd,"@ScopeEmployee",SqlDbType.Int,scope.Employee);
         Add(cmd,"@Actor",SqlDbType.NVarChar,user.Identity?.Name??"system",50);
-        await cmd.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct);
+        await cmd.ExecuteNonQueryAsync(ct);
+        if (!string.Equals(oldStatus, newStatus, StringComparison.Ordinal))
+        {
+            await audit.WriteAsync(db, tx, new CommonAuditEntry(
+                "TienDoCongViec", "WORK_STATUS_CHANGE", "TblYeuCauCongViec", move.Id.ToString(CultureInfo.InvariantCulture), requestCode,
+                $"Đổi trạng thái công việc từ '{oldStatus}' sang '{newStatus}'.", user.Identity?.Name ?? "system",
+                new { WorkId = move.Id, Status = newStatus }, new { Status = oldStatus }, new { Status = newStatus }), ct);
+        }
+        await tx.CommitAsync(ct);
     }
 }
+
+public sealed class WorkProgressConflictException : Exception;

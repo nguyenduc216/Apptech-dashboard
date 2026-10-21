@@ -2803,6 +2803,8 @@ public sealed class YeuCauService(
                         IDCongViec,
                         TrangThaiCongViec,
                         GhiChu,
+                        StartDate,
+                        ExpectedCompletionDate,
                         CheckInTime,
                         CheckoutTime,
                         Created_Date,
@@ -2815,6 +2817,8 @@ public sealed class YeuCauService(
                         @IDCongViec,
                         @TrangThaiCongViec,
                         @GhiChu,
+                        @StartDate,
+                        @ExpectedCompletionDate,
                         @CheckInTime,
                         @CheckoutTime,
                         GETDATE(),
@@ -2829,6 +2833,8 @@ public sealed class YeuCauService(
                 insertWorkCommand.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = work.CongViecId!.Value });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@TrangThaiCongViec", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 500) { Value = ToDbValue(TrimNullableToLength(work.GhiChu, 500)) });
+                insertWorkCommand.Parameters.Add(new SqlParameter("@StartDate", SqlDbType.DateTime2) { Value = ToDbValue(work.StartDate) });
+                insertWorkCommand.Parameters.Add(new SqlParameter("@ExpectedCompletionDate", SqlDbType.DateTime2) { Value = ToDbValue(work.ExpectedCompletionDate) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CheckInTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckInTime) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CheckoutTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckOutTime) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CreatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });

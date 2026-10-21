@@ -1,5 +1,6 @@
 {
   "passed": true,
+  "identity": "persisted legacy admin, QuanTriVien=false",
   "viewports": [
     "1440x900",
     "768x1024",
@@ -7,13 +8,15 @@
   ],
   "checks": [
     "SQL-backed MVC rendering",
+    "legacy admin access and full request scope",
     "drag and drop persists",
     "409 rollback",
     "dropdown completion",
     "overdue and late badges",
     "avatar +N",
     "catalog create and preview and deactivate",
-    "no document overflow"
+    "no document overflow",
+    "access denied view terminates with HTTP 403"
   ],
   "pageErrors": []
 }

@@ -30,7 +30,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = ".ApptechDashboard.Auth";
         options.LoginPath = "/dang-nhap";
         options.LogoutPath = "/dang-xuat-he-thong";
-        options.AccessDeniedPath = "/dang-nhap";
+        CookieAuthorization.ConfigureAccessDenied(options);
         options.ExpireTimeSpan = TimeSpan.FromHours(12);
         options.SlidingExpiration = true;
     });
@@ -90,6 +90,7 @@ builder.Services.AddScoped<INhapKhoService, NhapKhoService>();
 builder.Services.AddScoped<INhapXuatImageService, NhapXuatImageService>();
 builder.Services.AddScoped<INhaCungCapService, NhaCungCapService>();
 builder.Services.AddScoped<ICommonAuditService, CommonAuditService>();
+builder.Services.AddScoped<SystemAuditService>();
 builder.Services.AddScoped<ISimpleExcelService, SimpleExcelService>();
 builder.Services.AddSingleton<IZaloSettingsService, ZaloSettingsService>();
 builder.Services.AddScoped<IZaloRequestService, ZaloRequestService>();
@@ -119,6 +120,7 @@ using (var scope = app.Services.CreateScope())
     await permissionCatalogService.EnsureZaloManagementPermissionsAsync();
     await permissionCatalogService.EnsureDanhMucDichVuPermissionsAsync();
     await permissionCatalogService.EnsureDanhMucChamCongNgoaiPermissionsAsync();
+    await permissionCatalogService.EnsureSystemAuditPermissionsAsync();
 }
 
 if (!app.Environment.IsDevelopment())

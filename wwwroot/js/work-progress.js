@@ -62,6 +62,54 @@
     document.addEventListener('drop', event => { const column = event.target.closest('[data-status-id]'); if (dragged && column) { event.preventDefault(); void move(dragged, column.dataset.statusId); dragged = null; } });
     document.addEventListener('change', event => { if (event.target.matches('[data-card-status]')) void move(event.target.closest('[data-card]'), event.target.value); });
     document.addEventListener('click', async event => {
+        const cardToggle = event.target.closest('[data-card-toggle]');
+        if (cardToggle) {
+            event.preventDefault();
+            event.stopPropagation();
+            const card = cardToggle.closest('[data-card]');
+            if (!card) return;
+            const collapsed = card.classList.toggle('is-collapsed');
+            cardToggle.setAttribute('aria-expanded', (!collapsed).toString());
+            cardToggle.textContent = collapsed ? '+' : '−';
+            return;
+        }
+        const toggle = event.target.closest('[data-column-toggle]');
+        if (toggle) {
+            const column = toggle.closest('[data-status-id]');
+            const collapsed = column.classList.toggle('is-collapsed');
+            toggle.setAttribute('aria-expanded', (!collapsed).toString());
+            toggle.textContent = collapsed ? '+' : '−';
+            return;
+        }
+        const loadMore = event.target.closest('[data-load-more]');
+        if (!loadMore || pending) return;
+        const column = loadMore.closest('[data-status-id]');
+        const cards = column?.querySelector('.wp-cards');
+        if (!column || !cards) return;
+        loadMore.disabled = true;
+        loadMore.textContent = 'Đang tải…';
+        const url = new URL(location.href);
+        url.searchParams.set('StatusId', column.dataset.statusId);
+        url.searchParams.set('Page', (Number(loadMore.dataset.page) + 1).toString());
+        try {
+            const response = await fetch(url, { cache: 'no-store', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!response.ok || response.redirected) throw new Error('Không tải được dữ liệu.');
+            const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const source = doc.querySelector(`[data-status-id="${CSS.escape(column.dataset.statusId)}"]`);
+            const sourceCards = source?.querySelector('.wp-cards');
+            if (!sourceCards) throw new Error('Không tải được dữ liệu của cột.');
+            sourceCards.querySelectorAll('[data-card]').forEach(card => cards.append(card));
+            loadMore.remove();
+            const next = sourceCards.querySelector('[data-load-more]');
+            if (next) column.append(next);
+            message('Đã tải thêm dữ liệu.');
+        } catch (error) {
+            loadMore.disabled = false;
+            loadMore.textContent = 'Tải thêm';
+            message(error.message);
+        }
+    });
+    document.addEventListener('click', async event => {
         if (!event.target.closest('[data-board-refresh]') || pending) return;
         pending = true; message('Đang tải dữ liệu…');
         try { await refresh(); message('Đã làm mới.'); } catch (error) { message(error.message); } finally { pending = false; }
