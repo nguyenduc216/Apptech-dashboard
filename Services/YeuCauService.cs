@@ -277,8 +277,9 @@ public sealed class YeuCauService(
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
-                        SUM(CASE WHEN ycvc.TrangThaiCongViec = @CompletedWorkStatus THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
+                        SUM(CASE WHEN workStatus.Kind = 'Completed' THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
                     FROM [{WorkTableName}] AS ycvc
+                    LEFT JOIN dbo.TblTrangThaiCongViec workStatus ON workStatus.StorageValue=ycvc.TrangThaiCongViec
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
                 OUTER APPLY (
@@ -376,8 +377,9 @@ public sealed class YeuCauService(
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
-                        SUM(CASE WHEN ycvc.TrangThaiCongViec = @CompletedWorkStatus THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
+                        SUM(CASE WHEN workStatus.Kind = 'Completed' THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
                     FROM [{WorkTableName}] AS ycvc
+                    LEFT JOIN dbo.TblTrangThaiCongViec workStatus ON workStatus.StorageValue=ycvc.TrangThaiCongViec
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
                 OUTER APPLY (
@@ -490,8 +492,9 @@ public sealed class YeuCauService(
                 OUTER APPLY (
                     SELECT
                         COUNT(1) AS SoCongViec,
-                        SUM(CASE WHEN ycvc.TrangThaiCongViec = @CompletedWorkStatus THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
+                        SUM(CASE WHEN workStatus.Kind = 'Completed' THEN 1 ELSE 0 END) AS SoCongViecHoanThanh
                     FROM [{WorkTableName}] AS ycvc
+                    LEFT JOIN dbo.TblTrangThaiCongViec workStatus ON workStatus.StorageValue=ycvc.TrangThaiCongViec
                     WHERE ycvc.IDYeuCau = yc.ID
                 ) AS workStats
                 {GetConstructionAttendanceApplySql()}
@@ -1229,7 +1232,7 @@ public sealed class YeuCauService(
                     SELECT COUNT(1)
                     FROM [{WorkTableName}]
                     WHERE IDYeuCau = @Id
-                      AND LTRIM(RTRIM(ISNULL(TrangThaiCongViec, ''))) IN (@CancelledStatus, @LegacyCancelledStatus)
+                      AND TrangThaiCongViec IN (SELECT StorageValue FROM dbo.TblTrangThaiCongViec WHERE Kind='Cancelled')
                     """;
                 countCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = requestId });
                 countCommand.Parameters.Add(new SqlParameter("@CancelledStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Huy });
@@ -1248,7 +1251,7 @@ public sealed class YeuCauService(
                         Updated_Date = @CompletedAt,
                         Updated_By = @UpdatedBy
                     WHERE IDYeuCau = @Id
-                      AND LTRIM(RTRIM(ISNULL(TrangThaiCongViec, ''))) NOT IN (@CompletedWorkStatus, @CancelledStatus, @LegacyCancelledStatus)
+                      AND TrangThaiCongViec IN (SELECT StorageValue FROM dbo.TblTrangThaiCongViec WHERE Kind='Normal')
                     """;
                 workCommand.Parameters.Add(new SqlParameter("@Id", SqlDbType.Int) { Value = requestId });
                 workCommand.Parameters.Add(new SqlParameter("@CompletedWorkStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
@@ -2274,7 +2277,7 @@ public sealed class YeuCauService(
                 ycvc.TrangThaiCongViec,
                 ycvc.GhiChu,
                 ycvc.CheckInTime,
-                ycvc.CheckoutTime
+                ycvc.CheckoutTime, ycvc.StartDate, ycvc.ExpectedCompletionDate, ycvc.ActualCompletionDate, ycvc.ProgressVersion
             FROM [{WorkTableName}] AS ycvc
             LEFT JOIN [TblCongViec] AS cv ON cv.ID = ycvc.IDCongViec
             WHERE ycvc.IDYeuCau = @IDYeuCau
@@ -2296,7 +2299,11 @@ public sealed class YeuCauService(
                 TrangThaiCongViec = YeuCauCongViecTrangThaiCatalog.Normalize(GetNullableString(reader, "TrangThaiCongViec")),
                 GhiChu = GetNullableString(reader, "GhiChu"),
                 CheckInTime = GetNullableDateTime(reader, "CheckInTime"),
-                CheckOutTime = GetNullableDateTime(reader, "CheckoutTime")
+                CheckOutTime = GetNullableDateTime(reader, "CheckoutTime"),
+                StartDate = GetNullableDateTime(reader, "StartDate"),
+                ExpectedCompletionDate = GetNullableDateTime(reader, "ExpectedCompletionDate"),
+                ActualCompletionDate = GetNullableDateTime(reader, "ActualCompletionDate"),
+                ProgressVersion = Convert.ToBase64String((byte[])reader["ProgressVersion"])
             });
         }
 
@@ -2585,6 +2592,19 @@ public sealed class YeuCauService(
             .Where(work => work.CongViecId.HasValue && work.CongViecId.Value > 0)
             .ToList() ?? [];
 
+        // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+        // Lock and compare the editor snapshot before touching any sibling work or child records.
+        foreach (var posted in workItems.Where(w => w.YeuCauCongViecId > 0))
+        {
+            await using var check = connection.CreateCommand(); check.Transaction=transaction;
+            check.CommandText="SELECT ProgressVersion FROM dbo.TblYeuCauCongViec WITH(UPDLOCK,HOLDLOCK) WHERE ID=@Id AND IDYeuCau=@Request";
+            check.Parameters.Add(new SqlParameter("@Id",SqlDbType.Int){Value=posted.YeuCauCongViecId!.Value});
+            check.Parameters.Add(new SqlParameter("@Request",SqlDbType.Int){Value=yeuCauId});
+            var version=await check.ExecuteScalarAsync(cancellationToken) as byte[];
+            if(version is null || Convert.ToBase64String(version)!=posted.ProgressVersion)
+                throw new YeuCauBusinessRuleException("Công việc đã thay đổi. Hãy tải lại phiếu trước khi lưu.");
+        }
+
         var keepIds = workItems
             .Where(work => work.YeuCauCongViecId.HasValue && work.YeuCauCongViecId.Value > 0)
             .Select(work => work.YeuCauCongViecId!.Value)
@@ -2735,6 +2755,9 @@ public sealed class YeuCauService(
         foreach (var work in workItems)
         {
             work.TrangThaiCongViec = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec);
+            // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+            if (!WorkProgressRules.ValidDates(work.StartDate, work.ExpectedCompletionDate))
+                throw new YeuCauBusinessRuleException("Ngày dự kiến không được trước ngày bắt đầu.");
             work.GhiChu = TrimNullableToLength(work.GhiChu, 500);
             var isNewWork = !work.YeuCauCongViecId.HasValue || work.YeuCauCongViecId.Value <= 0;
             var previousState = isNewWork
@@ -2780,6 +2803,8 @@ public sealed class YeuCauService(
                         IDCongViec,
                         TrangThaiCongViec,
                         GhiChu,
+                        StartDate,
+                        ExpectedCompletionDate,
                         CheckInTime,
                         CheckoutTime,
                         Created_Date,
@@ -2792,6 +2817,8 @@ public sealed class YeuCauService(
                         @IDCongViec,
                         @TrangThaiCongViec,
                         @GhiChu,
+                        @StartDate,
+                        @ExpectedCompletionDate,
                         @CheckInTime,
                         @CheckoutTime,
                         GETDATE(),
@@ -2806,6 +2833,8 @@ public sealed class YeuCauService(
                 insertWorkCommand.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = work.CongViecId!.Value });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@TrangThaiCongViec", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 500) { Value = ToDbValue(TrimNullableToLength(work.GhiChu, 500)) });
+                insertWorkCommand.Parameters.Add(new SqlParameter("@StartDate", SqlDbType.DateTime2) { Value = ToDbValue(work.StartDate) });
+                insertWorkCommand.Parameters.Add(new SqlParameter("@ExpectedCompletionDate", SqlDbType.DateTime2) { Value = ToDbValue(work.ExpectedCompletionDate) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CheckInTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckInTime) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CheckoutTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckOutTime) });
                 insertWorkCommand.Parameters.Add(new SqlParameter("@CreatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
@@ -2822,6 +2851,8 @@ public sealed class YeuCauService(
                         IDCongViec = @IDCongViec,
                         TrangThaiCongViec = @TrangThaiCongViec,
                         GhiChu = @GhiChu,
+                        StartDate = @StartDate,
+                        ExpectedCompletionDate = @ExpectedCompletionDate,
                         CheckInTime = @CheckInTime,
                         CheckoutTime = @CheckoutTime,
                         Updated_Date = GETDATE(),
@@ -2834,6 +2865,8 @@ public sealed class YeuCauService(
                 updateCommand.Parameters.Add(new SqlParameter("@IDCongViec", SqlDbType.Int) { Value = work.CongViecId!.Value });
                 updateCommand.Parameters.Add(new SqlParameter("@TrangThaiCongViec", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.Normalize(work.TrangThaiCongViec) });
                 updateCommand.Parameters.Add(new SqlParameter("@GhiChu", SqlDbType.NVarChar, 500) { Value = ToDbValue(TrimNullableToLength(work.GhiChu, 500)) });
+                updateCommand.Parameters.Add(new SqlParameter("@StartDate", SqlDbType.DateTime2) { Value = ToDbValue(work.StartDate) });
+                updateCommand.Parameters.Add(new SqlParameter("@ExpectedCompletionDate", SqlDbType.DateTime2) { Value = ToDbValue(work.ExpectedCompletionDate) });
                 updateCommand.Parameters.Add(new SqlParameter("@CheckInTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckInTime) });
                 updateCommand.Parameters.Add(new SqlParameter("@CheckoutTime", SqlDbType.DateTime) { Value = ToDbValue(work.CheckOutTime) });
                 updateCommand.Parameters.Add(new SqlParameter("@UpdatedBy", SqlDbType.NVarChar, 50) { Value = TrimToLength(currentUser, 50) });
@@ -3547,7 +3580,7 @@ public sealed class YeuCauService(
 
     private static string BuildWorkStatusExpression(string alias)
     {
-        return $"ISNULL(NULLIF(LTRIM(RTRIM({alias}.TrangThaiCongViec)), N''), @DefaultWorkStatusFilter)";
+        return $"CASE WHEN EXISTS(SELECT 1 FROM dbo.TblTrangThaiCongViec ws WHERE ws.StorageValue={alias}.TrangThaiCongViec AND ws.Kind='Completed') THEN @CompletedWorkStatusFilter ELSE ISNULL({alias}.TrangThaiCongViec,@DefaultWorkStatusFilter) END";
     }
 
     private static string BuildLocationWhereClause(string? keyword)
@@ -3670,34 +3703,10 @@ public sealed class YeuCauService(
 
     private static async Task EnsureWorkMetadataColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
     {
+        // Status schema and legacy migration are operator-owned; never infer state from attendance.
         await using var schemaCommand = connection.CreateCommand();
-        schemaCommand.CommandText = $"""
-            IF COL_LENGTH('dbo.{WorkTableName}', 'TrangThaiCongViec') IS NULL
-            BEGIN
-                ALTER TABLE [dbo].[{WorkTableName}] ADD [TrangThaiCongViec] NVARCHAR(50) NULL;
-            END;
-
-            IF COL_LENGTH('dbo.{WorkTableName}', 'GhiChu') IS NULL
-            BEGIN
-                ALTER TABLE [dbo].[{WorkTableName}] ADD [GhiChu] NVARCHAR(500) NULL;
-            END;
-            """;
+        schemaCommand.CommandText = "SELECT TOP(0) TrangThaiCongViec,GhiChu,StartDate,ExpectedCompletionDate,ActualCompletionDate,ProgressVersion FROM dbo.TblYeuCauCongViec";
         await schemaCommand.ExecuteNonQueryAsync(cancellationToken);
-
-        await using var dataCommand = connection.CreateCommand();
-        dataCommand.CommandText = $"""
-            UPDATE [dbo].[{WorkTableName}]
-            SET [TrangThaiCongViec] = CASE
-                WHEN [CheckInTime] IS NOT NULL AND [CheckoutTime] IS NOT NULL AND [CheckoutTime] > [CheckInTime] THEN @CompletedStatus
-                WHEN [CheckInTime] IS NOT NULL THEN @InProgressStatus
-                ELSE @NewStatus
-            END
-            WHERE [TrangThaiCongViec] IS NULL OR LTRIM(RTRIM([TrangThaiCongViec])) = N'';
-            """;
-        dataCommand.Parameters.Add(new SqlParameter("@NewStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.TaoMoi });
-        dataCommand.Parameters.Add(new SqlParameter("@InProgressStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.DangThucHien });
-        dataCommand.Parameters.Add(new SqlParameter("@CompletedStatus", SqlDbType.NVarChar, 50) { Value = YeuCauCongViecTrangThaiCatalog.HoanThanh });
-        await dataCommand.ExecuteNonQueryAsync(cancellationToken);
 
         await EnsureWorkImageMetadataColumnsAsync(connection, cancellationToken);
     }

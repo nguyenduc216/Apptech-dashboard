@@ -575,6 +575,7 @@
                                 <section class="yeu-cau-work-card is-collapsed @work.TrangThaiCongViecCssClass @(isWorkCompleted ? "is-completed" : null)" data-work-item>
                                     <input type="hidden" name="Form.CongViecs[@workIndex].YeuCauCongViecId" value="@work.YeuCauCongViecId" data-work-id />
                                     <input type="hidden" name="Form.CongViecs[@workIndex].TenCongViec" value="@work.TenCongViec" data-work-name />
+                                    <input type="hidden" name="Form.CongViecs[@workIndex].ProgressVersion" value="@work.ProgressVersion" data-progress-field="ProgressVersion" />
                                     <div class="yeu-cau-work-header">
                                         <button type="button"
                                                 class="yeu-cau-work-toggle"
@@ -594,6 +595,11 @@
                                     </div>
 
                                     <div class="yeu-cau-work-body" data-work-body hidden>
+                                        <div class="account-form-grid">
+                                            <label class="login-field"><span>Ngày bắt đầu công việc</span><input type="date" data-progress-field="StartDate" name="Form.CongViecs[@workIndex].StartDate" value="@(work.StartDate?.ToString("yyyy-MM-dd"))" /></label>
+                                            <label class="login-field"><span>Ngày dự kiến hoàn thành</span><input type="date" data-progress-field="ExpectedCompletionDate" name="Form.CongViecs[@workIndex].ExpectedCompletionDate" value="@(work.ExpectedCompletionDate?.ToString("yyyy-MM-dd"))" /></label>
+                                            <p>Hoàn thành thực tế: @(work.ActualCompletionDate?.ToString("dd/MM/yyyy HH:mm") ?? "—")</p>
+                                        </div>
                                         <div class="account-form-grid yeu-cau-work-time-grid">
                                             <label class="login-field">
                                                 <span>Công việc</span>
@@ -615,9 +621,11 @@
                                                 <span class="login-input-shell select-shell">
                                                     <i class="fa-solid fa-list-check" aria-hidden="true"></i>
                                                     <select name="Form.CongViecs[@workIndex].TrangThaiCongViec" data-work-status-select>
-                                                        @foreach (var option in Model.WorkStatusOptions)
+                                                        @foreach (var option in Model.WorkStatusOptions.Concat(
+                                                            Model.WorkStatusOptions.Any(o => o.Value == work.TrangThaiCongViec) ? Array.Empty<YeuCauTrangThaiOption>() :
+                                                            new[] { new YeuCauTrangThaiOption { Value=work.TrangThaiCongViec, Label=work.TrangThaiCongViecDisplay + " (đã tắt)" } }))
                                                         {
-                                                            <option value="@option.Value" selected="@(work.TrangThaiCongViecDisplay == option.Value ? "selected" : null)">@option.Label</option>
+                                                            <option value="@option.Value" selected="@(work.TrangThaiCongViec == option.Value ? "selected" : null)">@option.Label</option>
                                                         }
                                                     </select>
                                                     <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
@@ -889,6 +897,9 @@
                                             <span class="select-indicator"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
                                         </span>
                                     </label>
+                                        <label class="login-field"><span>Ngày bắt đầu công việc</span><input type="date" data-progress-field="StartDate" /></label>
+                                        <label class="login-field"><span>Ngày dự kiến hoàn thành</span><input type="date" data-progress-field="ExpectedCompletionDate" /></label>
+
 
                                     <label class="login-field">
                                         <span>Thời gian bắt đầu</span>
@@ -3617,7 +3628,9 @@
                 .trim()
                 .toLowerCase();
 
-            const isCompletedWorkStatus = (value) => normalizeWorkStatusValue(value) === "hoanthanh";
+            const configuredWorkStatuses = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(WorkStatusContext.Current?.Statuses.Select(s => new { value=s.StorageValue, name=s.Name, color=s.Color, textColor=s.TextColor, kind=s.Kind })));
+            const workStatusConfig = value => configuredWorkStatuses?.find(s => s.value === value);
+            const isCompletedWorkStatus = value => workStatusConfig(value)?.kind === "Completed";
 
             const isValidWorkCompletion = (workItem) => {
                 const statusSelect = workItem.querySelector("[data-work-status-select]");
@@ -3675,7 +3688,12 @@
                     workItem.classList.add(statusClass);
                 }
                 if (status instanceof HTMLElement) {
-                    status.textContent = statusValue;
+                    const config = workStatusConfig(statusValue);
+                    status.textContent = config?.name || statusValue;
+                    status.style.backgroundColor = config?.color || "#64748b";
+                    status.style.color = config?.textColor || "#ffffff";
+                    status.style.padding = "3px 8px";
+                    status.style.borderRadius = "6px";
                 }
             };
 
@@ -4862,6 +4880,9 @@
 
             const updateWorkIndexes = () => {
                 getWorkItems().forEach((workItem, workIndex) => {
+                    workItem.querySelectorAll("[data-progress-field]").forEach(input => {
+                        input.name = `Form.CongViecs[${workIndex}].${input.dataset.progressField}`;
+                    });
                     const workIdInput = workItem.querySelector("[data-work-id]");
                     const workNameInput = workItem.querySelector("[data-work-name]");
                     const workSelect = workItem.querySelector("[data-work-option-select]");
@@ -4956,6 +4977,9 @@
 
             const syncWorkEmployeesJson = () => {
                 const payload = getWorkItems().map((workItem, workIndex) => {
+                    workItem.querySelectorAll("[data-progress-field]").forEach(input => {
+                        input.name = `Form.CongViecs[${workIndex}].${input.dataset.progressField}`;
+                    });
                     const workIdInput = workItem.querySelector("[data-work-id]");
                     const workSelect = workItem.querySelector("[data-work-option-select]");
                     const workId = workIdInput instanceof HTMLInputElement

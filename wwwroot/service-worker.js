@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'apptech-static-v4';
+const STATIC_CACHE = 'apptech-static-v5';
 const STATIC_ASSETS = [
     '/dang-nhap',
     '/manifest.webmanifest',
@@ -42,6 +42,13 @@ self.addEventListener('fetch', (event) => {
 
     const requestUrl = new URL(request.url);
     if (requestUrl.origin !== self.location.origin) {
+        return;
+    }
+
+    // FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+    // Authenticated progress HTML must never be served from a stale/shared cache.
+    if (request.cache === 'no-store' || /^\/(TienDoCongViec|TrangThaiCongViec)(\/|$)/i.test(requestUrl.pathname)) {
+        event.respondWith(fetch(request));
         return;
     }
 

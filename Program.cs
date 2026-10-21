@@ -30,7 +30,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.Name = ".ApptechDashboard.Auth";
         options.LoginPath = "/dang-nhap";
         options.LogoutPath = "/dang-xuat-he-thong";
-        options.AccessDeniedPath = "/dang-nhap";
+        CookieAuthorization.ConfigureAccessDenied(options);
         options.ExpireTimeSpan = TimeSpan.FromHours(12);
         options.SlidingExpiration = true;
     });
@@ -69,6 +69,7 @@ builder.Services.AddScoped<INhanVienService, NhanVienService>();
 builder.Services.AddScoped<IVaiTroService, VaiTroService>();
 builder.Services.AddScoped<IKhachHangService, KhachHangService>();
 builder.Services.AddScoped<IYeuCauService, YeuCauService>();
+builder.Services.AddScoped<WorkProgressService>();
 builder.Services.AddScoped<IChamCongService, ChamCongService>();
 builder.Services.AddScoped<IChamCongReportService, ChamCongReportService>();
 builder.Services.AddScoped<IAttendanceSettingsService, AttendanceSettingsService>();
@@ -89,6 +90,7 @@ builder.Services.AddScoped<INhapKhoService, NhapKhoService>();
 builder.Services.AddScoped<INhapXuatImageService, NhapXuatImageService>();
 builder.Services.AddScoped<INhaCungCapService, NhaCungCapService>();
 builder.Services.AddScoped<ICommonAuditService, CommonAuditService>();
+builder.Services.AddScoped<SystemAuditService>();
 builder.Services.AddScoped<ISimpleExcelService, SimpleExcelService>();
 builder.Services.AddSingleton<IZaloSettingsService, ZaloSettingsService>();
 builder.Services.AddScoped<IZaloRequestService, ZaloRequestService>();
@@ -118,6 +120,7 @@ using (var scope = app.Services.CreateScope())
     await permissionCatalogService.EnsureZaloManagementPermissionsAsync();
     await permissionCatalogService.EnsureDanhMucDichVuPermissionsAsync();
     await permissionCatalogService.EnsureDanhMucChamCongNgoaiPermissionsAsync();
+    await permissionCatalogService.EnsureSystemAuditPermissionsAsync();
 }
 
 if (!app.Environment.IsDevelopment())
@@ -136,6 +139,21 @@ app.UseRouting();
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
+// FEATURE_ID: APPTECH-WORK-PROGRESS-KANBAN; CHANGE_ID: APPTECH-20261020-WORK-PROGRESS-001
+app.Use(async (context, next) =>
+{
+    var controller = context.GetRouteValue("controller")?.ToString();
+    if (context.User.Identity?.IsAuthenticated != true ||
+        !new[] { "YeuCau", "Home", "Report", "TienDoCongViec", "TrangThaiCongViec" }.Contains(controller, StringComparer.OrdinalIgnoreCase))
+    { await next(context); return; }
+    WorkStatusContext.Begin();
+    try
+    {
+        WorkStatusContext.Current!.Statuses = await context.RequestServices.GetRequiredService<WorkProgressService>().Statuses(context.RequestAborted);
+        await next(context);
+    }
+    finally { WorkStatusContext.End(); }
+});
 
 app.MapControllerRoute(
     name: "dashboard",

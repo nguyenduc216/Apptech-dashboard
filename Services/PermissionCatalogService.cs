@@ -16,6 +16,7 @@ public interface IPermissionCatalogService
     Task EnsureZaloManagementPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureDanhMucDichVuPermissionsAsync(CancellationToken cancellationToken = default);
     Task EnsureDanhMucChamCongNgoaiPermissionsAsync(CancellationToken cancellationToken = default);
+    Task EnsureSystemAuditPermissionsAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class PermissionCatalogService(
@@ -40,6 +41,29 @@ public sealed class PermissionCatalogService(
     public const string DanhMucChamCongNgoaiCreatePermissionCode = "DanhMucChamCongNgoai_Create";
     public const string DanhMucChamCongNgoaiUpdatePermissionCode = "DanhMucChamCongNgoai_Update";
     public const string DanhMucChamCongNgoaiDeletePermissionCode = "DanhMucChamCongNgoai_Delete";
+    public const string SystemAuditViewPermissionCode = "NhatKyHeThong_View";
+
+    public async Task EnsureSystemAuditPermissionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_connectionString) && !_sqlOptions.IsConfigured) return;
+        try
+        {
+            var cs = !string.IsNullOrWhiteSpace(_connectionString) ? _connectionString : _sqlOptions.BuildConnectionString();
+            await using var connection = new SqlConnection(cs);
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                DECLARE @FunctionId int;
+                SELECT TOP(1) @FunctionId=ID FROM TblChucNang WHERE MaChucNang=N'NhatKyHeThong';
+                IF @FunctionId IS NULL
+                BEGIN INSERT TblChucNang(MaChucNang,TenChucNang,MieuTa,URL,ThuTuHienThi,TrangThaiSuDung) VALUES(N'NhatKyHeThong',N'Nhật ký hệ thống',N'Tra cứu nhật ký audit hệ thống',N'/nhat-ky-he-thong',N'95',1); SET @FunctionId=SCOPE_IDENTITY(); END;
+                IF NOT EXISTS(SELECT 1 FROM TblQuyen WHERE MaQuyen=@PermissionCode) INSERT TblQuyen(IDChucNang,TenQuyen,MaQuyen,MieuTa) VALUES(@FunctionId,N'Xem nhật ký hệ thống',@PermissionCode,N'Cho phép tra cứu nhật ký audit.');
+                """;
+            command.Parameters.Add(new SqlParameter("@PermissionCode", SqlDbType.NVarChar, 250) { Value = SystemAuditViewPermissionCode });
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to ensure system audit permissions."); }
+    }
 
     private readonly SqlServerOptions _sqlOptions = sqlOptions.Value;
     private readonly string? _connectionString = configuration.GetConnectionString("DefaultConnection");

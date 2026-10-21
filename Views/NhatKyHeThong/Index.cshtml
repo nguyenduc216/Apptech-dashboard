@@ -1,0 +1,35 @@
+@model SystemAuditModel
+@{
+    ViewData["Title"] = "Nhật ký hệ thống";
+    ViewData["Breadcrumb"] = "Quản trị / Nhật ký hệ thống";
+    var filterFields = new[] { "FunctionCode", "ActionCode", "ObjectType", "ObjectId", "ObjectCode", "UserName", "Description", "Data", "OldData", "NewData" };
+    string Label(string field) => SystemAuditModel.Labels.GetValueOrDefault(field, field);
+    string PageUrl(int page) => Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("/nhat-ky-he-thong", new Dictionary<string, string?> { ["Page"] = page.ToString(), ["PageSize"] = Model.Query.PageSize.ToString(), ["Keyword"] = Model.Query.Keyword, ["From"] = Model.Query.From?.ToString("O"), ["To"] = Model.Query.To?.ToString("O"), ["Field"] = Model.Query.Field, ["Value"] = Model.Query.Value });
+}
+<section class="master-data-page system-audit-page">
+    <article class="panel master-data-panel">
+        <div class="panel-header master-data-header"><div><h3>Tra cứu nhật ký hệ thống</h3><p>Toàn bộ thông tin audit: chức năng, thao tác, đối tượng, người dùng, thời gian và dữ liệu trước/sau.</p></div></div>
+        @if (!string.IsNullOrWhiteSpace(Model.Error)) { <div class="status-message error">@Model.Error</div> }
+        <form method="get" action="/nhat-ky-he-thong" class="master-data-filter-form">
+            <label class="master-data-filter-field"><span>Từ khóa tất cả thông tin</span><input name="Keyword" value="@Model.Query.Keyword" maxlength="500" placeholder="Nhập nội dung cần tìm..." /></label>
+            <label class="master-data-filter-field"><span>Từ ngày/giờ</span><input type="datetime-local" name="From" value="@Model.Query.From?.ToString("yyyy-MM-ddTHH:mm")" /></label>
+            <label class="master-data-filter-field"><span>Đến ngày/giờ</span><input type="datetime-local" name="To" value="@Model.Query.To?.ToString("yyyy-MM-ddTHH:mm")" /></label>
+            <label class="master-data-filter-field"><span>Trường tìm kiếm</span><select name="Field"><option value="">Chọn trường cụ thể</option>@foreach(var field in Model.Columns){<option value="@field" selected="@(Model.Query.Field==field)">@Label(field)</option>}</select></label>
+            <label class="master-data-filter-field"><span>Giá trị trường</span><input name="Value" value="@Model.Query.Value" maxlength="500" placeholder="Giá trị cần tìm..." /></label>
+            <input type="hidden" name="PageSize" value="@Model.Query.PageSize" />
+            <button type="submit" class="primary-button"><i class="fa-solid fa-filter"></i><span>Tra cứu</span></button><a class="secondary-button" href="/nhat-ky-he-thong">Xóa bộ lọc</a>
+        </form>
+        <form method="get" action="/nhat-ky-he-thong" class="audit-advanced-filters">
+            <input type="hidden" name="Keyword" value="@Model.Query.Keyword" /><input type="hidden" name="From" value="@Model.Query.From?.ToString("O")" /><input type="hidden" name="To" value="@Model.Query.To?.ToString("O")" /><input type="hidden" name="PageSize" value="@Model.Query.PageSize" /><strong>Lọc chi tiết</strong>
+            @foreach (var field in filterFields) { <label><span>@Label(field)</span><input name="Filters[@field]" value="@Model.Query.Filters.GetValueOrDefault(field)" maxlength="500" /></label> }
+            <button type="submit" class="secondary-button">Áp dụng lọc chi tiết</button>
+        </form>
+        @if (Model.Rows.Count > 0) {
+            <p class="audit-result-summary">Tìm thấy <strong>@Model.Total</strong> bản ghi · Trang @Model.Query.Page</p>
+            <div class="table-responsive"><table class="data-table system-audit-table"><thead><tr><th>Thời gian</th><th>Người dùng</th><th>Chức năng / thao tác</th><th>Đối tượng</th><th>Nội dung</th><th>Dữ liệu thay đổi</th></tr></thead><tbody>
+            @foreach (var row in Model.Rows) { <tr><td>@SystemAuditService.Display(row,"CreatedDate")</td><td>@SystemAuditService.Display(row,"UserName")</td><td>@SystemAuditService.Display(row,"FunctionCode")<br /><small>@SystemAuditService.Display(row,"ActionCode")</small></td><td>@SystemAuditService.Display(row,"ObjectType") #@SystemAuditService.Display(row,"ObjectId")<br /><small>@SystemAuditService.Display(row,"ObjectCode")</small></td><td>@SystemAuditService.Display(row,"Description")</td><td><details><summary>Xem dữ liệu</summary><pre>@SystemAuditService.Display(row,"OldData") -&gt; @SystemAuditService.Display(row,"NewData")</pre></details></td></tr> }
+            </tbody></table></div>
+            <nav class="pagination-bar"><a class="pagination-button @(Model.Query.Page <= 1 ? "disabled" : "")" href="@PageUrl(Model.Query.Page - 1)">Trước</a><span class="pagination-page active">@Model.Query.Page</span><a class="pagination-button @(Model.Total <= (long)Model.Query.Page * Model.Query.PageSize ? "disabled" : "")" href="@PageUrl(Model.Query.Page + 1)">Sau</a></nav>
+        } else if (string.IsNullOrWhiteSpace(Model.Error)) { <p class="empty-state">Không có bản ghi phù hợp.</p> }
+    </article>
+</section>

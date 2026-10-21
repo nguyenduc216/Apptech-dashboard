@@ -1,0 +1,17 @@
+@model WorkStatus
+@{ var edit = Model.Id == 0 || (bool)ViewBag.CanUpdate; }
+<form method="post" asp-action="Save" class="wp-status-form">
+ <input type="hidden" name="Id" value="@Model.Id" /><input type="hidden" name="Version" value="@Model.Version" />
+ <label>Mã trạng thái<input name="Code" value="@Model.Code" required maxlength="50" pattern="[A-Z][A-Z0-9_]*" readonly="@(Model.Id != 0)" /></label>
+ <label>Tên trạng thái<input name="Name" value="@Model.Name" required maxlength="100" readonly="@(!edit)" data-status-name /></label>
+ <label>Màu sắc<input type="color" value="@Model.Color" disabled="@(!edit)" data-color-picker /><input name="Color" value="@Model.Color" pattern="#[0-9a-fA-F]{6}" required maxlength="7" readonly="@(!edit)" data-color-hex /></label>
+ <label>Thứ tự<input type="number" name="SortOrder" value="@Model.SortOrder" readonly="@(!edit)" /></label>
+ <label>Loại nghiệp vụ
+ @if(Model.Id != 0) { <input type="hidden" name="Kind" value="@Model.Kind" /><span>@(Model.Kind == "Completed" ? "Hoàn thành" : Model.Kind == "Cancelled" ? "Hủy" : "Bình thường")</span> }
+ else { <select name="Kind"><option value="Normal">Bình thường</option><option value="Completed">Hoàn thành</option><option value="Cancelled">Hủy</option></select> }
+ </label>
+ <input type="hidden" name="Active" value="@Model.Active.ToString().ToLowerInvariant()" />
+ <span class="wp-badge" data-status-preview style="background:@Model.Color;color:@Model.TextColor">@(Model.Id == 0 ? "Trạng thái mới" : Model.Name)</span>
+ <span>@(Model.Active ? "Đang kích hoạt" : "Đã tắt")</span>
+ @if(edit) { <button type="submit">@(Model.Id == 0 ? "Thêm trạng thái" : "Lưu thay đổi")</button> }
+</form>
